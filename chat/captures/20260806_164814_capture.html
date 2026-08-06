@@ -1,0 +1,76 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 4</h1>
+<p><strong><a href="20260806_164810_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260806_164816_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is the updated <code>sort_here.py</code> script with the <code>YYYY-MM</code> date fallback removed so unmatched images stay right in place.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+import pytesseract
+from PIL import Image
+
+# Working directory is wherever the command was executed
+WORK_DIR = Path.cwd()
+
+# Rules mapping: (Regex pattern -&gt; Subfolder name)
+RULES = [
+    (r&quot;craigslist\.org&quot;, &quot;Craigslist&quot;),
+    (r&quot;github\.com&quot;, &quot;GitHub&quot;),
+    (r&quot;invoice|receipt|order summary&quot;, &quot;Financial&quot;),
+]
+
+def batch_sort():
+    image_extensions = {&quot;.png&quot;, &quot;.jpg&quot;, &quot;.jpeg&quot;, &quot;.webp&quot;}
+    # Only pick up image files directly inside the current directory
+    image_files = [
+        f for f in WORK_DIR.iterdir() 
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f&quot;No unprocessed images found in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Processing {len(image_files)} image(s) in {WORK_DIR}...\n&quot;)
+
+    for image_path in image_files:
+        try:
+            img = Image.open(image_path)
+            extracted_text = pytesseract.image_to_string(img).lower()
+        except Exception as e:
+            print(f&quot;Warning: Could not process {image_path.name}: {e}&quot;)
+            extracted_text = &quot;&quot;
+
+        # Check rules
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        # Move only if a rule matched; otherwise, leave in place
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            destination = target_dir / image_path.name
+            shutil.move(str(image_path), str(destination))
+            print(f&quot;Moved '{image_path.name}' -&gt; {subfolder_name}/&quot;)
+        else:
+            print(f&quot;Skipped '{image_path.name}' (no rule matched)&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    batch_sort()
+
+</code></pre>
+<h3>Key Changes</h3>
+<ol>
+<li><strong>Removed <code>datetime</code> fallback:</strong> The <code>YYYY-MM</code> date logic was deleted.</li>
+<li><strong>Conditional Move:</strong> Files are moved only when <code>subfolder_name</code> is set by a matching rule in <code>RULES</code>.</li>
+<li><strong>Explicit Skip Message:</strong> Prints <code>Skipped '...' (no rule matched)</code> for files that remain untouched in the root directory.</li>
+</ol>
+<hr />
+<p><strong><a href="20260806_164810_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260806_164816_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164814_capture.md&quot;)</p>

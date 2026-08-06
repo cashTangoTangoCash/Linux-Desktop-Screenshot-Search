@@ -269,3 +269,109 @@ python3 -c &quot;import pytesseract, PIL; print('Imports successful!')&quot;
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_163428_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 4</h1>
+<p>rewrite sort_here.py so that if the extracted text doesn't match the pattern, the screenshot stays in its original folder.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164810_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 4</h1>
+<p>Here is the updated <code>sort_here.py</code> script with the <code>YYYY-MM</code> date fallback removed so unmatched images stay right in place.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+import pytesseract
+from PIL import Image
+
+# Working directory is wherever the command was executed
+WORK_DIR = Path.cwd()
+
+# Rules mapping: (Regex pattern -&gt; Subfolder name)
+RULES = [
+    (r&quot;craigslist\.org&quot;, &quot;Craigslist&quot;),
+    (r&quot;github\.com&quot;, &quot;GitHub&quot;),
+    (r&quot;invoice|receipt|order summary&quot;, &quot;Financial&quot;),
+]
+
+def batch_sort():
+    image_extensions = {&quot;.png&quot;, &quot;.jpg&quot;, &quot;.jpeg&quot;, &quot;.webp&quot;}
+    # Only pick up image files directly inside the current directory
+    image_files = [
+        f for f in WORK_DIR.iterdir() 
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f&quot;No unprocessed images found in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Processing {len(image_files)} image(s) in {WORK_DIR}...\n&quot;)
+
+    for image_path in image_files:
+        try:
+            img = Image.open(image_path)
+            extracted_text = pytesseract.image_to_string(img).lower()
+        except Exception as e:
+            print(f&quot;Warning: Could not process {image_path.name}: {e}&quot;)
+            extracted_text = &quot;&quot;
+
+        # Check rules
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        # Move only if a rule matched; otherwise, leave in place
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            destination = target_dir / image_path.name
+            shutil.move(str(image_path), str(destination))
+            print(f&quot;Moved '{image_path.name}' -&gt; {subfolder_name}/&quot;)
+        else:
+            print(f&quot;Skipped '{image_path.name}' (no rule matched)&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    batch_sort()
+
+</code></pre>
+<h3>Key Changes</h3>
+<ol>
+<li><strong>Removed <code>datetime</code> fallback:</strong> The <code>YYYY-MM</code> date logic was deleted.</li>
+<li><strong>Conditional Move:</strong> Files are moved only when <code>subfolder_name</code> is set by a matching rule in <code>RULES</code>.</li>
+<li><strong>Explicit Skip Message:</strong> Prints <code>Skipped '...' (no rule matched)</code> for files that remain untouched in the root directory.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164814_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 5</h1>
+<p>ok, that succeeded in a small test run - it picked out the craigslist screenshots and put them in their own folder.  very nice.  Now we have a skeleton on which to expand.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164816_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 5</h1>
+<p>That is a great milestone. Having a functional baseline makes it much easier to layer on features incrementally.</p>
+<p>Here are a few natural directions you can take to build out the workflow:</p>
+<hr />
+<h3>1. Robustness &amp; Image Pre-processing</h3>
+<ul>
+<li><strong>Dark Mode &amp; Contrast Boost:</strong> Tesseract sometimes struggles with low-contrast UI elements or dark mode screenshots. Converting images to grayscale or boosting contrast with Pillow before passing them to Tesseract can noticeably increase accuracy.</li>
+<li><strong>Region Cropping (Header Focus):</strong> If you're primarily sorting based on URLs or window title bars, you can crop to the top 10–20% of the image before running OCR. This runs significantly faster and reduces false positives from body text.</li>
+</ul>
+<h3>2. Multi-Threading / Speed Optimization</h3>
+<ul>
+<li>Processing hundreds of images sequentially with Tesseract can take time because CPU-bound OCR runs per file.</li>
+<li>Wrapping the loop in Python’s <code>concurrent.futures.ThreadPoolExecutor</code> or <code>ProcessPoolExecutor</code> allows you to run OCR across multiple CPU cores simultaneously.</li>
+</ul>
+<h3>3. Rule Organization &amp; Config Files</h3>
+<ul>
+<li>Instead of hardcoding rules directly inside the Python script, move them to an external <code>YAML</code> or <code>JSON</code> file (e.g., <code>~/.config/screenshot-rules.json</code>).</li>
+<li>This lets you update patterns, add categories, or toggle rules without editing Python code.</li>
+</ul>
+<h3>4. CLI Control &amp; Debugging</h3>
+<ul>
+<li><strong>Dry-Run Mode (<code>--dry-run</code>):</strong> Preview where files would move without actually touching the disk.</li>
+<li><strong>Verbose/OCR Dumping (<code>--inspect</code>):</strong> Print or save the extracted text for skipped files so you can see why a rule didn't trigger and refine your regex patterns.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164820_capture.md&quot;)</p>
+<hr />
