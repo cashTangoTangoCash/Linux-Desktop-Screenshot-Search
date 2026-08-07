@@ -10,16 +10,27 @@ from PIL import Image
 WORK_DIR = Path.cwd()
 
 # Rules mapping: (Regex pattern -> Subfolder name)
-# RULES = [
-#     (r"craigslist\.org", "Craigslist"),
-#     (r"github\.com", "GitHub"),
-#     (r"invoice|receipt|order summary", "Financial"),
-# ]
 
 RULES = [
     (r"craigslist\.org", "craigslist"),
     (r"wikipedia\.org", "wikipedia"),
-    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}", "Real_Estate")
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing", "housing-listings"),
+    (r"news\.google\.com", "google-news"),
+    (r"cambriabike\.com", "shopping-cambria-bike"),
+    (r"jensonusa\.com", "shopping-jenson-usa-bike"),
+    (r"amazon\.com", "shopping-amazon"),
+    (r"bikeradar\.com", "shopping-bikeradar-bike"),
+    (r"rottentomatoes\.com", "movies"),
+    (r"audioclassics\.com", "audioclassics"),
+    (r"forecast\.weather\.gov", "weather"),
+    (r"npr\.org", "news"),
+    (r"ebay\.com", "shopping-ebay"),
+    (r"github\.com", "github"),
+    (r"arstechnica\.com", "technology"),
+    (r"gizmodo\.com", "news"),
+    (r"nytimes\.com", "news"),
+    (r"theguardian\.com", "news"),
+    (r"techcrunch\.com", "technology")
 ]
 
 def batch_sort():

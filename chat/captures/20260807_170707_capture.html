@@ -1,0 +1,24 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 9</h1>
+<p><strong><a href="20260807_170703_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Keeping the complete OCR output in companion <code>.txt</code> files gives you the best of both worlds—fast categorical sorting now without sacrificing the raw data needed for full-text search later. Decoupling image extraction from search indexing also keeps the project modular, making it much easier to hit a clean &quot;version 1.0&quot; milestone before tackling search.</p>
+<p>Here are a few lightweight ways to turn those <code>.txt</code> sidecars into a fast, searchable screenshot archive on Linux:</p>
+<p>**1. Interactive Terminal Search with <code>ripgrep</code> + <code>fzf**</code>
+Because the <code>.txt</code> sidecars live right alongside the images, standard CLI search tools handle indexing for free. Combining <code>ripgrep</code> with <code>fzf</code> allows for instant fuzzy search across all extracted text. Selecting a search result in the terminal can automatically pop open the corresponding PNG file in your default image viewer:</p>
+<pre><code class="language-bash"># Search text sidecars; select a match to open the image
+rg -i &quot;search term&quot; -l | fzf --preview 'cat {}' | sed 's/\.txt$//' | xargs -r xdg-open
+
+</code></pre>
+<p><strong>2. SQLite Full-Text Search Index (<code>FTS5</code>)</strong>
+If thousands of <code>.txt</code> sidecars ever feel cluttered in your file manager, a standalone indexer script can parse all <code>.txt</code> files into a single local SQLite database using the <code>FTS5</code> extension. This allows structured SQL queries (like searching by date range, keyword proximity, or domain) without needing to re-scan the file system.</p>
+<p><strong>3. Dual-Pass Processing (Classification vs. Full Indexing)</strong>
+If CPU usage on larger batches becomes an issue again down the road:</p>
+<ul>
+<li><strong>Pass 1 (Fast Sorting):</strong> Crop the top 15% of the screenshot in memory to read just the URL/window title for instant regex matching.</li>
+<li><strong>Pass 2 (Background Indexing):</strong> Run full-image OCR only on matched/archived screenshots to generate the <code>.txt</code> sidecar file asynchronously.</li>
+</ul>
+<p>Would you like to set up a small terminal search wrapper script using <code>ripgrep</code> and <code>fzf</code> to test searching through your existing sidecar <code>.txt</code> files?</p>
+<hr />
+<p><strong><a href="20260807_170703_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170707_capture.md&quot;)</p>

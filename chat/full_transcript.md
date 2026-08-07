@@ -535,3 +535,382 @@ RULES = [
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_160233_capture.md")
 
 ---
+
+# PROMPT 7
+The 2013 pc was blowing the computer fans and taking some time to work through 200 1440p screenshots.  I think the next step is to write the ocr-output text to a companion text file for each screenshot.  The script should check for the existence of this file before carrying out OCR on a screenshot.  If the text file exists, assume that it contains valid ocr-output text for the screenshot.  This version of the script will allow me to tinker with making more RULES.
+
+I keep renaming the script.  it is now called ocr_then_sort_screenshots_here.py, and currently is:
+
+ #!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+import pytesseract
+from PIL import Image
+
+# Working directory is wherever the command was executed
+WORK_DIR = Path.cwd()
+
+# Rules mapping: (Regex pattern -> Subfolder name)
+
+RULES = [
+    (r"craigslist\.org", "craigslist"),
+    (r"wikipedia\.org", "wikipedia"),
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing", "housing-listings"),
+    (r"news\.google\.com", "google-news"),
+    (r"cambriabike\.com", "shopping-cambria-bike"),
+    (r"jensonusa\.com", "shopping-jenson-usa-bike"),
+    (r"amazon\.com", "shopping-amazon"),
+    (r"bikeradar\.com", "shopping-bikeradar-bike"),
+    (r"rottentomatoes\.com", "movies"),
+    (r"audioclassics\.com", "audioclassics"),
+    (r"forecast\.weather\.gov", "weather"),
+    (r"npr\.org", "news"),
+    (r"ebay\.com", "shopping-ebay"),
+    (r"github\.com", "github"),
+    (r"arstechnica\.com", "technology"),
+    (r"gizmodo\.com", "news"),
+    (r"nytimes\.com", "news"),
+    (r"theguardian\.com", "news"),
+    (r"techcrunch\.com", "technology")
+]
+
+def batch_sort():
+    image_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+    # Only pick up image files directly inside the current directory
+    image_files = [
+        f for f in WORK_DIR.iterdir() 
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f"No unprocessed images found in {WORK_DIR}")
+        return
+
+    print(f"Processing {len(image_files)} image(s) in {WORK_DIR}...\n")
+
+    for image_path in image_files:
+        try:
+            img = Image.open(image_path)
+            extracted_text = pytesseract.image_to_string(img).lower()
+        except Exception as e:
+            print(f"Warning: Could not process {image_path.name}: {e}")
+            extracted_text = ""
+
+        # Check rules
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        # Move only if a rule matched; otherwise, leave in place
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            destination = target_dir / image_path.name
+            shutil.move(str(image_path), str(destination))
+            print(f"Moved '{image_path.name}' -> {subfolder_name}/")
+        else:
+            print(f"Skipped '{image_path.name}' (no rule matched)")
+
+if __name__ == "__main__":
+    batch_sort()
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170648_capture.md")
+
+---
+
+# RESPONSE 7
+Here is the updated script. It checks for a sidecar text file (`.txt`) for each screenshot before running OCR. If found, it reads the text instantly; if not, it runs `pytesseract`, saves the extracted text to that `.txt` file for future runs, and moves both the screenshot and its text file into the target folder when a rule matches.
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+import pytesseract
+from PIL import Image
+
+# Working directory is wherever the command was executed
+WORK_DIR = Path.cwd()
+
+# Rules mapping: (Regex pattern -> Subfolder name)
+RULES = [
+    (r"craigslist\.org", "craigslist"),
+    (r"wikipedia\.org", "wikipedia"),
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing", "housing-listings"),
+    (r"news\.google\.com", "google-news"),
+    (r"cambriabike\.com", "shopping-cambria-bike"),
+    (r"jensonusa\.com", "shopping-jenson-usa-bike"),
+    (r"amazon\.com", "shopping-amazon"),
+    (r"bikeradar\.com", "shopping-bikeradar-bike"),
+    (r"rottentomatoes\.com", "movies"),
+    (r"audioclassics\.com", "audioclassics"),
+    (r"forecast\.weather\.gov", "weather"),
+    (r"npr\.org", "news"),
+    (r"ebay\.com", "shopping-ebay"),
+    (r"github\.com", "github"),
+    (r"arstechnica\.com", "technology"),
+    (r"gizmodo\.com", "news"),
+    (r"nytimes\.com", "news"),
+    (r"theguardian\.com", "news"),
+    (r"techcrunch\.com", "technology"),
+]
+
+def batch_sort():
+    image_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+    # Only pick up image files directly inside the current directory
+    image_files = [
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f"No unprocessed images found in {WORK_DIR}")
+        return
+
+    print(f"Processing {len(image_files)} image(s) in {WORK_DIR}...\n")
+
+    for image_path in image_files:
+        # Define companion text file path (e.g. screenshot.png.txt)
+        txt_path = WORK_DIR / f"{image_path.name}.txt"
+
+        # Read cached text or perform OCR
+        if txt_path.is_file():
+            try:
+                extracted_text = txt_path.read_text(encoding="utf-8")
+            except Exception as e:
+                print(f"Warning: Could not read cached text for {image_path.name}: {e}")
+                extracted_text = ""
+        else:
+            try:
+                img = Image.open(image_path)
+                extracted_text = pytesseract.image_to_string(img).lower()
+                # Save extracted text to sidecar file
+                txt_path.write_text(extracted_text, encoding="utf-8")
+            except Exception as e:
+                print(f"Warning: Could not process {image_path.name}: {e}")
+                extracted_text = ""
+
+        # Check rules
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        # Move both image and text sidecar if a rule matched; otherwise, leave in place
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Move image
+            destination_img = target_dir / image_path.name
+            shutil.move(str(image_path), str(destination_img))
+
+            # Move sidecar text file alongside image
+            if txt_path.is_file():
+                destination_txt = target_dir / txt_path.name
+                shutil.move(str(txt_path), str(destination_txt))
+
+            print(f"Moved '{image_path.name}' -> {subfolder_name}/")
+        else:
+            print(f"Skipped '{image_path.name}' (no rule matched, cached text retained)")
+
+if __name__ == "__main__":
+    batch_sort()
+
+```
+
+### Key Workflow Improvements
+
+1. **Sidecar Cache (`.txt`):** The first run on a directory generates sidecar files like `screenshot.png.txt`. Subsequent runs read the `.txt` directly, skipping CPU-intensive image loading and Tesseract operations entirely.
+2. **Instant Rule Tweaking:** When adding or tweaking rules in `RULES`, rerunning the script completes in milliseconds without spinning up CPU fans or re-running OCR.
+3. **Coordinated Move:** When a match occurs, both the image file and its `.txt` sidecar are moved together into the destination folder, keeping your directory clean.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170654_capture.md")
+
+---
+
+# PROMPT 8
+is it straightforward to move to a multithreaded version of tesseract?  would it offer much of an advantage at this point, or would I get bogged down in trying to get it to work in endeavourOS?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170655_capture.md")
+
+---
+
+# RESPONSE 8
+Moving to parallel OCR in Python is **very straightforward** and requires **zero Arch/EndeavourOS system configuration or compilation**.
+
+---
+
+### Is it hard to set up in EndeavourOS?
+
+Not at all. You do not need a special build of Tesseract or extra AUR packages.
+
+Tesseract 5.x installed via `pacman` already uses OpenMP for internal multithreading on single images, but per-image multithreading yields diminishing returns. The standard approach for batch OCR in Python is **process pooling** using `concurrent.futures.ProcessPoolExecutor` from Python's standard library. This spawns multiple worker processes, allowing Python to run Tesseract across distinct screenshots on separate CPU cores simultaneously.
+
+---
+
+### Is it worth the advantage?
+
+| Scenario | Advantage? | Why? |
+| --- | --- | --- |
+| **Rule Tweaking / Re-runs** | **None** | Your `.txt` sidecar caching already solved the bottleneck. Reading text files takes milliseconds across 200 files. |
+| **First Run on 200 New Screenshots** | **High** | Cuts an initial 3-to-4-minute OCR pass down to **~30–45 seconds** on a multi-core CPU. |
+
+#### Thermal / Fan Noise Considerations
+
+Because running OCR on all CPU cores simultaneously pushes CPU utilization to 100%, the fans on older hardware will blow high during that initial pass. You can control this by setting `max_workers` (e.g., `max_workers=2` or `4`), giving a ~2x–3x speed boost while preventing thermal throttling or excessive fan noise.
+
+---
+
+### Parallel Implementation (`ocr_then_sort_screenshots_here.py`)
+
+Here is how to update the script to process initial OCR in parallel using standard library modules:
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import pytesseract
+from PIL import Image
+
+WORK_DIR = Path.cwd()
+
+# Cap workers to prevent fans from maxing out (e.g., 2 to 4 cores)
+MAX_WORKERS = 4
+
+RULES = [
+    (r"craigslist\.org", "craigslist"),
+    (r"wikipedia\.org", "wikipedia"),
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing", "housing-listings"),
+    (r"news\.google\.com", "google-news"),
+    (r"cambriabike\.com", "shopping-cambria-bike"),
+    (r"jensonusa\.com", "shopping-jenson-usa-bike"),
+    (r"amazon\.com", "shopping-amazon"),
+    (r"bikeradar\.com", "shopping-bikeradar-bike"),
+    (r"rottentomatoes\.com", "movies"),
+    (r"audioclassics\.com", "audioclassics"),
+    (r"forecast\.weather\.gov", "weather"),
+    (r"npr\.org", "news"),
+    (r"ebay\.com", "shopping-ebay"),
+    (r"github\.com", "github"),
+    (r"arstechnica\.com", "technology"),
+    (r"gizmodo\.com", "news"),
+    (r"nytimes\.com", "news"),
+    (r"theguardian\.com", "news"),
+    (r"techcrunch\.com", "technology"),
+]
+
+def process_single_image(image_path: Path):
+    """Worker function: reads cached .txt or runs OCR to generate sidecar file."""
+    txt_path = WORK_DIR / f"{image_path.name}.txt"
+
+    if txt_path.is_file():
+        try:
+            extracted_text = txt_path.read_text(encoding="utf-8")
+        except Exception:
+            extracted_text = ""
+    else:
+        try:
+            img = Image.open(image_path)
+            extracted_text = pytesseract.image_to_string(img).lower()
+            txt_path.write_text(extracted_text, encoding="utf-8")
+        except Exception as e:
+            extracted_text = ""
+
+    return image_path, txt_path, extracted_text
+
+def batch_sort():
+    image_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+    image_files = [
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f"No unprocessed images found in {WORK_DIR}")
+        return
+
+    print(f"Processing {len(image_files)} image(s) using up to {MAX_WORKERS} workers...\n")
+
+    # Run OCR across process pool
+    results = []
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_single_image, img_path) for img_path in image_files]
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    # Sort files based on rules
+    for image_path, txt_path, extracted_text in results:
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.move(str(image_path), str(target_dir / image_path.name))
+
+            if txt_path.is_file():
+                shutil.move(str(txt_path), str(target_dir / txt_path.name))
+
+            print(f"Moved '{image_path.name}' -> {subfolder_name}/")
+        else:
+            print(f"Skipped '{image_path.name}' (no rule matched)")
+
+if __name__ == "__main__":
+    batch_sort()
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170701_capture.md")
+
+---
+
+# PROMPT 9
+The idea of cropping to pick out just the browser urls is very good, but I also desire the ocr text of each screenshot in order to attempt to 'full text search the screenshots' which probably is an upcoming additional script.  Some / many screenshots in fact contain very little text.  this is kind of a fun project in that it can be taken in so many directions, which I often find challenging - it's challenging to avoid getting stuck on any one problem just like back with SAT test-taking.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170703_capture.md")
+
+---
+
+# RESPONSE 9
+Keeping the complete OCR output in companion `.txt` files gives you the best of both worlds—fast categorical sorting now without sacrificing the raw data needed for full-text search later. Decoupling image extraction from search indexing also keeps the project modular, making it much easier to hit a clean "version 1.0" milestone before tackling search.
+
+Here are a few lightweight ways to turn those `.txt` sidecars into a fast, searchable screenshot archive on Linux:
+
+**1. Interactive Terminal Search with `ripgrep` + `fzf**`
+Because the `.txt` sidecars live right alongside the images, standard CLI search tools handle indexing for free. Combining `ripgrep` with `fzf` allows for instant fuzzy search across all extracted text. Selecting a search result in the terminal can automatically pop open the corresponding PNG file in your default image viewer:
+
+```bash
+# Search text sidecars; select a match to open the image
+rg -i "search term" -l | fzf --preview 'cat {}' | sed 's/\.txt$//' | xargs -r xdg-open
+
+```
+
+**2. SQLite Full-Text Search Index (`FTS5`)**
+If thousands of `.txt` sidecars ever feel cluttered in your file manager, a standalone indexer script can parse all `.txt` files into a single local SQLite database using the `FTS5` extension. This allows structured SQL queries (like searching by date range, keyword proximity, or domain) without needing to re-scan the file system.
+
+**3. Dual-Pass Processing (Classification vs. Full Indexing)**
+If CPU usage on larger batches becomes an issue again down the road:
+
+* **Pass 1 (Fast Sorting):** Crop the top 15% of the screenshot in memory to read just the URL/window title for instant regex matching.
+* **Pass 2 (Background Indexing):** Run full-image OCR only on matched/archived screenshots to generate the `.txt` sidecar file asynchronously.
+
+Would you like to set up a small terminal search wrapper script using `ripgrep` and `fzf` to test searching through your existing sidecar `.txt` files?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_170707_capture.md")
+
+---
