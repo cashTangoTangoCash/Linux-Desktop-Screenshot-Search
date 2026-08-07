@@ -3,7 +3,6 @@ import os
 import re
 import shutil
 from pathlib import Path
-from datetime import datetime
 import pytesseract
 from PIL import Image
 
@@ -18,9 +17,10 @@ WORK_DIR = Path.cwd()
 # ]
 
 RULES = [
-    (r"craigslist\.org", "craigslist")
+    (r"craigslist\.org", "craigslist"),
+    (r"wikipedia\.org", "wikipedia"),
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}", "Real_Estate")
 ]
-
 
 def batch_sort():
     image_extensions = {".png", ".jpg", ".jpeg", ".webp"}
@@ -51,17 +51,16 @@ def batch_sort():
                 subfolder_name = folder
                 break
 
-        # Fallback to YYYY-MM if no rules match
-        if not subfolder_name:
-            mtime = datetime.fromtimestamp(image_path.getmtime())
-            subfolder_name = mtime.strftime("%Y-%m")
+        # Move only if a rule matched; otherwise, leave in place
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
 
-        target_dir = WORK_DIR / subfolder_name
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        destination = target_dir / image_path.name
-        shutil.move(str(image_path), str(destination))
-        print(f"Moved '{image_path.name}' -> {subfolder_name}/")
+            destination = target_dir / image_path.name
+            shutil.move(str(image_path), str(destination))
+            print(f"Moved '{image_path.name}' -> {subfolder_name}/")
+        else:
+            print(f"Skipped '{image_path.name}' (no rule matched)")
 
 if __name__ == "__main__":
     batch_sort()

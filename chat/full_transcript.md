@@ -470,3 +470,68 @@ Here are a few natural directions you can take to build out the workflow:
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260806_164820_capture.md")
 
 ---
+
+# PROMPT 6
+Identify a suitable regex for picking out screenshots of email messages of Howard Hanna listings.  I notice text such as MLS # R1657354.  Probably the MLS space pound sign space is the bit to match?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_160230_capture.md")
+
+---
+
+# RESPONSE 6
+For `sort_here.py` (which lowercases the OCR output before testing regex patterns), here are the most effective regex patterns depending on how broad or specific you want to be.
+
+### 1. Robust MLS Number Pattern (Recommended)
+
+```python
+r"mls\s*#?\s*[a-z]?\d{6,8}"
+
+```
+
+**Why this works well for OCR:**
+
+* `mls` matches the literal string `mls` (lowercased).
+* `\s*` allows zero or more spaces (handles `MLS#`, `MLS #`, or extra spaces added by OCR).
+* `#?` makes the pound sign optional in case OCR misinterprets or drops the `#` symbol.
+* `[a-z]?` matches an optional prefix letter like the `r` in `R1657354`.
+* `\d{6,8}` matches the standard 6- to 8-digit listing ID number.
+
+Matches: `mls # r1657354`, `mls#r1657354`, `mls # 1657354`, `mls r1657354`.
+
+---
+
+### 2. Branding + MLS Combo Pattern
+
+If you want to ensure the folder captures both direct Howard Hanna emails and generic listing notifications featuring MLS numbers, use an OR (`|`) condition:
+
+```python
+r"howard\s*hanna|mls\s*#\s*[a-z]?\d+"
+
+```
+
+**Why this works well:**
+
+* `howard\s*hanna` catches any email header, logo alt text, or footer mentioning Howard Hanna, even if the screenshot doesn't show an explicit MLS number.
+* `|` acts as an logical OR, so if either the brand name OR an MLS number format appears, it matches.
+
+---
+
+### Integration into `sort_here.py`
+
+Update your `RULES` list in the script like this:
+
+```python
+RULES = [
+    (r"craigslist\.org", "Craigslist"),
+    (r"github\.com", "GitHub"),
+    (r"howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}", "Real_Estate"),
+    (r"invoice|receipt|order summary", "Financial"),
+]
+
+```
+
+*(Note: If you are matching against `extracted_text.lower()`, ensure all characters in the regex patterns remain lowercase.)*
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_160233_capture.md")
+
+---

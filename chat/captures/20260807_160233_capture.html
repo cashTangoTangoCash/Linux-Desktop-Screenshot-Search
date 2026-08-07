@@ -1,0 +1,44 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 6</h1>
+<p><strong><a href="20260807_160230_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>For <code>sort_here.py</code> (which lowercases the OCR output before testing regex patterns), here are the most effective regex patterns depending on how broad or specific you want to be.</p>
+<h3>1. Robust MLS Number Pattern (Recommended)</h3>
+<pre><code class="language-python">r&quot;mls\s*#?\s*[a-z]?\d{6,8}&quot;
+
+</code></pre>
+<p><strong>Why this works well for OCR:</strong></p>
+<ul>
+<li><code>mls</code> matches the literal string <code>mls</code> (lowercased).</li>
+<li><code>\s*</code> allows zero or more spaces (handles <code>MLS#</code>, <code>MLS #</code>, or extra spaces added by OCR).</li>
+<li><code>#?</code> makes the pound sign optional in case OCR misinterprets or drops the <code>#</code> symbol.</li>
+<li><code>[a-z]?</code> matches an optional prefix letter like the <code>r</code> in <code>R1657354</code>.</li>
+<li><code>\d{6,8}</code> matches the standard 6- to 8-digit listing ID number.</li>
+</ul>
+<p>Matches: <code>mls # r1657354</code>, <code>mls#r1657354</code>, <code>mls # 1657354</code>, <code>mls r1657354</code>.</p>
+<hr />
+<h3>2. Branding + MLS Combo Pattern</h3>
+<p>If you want to ensure the folder captures both direct Howard Hanna emails and generic listing notifications featuring MLS numbers, use an OR (<code>|</code>) condition:</p>
+<pre><code class="language-python">r&quot;howard\s*hanna|mls\s*#\s*[a-z]?\d+&quot;
+
+</code></pre>
+<p><strong>Why this works well:</strong></p>
+<ul>
+<li><code>howard\s*hanna</code> catches any email header, logo alt text, or footer mentioning Howard Hanna, even if the screenshot doesn't show an explicit MLS number.</li>
+<li><code>|</code> acts as an logical OR, so if either the brand name OR an MLS number format appears, it matches.</li>
+</ul>
+<hr />
+<h3>Integration into <code>sort_here.py</code></h3>
+<p>Update your <code>RULES</code> list in the script like this:</p>
+<pre><code class="language-python">RULES = [
+    (r&quot;craigslist\.org&quot;, &quot;Craigslist&quot;),
+    (r&quot;github\.com&quot;, &quot;GitHub&quot;),
+    (r&quot;howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}&quot;, &quot;Real_Estate&quot;),
+    (r&quot;invoice|receipt|order summary&quot;, &quot;Financial&quot;),
+]
+
+</code></pre>
+<p><em>(Note: If you are matching against <code>extracted_text.lower()</code>, ensure all characters in the regex patterns remain lowercase.)</em></p>
+<hr />
+<p><strong><a href="20260807_160230_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_160233_capture.md&quot;)</p>
