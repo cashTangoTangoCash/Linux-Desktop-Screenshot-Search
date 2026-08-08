@@ -1,0 +1,32 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 14</h1>
+<p><strong><a href="20260807_235304_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>The quickest built-in method without opening <code>ibuffer</code> is <strong><code>M-x kill-matching-buffers</code></strong>.</p>
+<h3>Method 1: <code>kill-matching-buffers</code> (Fastest Direct Command)</h3>
+<ol>
+<li>Type <strong><code>M-x kill-matching-buffers</code></strong></li>
+<li>Enter the regex matching your file extension: <strong><code>\.txt$</code></strong></li>
+<li>At the first prompt asking to kill a buffer, press <strong><code>!</code></strong> (exclamation mark). This acts as a &quot;yes to all&quot; switch, killing every matching <code>.txt</code> buffer immediately without prompting you for each file.</li>
+</ol>
+<hr />
+<h3>Method 2: Fast <code>ibuffer</code> Key Sequence</h3>
+<p>If you already have <code>ibuffer</code> open (<code>C-x C-b</code> or <code>M-x ibuffer</code>), you can mark and delete them in three quick keystrokes:</p>
+<ol>
+<li><strong><code>% n</code></strong> — Mark buffers by name. Type <strong><code>\.txt$</code></strong> and press <code>Enter</code>.</li>
+<li><strong><code>D</code></strong> — Delete (kill) all marked buffers.</li>
+<li><strong><code>y</code></strong> — Confirm deletion.</li>
+</ol>
+<hr />
+<h3>Method 3: One-Liner via <code>M-:</code> (Eval)</h3>
+<p>If you want an instant execution without confirmation prompts:</p>
+<ol>
+<li>Type <strong><code>M-:</code></strong> (<code>eval-expression</code>)</li>
+<li>Paste this snippet and hit <code>Enter</code>:</li>
+</ol>
+<pre><code class="language-elisp">(mapc #'kill-buffer (seq-filter (lambda (b) (string-match-p &quot;\\.txt$&quot; (buffer-name b))) (buffer-list)))
+
+</code></pre>
+<hr />
+<p><strong><a href="20260807_235304_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_235307_capture.md&quot;)</p>

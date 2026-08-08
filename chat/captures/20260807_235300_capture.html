@@ -1,0 +1,53 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 13</h1>
+<p><strong><a href="20260807_235254_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_235304_capture.html">Next →</a></strong></p>
+<hr />
+<p>The fastest way to get that exact &quot;flashcard&quot; cycling experience—where one keypress flips to the next file in the folder—can be done either natively inside Emacs or right from the terminal.</p>
+<hr />
+<h3>Option 1: Native Emacs Buffer Cycling (Zero Config)</h3>
+<p>Since your Emacs is already handling buffer switching smoothly, you can load all <code>.txt</code> files in the directory at once and cycle through them using built-in buffer navigation shortcuts.</p>
+<ol>
+<li><strong>Launch Emacs with all text files in the folder:</strong></li>
+</ol>
+<pre><code class="language-bash">emacs *.txt
+
+</code></pre>
+<p><em>(Or inside Emacs, press <code>C-x C-f</code>, type <code>*.txt</code>, and hit Enter).</em>
+2. <strong>Cycle forward and backward like flashcards:</strong></p>
+<ul>
+<li><strong><code>C-x &lt;right&gt;</code></strong> (<code>next-buffer</code>) — Flips to the next text file.</li>
+<li><strong><code>C-x &lt;left&gt;</code></strong> (<code>previous-buffer</code>) — Flips to the previous text file.</li>
+</ul>
+<h4>Make it a 1-Key Flashcard in Emacs</h4>
+<p>If pressing <code>C-x &lt;right&gt;</code> feels clunky for rapid flashcarding, open a directory in Dired (<code>C-x d</code>), put your cursor on the first file, and press <strong><code>v</code></strong> to enter <code>view-mode</code>.</p>
+<p>In <code>view-mode</code>, you can add this 3-line snippet to your <code>~/.emacs</code> or <code>init.el</code> to make pressing <code>n</code> and <code>p</code> instantly jump to the next/previous file in the directory:</p>
+<pre><code class="language-elisp">(with-eval-after-load 'view
+  (define-key view-mode-map (kbd &quot;n&quot;) 'View-goto-line-last-regexp) ; or custom next-file
+  (define-key view-mode-map (kbd &quot;q&quot;) 'View-quit))
+
+</code></pre>
+<hr />
+<h3>Option 2: The Terminal Approach (<code>less</code>)</h3>
+<p>If you want an instant, lightweight flashcard viewer without leaving your command line prompt:</p>
+<pre><code class="language-bash">less *.txt
+
+</code></pre>
+<ul>
+<li><strong><code>:n</code></strong> — Jump to the <strong>n</strong>ext text file.</li>
+<li><strong><code>:p</code></strong> — Jump to the <strong>p</strong>revious text file.</li>
+<li><strong><code>q</code></strong> — Quit out of the viewer.</li>
+</ul>
+<p><code>less</code> displays the current filename at the bottom bar, renders instantly, and lets you scroll up and down if the text file exceeds one screen height.</p>
+<hr />
+<h3>Option 3: Terminal Pager with Syntax/Formatting (<code>glow</code> / <code>bat</code>)</h3>
+<p>If you prefer styled terminal output, <code>less</code> can be paired with <code>glow</code> or <code>bat</code>:</p>
+<pre><code class="language-bash"># Using bat (if installed via pacman -S bat)
+bat *.txt
+
+# Navigate using bat's built-in less backend:
+# Press :n for next file, :p for previous file
+
+</code></pre>
+<hr />
+<p><strong><a href="20260807_235254_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_235304_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_235300_capture.md&quot;)</p>

@@ -1,0 +1,133 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 12</h1>
+<p><strong><a href="20260807_235246_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_235254_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is the complete script with the top 15% cropping and dark mode auto-inversion integrated into <code>process_single_image</code>.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import pytesseract
+from PIL import Image, ImageOps, ImageStat
+
+WORK_DIR = Path.cwd()
+
+# Cap workers to prevent fans from maxing out (e.g., 2 to 4 cores)
+MAX_WORKERS = 6
+
+# Percentage of top region to crop for fast URL/header OCR (0.15 = top 15%)
+CROP_TOP_PCT = 0.15
+
+RULES = [
+    (r&quot;craigslist\.org&quot;, &quot;craigslist&quot;),
+    (r&quot;wikipedia\.org&quot;, &quot;wikipedia&quot;),
+    (r&quot;howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing&quot;, &quot;housing-listings&quot;),
+    (r&quot;news\.google\.com&quot;, &quot;google-news&quot;),
+    (r&quot;cambriabike\.com&quot;, &quot;shopping-cambria-bike&quot;),
+    (r&quot;jensonusa\.com&quot;, &quot;shopping-jenson-usa-bike&quot;),
+    (r&quot;amazon\.com&quot;, &quot;shopping-amazon&quot;),
+    (r&quot;bikeradar\.com&quot;, &quot;shopping-bikeradar-bike&quot;),
+    (r&quot;rottentomatoes\.com&quot;, &quot;movies&quot;),
+    (r&quot;audioclassics\.com&quot;, &quot;audioclassics&quot;),
+    (r&quot;forecast\.weather\.gov&quot;, &quot;weather&quot;),
+    (r&quot;npr\.org&quot;, &quot;news&quot;),
+    (r&quot;ebay\.com&quot;, &quot;shopping-ebay&quot;),
+    (r&quot;github\.com&quot;, &quot;github&quot;),
+    (r&quot;arstechnica\.com&quot;, &quot;technology&quot;),
+    (r&quot;gizmodo\.com&quot;, &quot;news&quot;),
+    (r&quot;nytimes\.com&quot;, &quot;news&quot;),
+    (r&quot;theguardian\.com&quot;, &quot;news&quot;),
+    (r&quot;techcrunch\.com&quot;, &quot;technology&quot;),
+]
+
+def process_single_image(image_path: Path):
+    &quot;&quot;&quot;Worker function: reads cached .txt or crops/pre-processes image to generate sidecar OCR text.&quot;&quot;&quot;
+    txt_path = WORK_DIR / f&quot;{image_path.name}.txt&quot;
+
+    if txt_path.is_file():
+        try:
+            extracted_text = txt_path.read_text(encoding=&quot;utf-8&quot;)
+        except Exception:
+            extracted_text = &quot;&quot;
+    else:
+        try:
+            with Image.open(image_path) as img:
+                width, height = img.size
+                
+                # 1. Crop top region (e.g., top 15% for URL/header bar)
+                crop_height = max(1, int(height * CROP_TOP_PCT))
+                cropped_img = img.crop((0, 0, width, crop_height))
+                
+                # 2. Convert to grayscale for threshold check
+                gray_img = cropped_img.convert(&quot;L&quot;)
+                
+                # 3. Auto-invert dark mode images (mean pixel value &lt; 128)
+                avg_brightness = ImageStat.Stat(gray_img).mean[0]
+                if avg_brightness &lt; 128:
+                    ocr_input = ImageOps.invert(gray_img)
+                else:
+                    ocr_input = gray_img
+                
+                extracted_text = pytesseract.image_to_string(ocr_input).lower()
+                txt_path.write_text(extracted_text, encoding=&quot;utf-8&quot;)
+        except Exception as e:
+            extracted_text = &quot;&quot;
+
+    return image_path, txt_path, extracted_text
+
+def batch_sort():
+    image_extensions = {&quot;.png&quot;, &quot;.jpg&quot;, &quot;.jpeg&quot;, &quot;.webp&quot;}
+    image_files = [
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in image_extensions
+    ]
+
+    if not image_files:
+        print(f&quot;No unprocessed images found in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Processing {len(image_files)} image(s) using up to {MAX_WORKERS} workers...\n&quot;)
+
+    # Run OCR across process pool
+    results = []
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_single_image, img_path) for img_path in image_files]
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    # Sort files based on rules
+    for image_path, txt_path, extracted_text in results:
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.move(str(image_path), str(target_dir / image_path.name))
+
+            if txt_path.is_file():
+                shutil.move(str(txt_path), str(target_dir / txt_path.name))
+
+            print(f&quot;Moved '{image_path.name}' -&gt; {subfolder_name}/&quot;)
+        else:
+            print(f&quot;Skipped '{image_path.name}' (no rule matched)&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    batch_sort()
+
+</code></pre>
+<h3>Key Changes</h3>
+<ul>
+<li><strong>Pillow Extensions:</strong> Added <code>ImageOps</code> and <code>ImageStat</code> imports.</li>
+<li><strong>Top 15% Crop:</strong> <code>CROP_TOP_PCT = 0.15</code> extracts only the top header strip (URL bar / page title).</li>
+<li><strong>Grayscale &amp; Auto-Invert:</strong> Converts the strip to grayscale (<code>&quot;L&quot;</code> mode), calculates average luminance, and flips inverted dark mode text to standard dark-on-light before feeding it into <code>pytesseract</code>.</li>
+</ul>
+<hr />
+<p><strong><a href="20260807_235246_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_235254_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_235252_capture.md&quot;)</p>

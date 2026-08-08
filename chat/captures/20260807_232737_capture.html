@@ -1,0 +1,44 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 10</h1>
+<p><strong><a href="20260807_232732_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_232740_capture.html">Next →</a></strong></p>
+<hr />
+<p>Your intuition is dead-on. Trying to force EasyOCR or PaddleOCR to run on your Sapphire Pulse RX 580 under EndeavourOS would be a major time sink—arguably even more painful than your experience getting Whisper to run.</p>
+<p>Here is why that specific path leads straight into compile-from-source friction, along with why your current Tesseract pipeline remains the better solution for this PC.</p>
+<hr />
+<h3>Why the RX 580 (Polaris) Fights Deep Learning OCR</h3>
+<ol>
+<li><strong>Official ROCm Support Was Dropped Years Ago</strong>
+The RX 580 is built on AMD's Polaris architecture (<code>gfx803</code>). AMD officially deprecated <code>gfx803</code> support in ROCm around version 4.0.</li>
+<li><strong>Arch / EndeavourOS Package Mismatch</strong>
+The standard <code>pytorch-rocm</code> packages available in Arch repositories target newer AMD architectures (Vega, RDNA2, RDNA3). If you install <code>python-pytorch-rocm</code> out of the box, PyTorch will either fail to detect the RX 580 or throw runtime CUDA/HIP initialization errors.</li>
+<li><strong>The Workaround Nightmare</strong>
+Getting modern PyTorch (which EasyOCR uses under the hood) or PaddlePaddle (which PaddleOCR uses) to recognize an RX 580 requires:</li>
+</ol>
+<ul>
+<li>Compiling custom <code>rocBLAS</code> and <code>rocSOLVER</code> libraries from source targeting <code>gfx803</code>.</li>
+<li>Exporting hardware overrides like <code>export HSA_OVERRIDE_GFX_VERSION=8.0.3</code>.</li>
+<li>Maintaining customized Docker containers just to hold legacy ROCm/PyTorch bindings.</li>
+</ul>
+<ol start="4">
+<li><strong>PaddleOCR is Even Worse on AMD</strong>
+While PyTorch has community patches for <code>gfx803</code>, PaddlePaddle’s ROCm support for legacy consumer GPUs is virtually nonexistent outside of NVIDIA CUDA environments.</li>
+</ol>
+<hr />
+<h3>What Happens on CPU?</h3>
+<p>If you skip GPU acceleration and run EasyOCR or PaddleOCR on a 2013 CPU, performance drops significantly:</p>
+<ul>
+<li><strong>Tesseract:</strong> Uses traditional computer vision (line detection, character segmentation, feature matching). It processes a 1440p screenshot in <strong>50 to 150 milliseconds</strong> on CPU.</li>
+<li><strong>EasyOCR / PaddleOCR:</strong> Use deep learning neural networks (e.g., CRAFT text detector + ResNet/CRNN recognizer). On a 2013 CPU without modern AVX512 instructions, a single 1440p image takes <strong>1 to 3 seconds</strong>.</li>
+<li>Running 200 screenshots through EasyOCR on CPU would keep the fans maxed out for <strong>5 to 10 minutes</strong>, whereas Tesseract completes the batch in a fraction of that time.</li>
+</ul>
+<hr />
+<h3>The Verdict</h3>
+<p>Your current setup—using <strong>Tesseract</strong> paired with <strong>parallel CPU execution</strong> and <strong><code>.txt</code> sidecar caching</strong>—is the architectural sweet spot for this machine:</p>
+<ul>
+<li><strong>Zero ROCm/GPU driver headache:</strong> Works natively out of Arch <code>pacman</code> packages without source builds.</li>
+<li><strong>Instant re-runs:</strong> The <code>.txt</code> caching means you only pay the OCR CPU tax once per screenshot.</li>
+<li><strong>Full-text search ready:</strong> The raw text output is stored locally and remains fully searchable with fast terminal tools like <code>ripgrep</code> or <code>fzf</code>.</li>
+</ul>
+<hr />
+<p><strong><a href="20260807_232732_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260807_232740_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260807_232737_capture.md&quot;)</p>
