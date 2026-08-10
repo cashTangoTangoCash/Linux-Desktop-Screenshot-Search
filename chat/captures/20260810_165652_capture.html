@@ -1,0 +1,133 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 21</h1>
+<p><strong><a href="20260810_165648_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_171134_capture.html">Next →</a></strong></p>
+<hr />
+<p>A single Python script using <code>subprocess</code> to execute your <code>magick | tesseract</code> shell pipeline is the cleanest architecture. It keeps everything in one file, eliminates the need for a third wrapper script, and gives you Python's clean file-handling and regex rules alongside ImageMagick's C-level execution speed.</p>
+<p>Here is the updated script, configured to target PC screenshots (<code>YYYY-MM-DD-*.jpg</code>), generate <code>.url.txt</code> sidecar files via your working <code>magick</code> pipeline, and sort matching images.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+
+# Exact GIMP crop coordinates for Firefox URL bar
+CROP_W = 1603
+CROP_H = 31
+CROP_X = 323
+CROP_Y = 56
+
+# Rules mapping: (Regex pattern -&gt; Subfolder name)
+RULES = [
+    (r&quot;craigslist\.org&quot;, &quot;craigslist&quot;),
+    (r&quot;wikipedia\.org&quot;, &quot;wikipedia&quot;),
+    (r&quot;howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing&quot;, &quot;housing-listings&quot;),
+    (r&quot;news\.google\.com&quot;, &quot;google-news&quot;),
+    (r&quot;cambriabike\.com&quot;, &quot;shopping-cambria-bike&quot;),
+    (r&quot;jensonusa\.com&quot;, &quot;shopping-jenson-usa-bike&quot;),
+    (r&quot;amazon\.com&quot;, &quot;shopping-amazon&quot;),
+    (r&quot;bikeradar\.com&quot;, &quot;shopping-bikeradar-bike&quot;),
+    (r&quot;rottentomatoes\.com&quot;, &quot;movies&quot;),
+    (r&quot;audioclassics\.com&quot;, &quot;audioclassics&quot;),
+    (r&quot;forecast\.weather\.gov&quot;, &quot;weather&quot;),
+    (r&quot;npr\.org&quot;, &quot;news&quot;),
+    (r&quot;ebay\.com&quot;, &quot;shopping-ebay&quot;),
+    (r&quot;github\.com&quot;, &quot;github&quot;),
+    (r&quot;arstechnica\.com&quot;, &quot;technology&quot;),
+    (r&quot;gizmodo\.com&quot;, &quot;news&quot;),
+    (r&quot;nytimes\.com&quot;, &quot;news&quot;),
+    (r&quot;theguardian\.com&quot;, &quot;news&quot;),
+    (r&quot;techcrunch\.com&quot;, &quot;technology&quot;),
+]
+
+# Regex matching PC screenshot naming convention (e.g. 2026-08-02-12:02-44_2560x1440.jpg)
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def run_magick_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Executes the tested ImageMagick + Tesseract shell pipeline.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;
+
+def batch_sort():
+    # Pick up only PC screenshots in current working directory
+    pc_images = [
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ]
+
+    if not pc_images:
+        print(f&quot;No unprocessed PC screenshots found in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Processing {len(pc_images)} PC screenshot(s) in {WORK_DIR}...\n&quot;)
+
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+
+        # Check for existing sidecar or generate via ImageMagick pipeline
+        if url_txt_path.is_file():
+            try:
+                extracted_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;)
+            except Exception:
+                extracted_text = &quot;&quot;
+        else:
+            extracted_text = run_magick_ocr(image_path)
+            # Write sidecar url.txt file for inspection/debugging
+            try:
+                url_txt_path.write_text(extracted_text, encoding=&quot;utf-8&quot;)
+            except Exception as e:
+                print(f&quot;Warning: Could not save sidecar for {image_path.name}: {e}&quot;)
+
+        # Check rules
+        subfolder_name = None
+        for pattern, folder in RULES:
+            if re.search(pattern, extracted_text):
+                subfolder_name = folder
+                break
+
+        # Move both image and .url.txt if a rule matched
+        if subfolder_name:
+            target_dir = WORK_DIR / subfolder_name
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            shutil.move(str(image_path), str(target_dir / image_path.name))
+
+            if url_txt_path.is_file():
+                shutil.move(str(url_txt_path), str(target_dir / url_txt_path.name))
+
+            print(f&quot;Moved '{image_path.name}' -&gt; {subfolder_name}/&quot;)
+        else:
+            print(f&quot;Skipped '{image_path.name}' (no rule matched, .url.txt cached)&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    batch_sort()
+
+</code></pre>
+<h2>Key Benefits of This Architecture</h2>
+<ol>
+<li><strong>Self-Contained Execution:</strong> Running <code>python3 ocr_then_sort_screenshots_here.py</code> handles filtering, cropped CLI OCR execution, sidecar generation, and folder sorting in one go.</li>
+<li><strong>Selective File Filtering:</strong> <code>PC_SCREENSHOT_PATTERN</code> isolates PC screenshots (<code>2026-08-02-*.jpg</code>) and ignores Android screenshots (<code>Screenshot_*.png</code>), avoiding misaligned crops on mobile layouts.</li>
+<li><strong>Pipelined Speed:</strong> Streams ImageMagick output directly into Tesseract stdin in memory without writing temporary crop files to disk.</li>
+<li><strong>Sidecar Cache (<code>.url.txt</code>):</strong> Generates <code>.url.txt</code> sidecar files alongside each image. Re-running the script to test new regex rules reads those text files instantly.</li>
+</ol>
+<hr />
+<p><strong><a href="20260810_165648_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_171134_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_165652_capture.md&quot;)</p>
