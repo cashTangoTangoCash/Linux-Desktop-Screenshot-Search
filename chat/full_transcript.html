@@ -1328,3 +1328,139 @@ convert &quot;$INPUT_IMAGE&quot; \
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_135056_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 17</h1>
+<p>the output is not as expected.  let's write the cropped image to disk in order to see what it looks like, before we apply tesseract.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142011_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 17</h1>
+<p>Here are two commands to output the cropped image directly to disk. The first saves the raw crop so you can verify your pixel coordinates, and the second saves the fully pre-processed image that Tesseract actually receives.</p>
+<h3>1. Save Raw Crop (Verify Geometry Coordinates)</h3>
+<p>This extracts just the selected box from the original image without applying any transformations:</p>
+<pre><code class="language-bash">convert input.png -crop 1420x42+380+72 +repage cropped_raw.png
+
+</code></pre>
+<p>Open <code>cropped_raw.png</code> in Eye of GNOME (<code>eog cropped_raw.png</code>) to check if the URL bar is fully centered and contained inside the box.</p>
+<hr />
+<h3>2. Save Pre-Processed Image (Verify What Tesseract Sees)</h3>
+<p>This applies the grayscale conversion, 200% resize, and contrast adjustment, then saves it as a PNG:</p>
+<pre><code class="language-bash">convert input.png \
+    -crop 1420x42+380+72 +repage \
+    -colorspace Gray \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    cropped_prep.png
+
+</code></pre>
+<hr />
+<h3>Common Geometry Gotchas</h3>
+<p>When inspecting the output image, look for these three common issues:</p>
+<ul>
+<li><strong>Offset X/Y (Wrong Starting Corner):</strong> If the cropped image shows empty space, window borders, or bookmarks instead of text, the <code>+X+Y</code> offset needs adjustment.</li>
+<li><strong>Window Scaling / DPI:</strong> If the screenshot was taken on a display with fractional scaling (or if Firefox was not running maximized/full-screen), the absolute pixel location of the URL bar shifts.</li>
+<li><strong>Inverted / Dark Mode Text:</strong> If <code>cropped_prep.png</code> shows light text on a dark background, Tesseract will struggle. You can add <code>-negate</code> to the ImageMagick arguments to flip dark mode text to black-on-white:</li>
+</ul>
+<pre><code class="language-bash">convert input.png \
+    -crop 1420x42+380+72 +repage \
+    -colorspace Gray \
+    -negate \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    cropped_prep_inverted.png
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142015_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 18</h1>
+<p>before I try that stuff, does it matter that my screenshots are .jpg?</p>
+<p>  /home/dad84/Documents/2026/screenshots/test4/craigslist:
+  drwxr-xr-x 2 4.0K Aug  7 23:35 .
+  drwxr-xr-x 3 4.0K Aug  7 23:35 ..
+  -rw-r--r-- 1 229K Jan 21  2026 2026-01-21-10:19-52_2560x1440.jpg
+  -rw-r--r-- 1  461 Aug  7 23:35 2026-01-21-10:19-52_2560x1440.jpg.txt
+  -rw-r--r-- 1 209K Jan 21  2026 2026-01-21-10:19-54_2560x1440.jpg
+  -rw-r--r-- 1  448 Aug  7 23:35 2026-01-21-10:19-54_2560x1440.jpg.txt
+  -rw-r--r-- 1 190K Jan 21  2026 2026-01-21-10:19-55_2560x1440.jpg
+  -rw-r--r-- 1  438 Aug  7 23:34 2026-01-21-10:19-55_2560x1440.jpg.txt
+  -rw-r--r-- 1 297K Jan 21  2026 2026-01-21-10:19-57_2560x1440.jpg
+  -rw-r--r-- 1  463 Aug  7 23:35 2026-01-21-10:19-57_2560x1440.jpg.txt
+  -rw-r--r-- 1 279K Jan 21  2026 2026-01-21-10:20-00_2560x1440.jpg
+  -rw-r--r-- 1  530 Aug  7 23:35 2026-01-21-10:20-00_2560x1440.jpg.txt
+  -rw-r--r-- 1 230K Jan 21  2026 2026-01-21-10:20-02_2560x1440.jpg
+  -rw-r--r-- 1  433 Aug  7 23:35 2026-01-21-10:20-02_2560x1440.jpg.txt</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142017_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 18</h1>
+<p>No, ImageMagick and Tesseract handle <code>.jpg</code> files just as easily as <code>.png</code> files, and your crop coordinates remain identical since the underlying resolution is still <strong>2560x1440</strong>.</p>
+<p>There are two minor details to keep in mind when working with JPEG screenshots:</p>
+<h3>1. Compression Artifacts</h3>
+<p>JPEG is a lossy format that creates subtle pixel noise (&quot;mosquito noise&quot;) around high-contrast edges like small URL bar text.</p>
+<p>This noise is another reason the ImageMagick pre-processing step helps: <code>-resize 200%</code> and <code>-contrast-stretch 0x50%</code> effectively smooth out those JPEG compression artifacts and sharpen the text edges before Tesseract sees the image.</p>
+<h3>2. Testing the Crop Command</h3>
+<p>You can run the test command directly against one of your actual JPEG files:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg -crop 1420x42+380+72 +repage cropped_raw.jpg
+
+</code></pre>
+<p>Then view <code>cropped_raw.jpg</code> in Eye of GNOME (<code>eog cropped_raw.jpg</code>) to verify that your <code>WIDTHxHEIGHT+X+Y</code> coordinates land squarely on the URL bar.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142023_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 19</h1>
+<p>yes, the cropped image is way off somehow and it contains text that I don't see on the original image (&quot;image 1 of 12&quot; is not on the original image) - ???.  oh wait, I found the cropped image within the original image - it's just in the wrong place.  I used slop - maybe slop is going by screen pixels and eog is not full-screen - the actual image is not full screen and I see GUI elements that belong to eog or maybe the desktop environment taking up screen real estate.  maybe I have to use GIMP instead of slop.  this stuff is so pains-taking but it's still the reality of using a computer.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142026_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 19</h1>
+<p>Your diagnosis is 100% correct. <code>slop</code> measures physical monitor screen pixels, so as soon as Eye of GNOME scales the image to fit a window or adds window borders, screen coordinates no longer match the actual 2560x1440 image canvas.</p>
+<p>GIMP operates directly on image-native canvas pixels, where $0,0$ is always the top-left pixel of the file itself, regardless of display scaling or window sizes.</p>
+<p>Here is the quickest way to grab the exact numbers in GIMP:</p>
+<ol>
+<li>Open the image file:</li>
+</ol>
+<pre><code class="language-bash">gimp 2026-01-21-10:19-52_2560x1440.jpg
+
+</code></pre>
+<ol start="2">
+<li>Press <strong><code>R</code></strong> to activate the <strong>Rectangle Select Tool</strong>.</li>
+<li>Click and drag a box tightly around the URL bar.</li>
+<li>Look at the <strong>Tool Options</strong> panel on the left sidebar:</li>
+</ol>
+<ul>
+<li><strong>Position:</strong> gives your <strong><code>X</code></strong> and <strong><code>Y</code></strong></li>
+<li><strong>Size:</strong> gives your <strong><code>WIDTH</code></strong> and <strong><code>HEIGHT</code></strong></li>
+</ul>
+<p>Once you have those image-native numbers, feed them back into the ImageMagick test command:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg -crop WIDTHxHEIGHT+X+Y +repage cropped_test.jpg
+
+</code></pre>
+<p>Opening <code>cropped_test.jpg</code> in Eye of GNOME will now show the URL bar cropped cleanly to the edges.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142031_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 20</h1>
+<p>ok, we have a valid image.  let's move on to a tesseract one-liner that operates on it.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142033_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 20</h1>
+<p>Here are the three cleanest one-liners depending on whether you want to test the saved cropped image or process original screenshots on the fly.</p>
+<h3>1. Simple One-Liner (On Saved Cropped File)</h3>
+<p>To run Tesseract directly on your verified <code>cropped_test.jpg</code> and print the text to your terminal:</p>
+<pre><code class="language-bash">tesseract cropped_test.jpg stdout
+
+</code></pre>
+<hr />
+<h3>2. Optimized One-Liner for URL Bars (<code>--psm 7</code>)</h3>
+<p>For a single strip of text like a URL bar or window title, adding <code>--psm 7</code> (Page Segmentation Mode 7: <em>Treat the image as a single text line</em>) prevents Tesseract from wasting time trying to find paragraphs or multi-line layouts, dramatically improving accuracy:</p>
+<pre><code class="language-bash">tesseract cropped_test.jpg stdout --psm 7
+
+</code></pre>
+<hr />
+<h3>3. Full Combined One-Liner (Raw Screenshot $\rightarrow$ Clean Text)</h3>
+<p>Once your coordinates are set, this single command crops, pre-processes, and runs OCR directly in memory without saving temporary crop files to disk:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg \
+    -crop WIDTHxHEIGHT+X+Y +repage \
+    -colorspace Gray \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    tif:- | tesseract stdin stdout --psm 7
+
+</code></pre>
+<p><em>(Be sure to replace <code>WIDTHxHEIGHT+X+Y</code> with the four numbers you recorded from GIMP.)</em></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142037_capture.md&quot;)</p>
+<hr />

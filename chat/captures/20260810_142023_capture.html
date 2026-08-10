@@ -1,0 +1,18 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 18</h1>
+<p><strong><a href="20260810_142017_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142026_capture.html">Next →</a></strong></p>
+<hr />
+<p>No, ImageMagick and Tesseract handle <code>.jpg</code> files just as easily as <code>.png</code> files, and your crop coordinates remain identical since the underlying resolution is still <strong>2560x1440</strong>.</p>
+<p>There are two minor details to keep in mind when working with JPEG screenshots:</p>
+<h3>1. Compression Artifacts</h3>
+<p>JPEG is a lossy format that creates subtle pixel noise (&quot;mosquito noise&quot;) around high-contrast edges like small URL bar text.</p>
+<p>This noise is another reason the ImageMagick pre-processing step helps: <code>-resize 200%</code> and <code>-contrast-stretch 0x50%</code> effectively smooth out those JPEG compression artifacts and sharpen the text edges before Tesseract sees the image.</p>
+<h3>2. Testing the Crop Command</h3>
+<p>You can run the test command directly against one of your actual JPEG files:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg -crop 1420x42+380+72 +repage cropped_raw.jpg
+
+</code></pre>
+<p>Then view <code>cropped_raw.jpg</code> in Eye of GNOME (<code>eog cropped_raw.jpg</code>) to verify that your <code>WIDTHxHEIGHT+X+Y</code> coordinates land squarely on the URL bar.</p>
+<hr />
+<p><strong><a href="20260810_142017_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142026_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142023_capture.md&quot;)</p>

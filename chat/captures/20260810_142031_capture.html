@@ -1,0 +1,30 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 19</h1>
+<p><strong><a href="20260810_142026_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142033_capture.html">Next →</a></strong></p>
+<hr />
+<p>Your diagnosis is 100% correct. <code>slop</code> measures physical monitor screen pixels, so as soon as Eye of GNOME scales the image to fit a window or adds window borders, screen coordinates no longer match the actual 2560x1440 image canvas.</p>
+<p>GIMP operates directly on image-native canvas pixels, where $0,0$ is always the top-left pixel of the file itself, regardless of display scaling or window sizes.</p>
+<p>Here is the quickest way to grab the exact numbers in GIMP:</p>
+<ol>
+<li>Open the image file:</li>
+</ol>
+<pre><code class="language-bash">gimp 2026-01-21-10:19-52_2560x1440.jpg
+
+</code></pre>
+<ol start="2">
+<li>Press <strong><code>R</code></strong> to activate the <strong>Rectangle Select Tool</strong>.</li>
+<li>Click and drag a box tightly around the URL bar.</li>
+<li>Look at the <strong>Tool Options</strong> panel on the left sidebar:</li>
+</ol>
+<ul>
+<li><strong>Position:</strong> gives your <strong><code>X</code></strong> and <strong><code>Y</code></strong></li>
+<li><strong>Size:</strong> gives your <strong><code>WIDTH</code></strong> and <strong><code>HEIGHT</code></strong></li>
+</ul>
+<p>Once you have those image-native numbers, feed them back into the ImageMagick test command:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg -crop WIDTHxHEIGHT+X+Y +repage cropped_test.jpg
+
+</code></pre>
+<p>Opening <code>cropped_test.jpg</code> in Eye of GNOME will now show the URL bar cropped cleanly to the edges.</p>
+<hr />
+<p><strong><a href="20260810_142026_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142033_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142031_capture.md&quot;)</p>

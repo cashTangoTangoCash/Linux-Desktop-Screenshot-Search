@@ -1,0 +1,42 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 17</h1>
+<p><strong><a href="20260810_142011_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142017_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here are two commands to output the cropped image directly to disk. The first saves the raw crop so you can verify your pixel coordinates, and the second saves the fully pre-processed image that Tesseract actually receives.</p>
+<h3>1. Save Raw Crop (Verify Geometry Coordinates)</h3>
+<p>This extracts just the selected box from the original image without applying any transformations:</p>
+<pre><code class="language-bash">convert input.png -crop 1420x42+380+72 +repage cropped_raw.png
+
+</code></pre>
+<p>Open <code>cropped_raw.png</code> in Eye of GNOME (<code>eog cropped_raw.png</code>) to check if the URL bar is fully centered and contained inside the box.</p>
+<hr />
+<h3>2. Save Pre-Processed Image (Verify What Tesseract Sees)</h3>
+<p>This applies the grayscale conversion, 200% resize, and contrast adjustment, then saves it as a PNG:</p>
+<pre><code class="language-bash">convert input.png \
+    -crop 1420x42+380+72 +repage \
+    -colorspace Gray \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    cropped_prep.png
+
+</code></pre>
+<hr />
+<h3>Common Geometry Gotchas</h3>
+<p>When inspecting the output image, look for these three common issues:</p>
+<ul>
+<li><strong>Offset X/Y (Wrong Starting Corner):</strong> If the cropped image shows empty space, window borders, or bookmarks instead of text, the <code>+X+Y</code> offset needs adjustment.</li>
+<li><strong>Window Scaling / DPI:</strong> If the screenshot was taken on a display with fractional scaling (or if Firefox was not running maximized/full-screen), the absolute pixel location of the URL bar shifts.</li>
+<li><strong>Inverted / Dark Mode Text:</strong> If <code>cropped_prep.png</code> shows light text on a dark background, Tesseract will struggle. You can add <code>-negate</code> to the ImageMagick arguments to flip dark mode text to black-on-white:</li>
+</ul>
+<pre><code class="language-bash">convert input.png \
+    -crop 1420x42+380+72 +repage \
+    -colorspace Gray \
+    -negate \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    cropped_prep_inverted.png
+
+</code></pre>
+<hr />
+<p><strong><a href="20260810_142011_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_142017_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142015_capture.md&quot;)</p>

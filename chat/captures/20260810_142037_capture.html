@@ -1,0 +1,31 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 20</h1>
+<p><strong><a href="20260810_142033_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here are the three cleanest one-liners depending on whether you want to test the saved cropped image or process original screenshots on the fly.</p>
+<h3>1. Simple One-Liner (On Saved Cropped File)</h3>
+<p>To run Tesseract directly on your verified <code>cropped_test.jpg</code> and print the text to your terminal:</p>
+<pre><code class="language-bash">tesseract cropped_test.jpg stdout
+
+</code></pre>
+<hr />
+<h3>2. Optimized One-Liner for URL Bars (<code>--psm 7</code>)</h3>
+<p>For a single strip of text like a URL bar or window title, adding <code>--psm 7</code> (Page Segmentation Mode 7: <em>Treat the image as a single text line</em>) prevents Tesseract from wasting time trying to find paragraphs or multi-line layouts, dramatically improving accuracy:</p>
+<pre><code class="language-bash">tesseract cropped_test.jpg stdout --psm 7
+
+</code></pre>
+<hr />
+<h3>3. Full Combined One-Liner (Raw Screenshot $\rightarrow$ Clean Text)</h3>
+<p>Once your coordinates are set, this single command crops, pre-processes, and runs OCR directly in memory without saving temporary crop files to disk:</p>
+<pre><code class="language-bash">convert 2026-01-21-10:19-52_2560x1440.jpg \
+    -crop WIDTHxHEIGHT+X+Y +repage \
+    -colorspace Gray \
+    -resize 200% \
+    -contrast-stretch 0x50% \
+    tif:- | tesseract stdin stdout --psm 7
+
+</code></pre>
+<p><em>(Be sure to replace <code>WIDTHxHEIGHT+X+Y</code> with the four numbers you recorded from GIMP.)</em></p>
+<hr />
+<p><strong><a href="20260810_142033_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_142037_capture.md&quot;)</p>
