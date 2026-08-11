@@ -2161,3 +2161,140 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_171146_capture.md")
 
 ---
+
+# PROMPT 24
+what a cool python script.  I gave it a short try.
+
+initial changes that much better match my taste:
+
+- I don't want focus to switch to feh.  I want focus to stay on terminal.
+- I want feh to fill up the monitor at all times.  I manually maximize it and then when I go to the next screenshot, feh is back to non-maximized (modest size)
+- when I advance to the next screenshot, I want the terminal cleared before printing the stuff for the next screenshot.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231846_capture.md")
+
+---
+
+# RESPONSE 24
+To solve all three requirements cleanly, the script runs a single persistent `feh` process in native fullscreen mode (`-F`) pointing to a temporary symlink (`/tmp/review_current_flashcard.jpg`).
+
+When advancing to the next card, Python updates the symlink and sends a `SIGUSR1` signal to `feh`. This forces `feh` to instantly reload the image on your display without reopening windows, shifting OS focus away from your terminal, or losing its fullscreen state.
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter."""
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Updates the target symlink and signals feh to reload without stealing focus."""
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    # Send SIGUSR1 to feh to force an immediate image refresh in the background
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f"{img.name}.url.txt"
+            if txt.is_file():
+                pairs.append((img, txt))
+
+    if not pairs:
+        print("No image / .url.txt pairs found to review.")
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())
+
+    # Launch feh ONCE in fullscreen mode (-F) with automatic image scaling (--auto-zoom)
+    feh_proc = subprocess.Popen(
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            # Refresh symlink & signal feh (terminal retains focus)
+            update_symlink_and_reload(img_path, feh_proc)
+
+            # Clear terminal output for a clean card view
+            os.system("clear")
+
+            try:
+                ocr_text = txt_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                ocr_text = "<Failed to read file>"
+
+            print(f"=== Flashcard Review ({idx}/{len(pairs)}) ===")
+            print(f"File: {img_path.name}")
+            print("=" * 60)
+            print(f"OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}")
+            print("=" * 60)
+            print("Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -> ", end="", flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)
+
+    finally:
+        # Clean termination of background feh and temp file on exit
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+```
+
+### What Changed
+
+1. **Focus Lock:** Because `feh` is started only once in the background, window focus never leaves your terminal.
+2. **Persistent Fullscreen:** `-F` keeps `feh` maximized across monitor boundaries, and `--auto-zoom` scales every image automatically to fit the screen.
+3. **Clean Interface:** `os.system("clear")` wipes the terminal on every iteration, displaying only the active card's OCR payload and action prompt.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231852_capture.md")
+
+---

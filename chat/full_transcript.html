@@ -1773,3 +1773,131 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_171146_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 24</h1>
+<p>what a cool python script.  I gave it a short try.</p>
+<p>initial changes that much better match my taste:</p>
+<ul>
+<li>I don't want focus to switch to feh.  I want focus to stay on terminal.</li>
+<li>I want feh to fill up the monitor at all times.  I manually maximize it and then when I go to the next screenshot, feh is back to non-maximized (modest size)</li>
+<li>when I advance to the next screenshot, I want the terminal cleared before printing the stuff for the next screenshot.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231846_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 24</h1>
+<p>To solve all three requirements cleanly, the script runs a single persistent <code>feh</code> process in native fullscreen mode (<code>-F</code>) pointing to a temporary symlink (<code>/tmp/review_current_flashcard.jpg</code>).</p>
+<p>When advancing to the next card, Python updates the symlink and sends a <code>SIGUSR1</code> signal to <code>feh</code>. This forces <code>feh</code> to instantly reload the image on your display without reopening windows, shifting OS focus away from your terminal, or losing its fullscreen state.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter.&quot;&quot;&quot;
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    # Send SIGUSR1 to feh to force an immediate image refresh in the background
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            if txt.is_file():
+                pairs.append((img, txt))
+
+    if not pairs:
+        print(&quot;No image / .url.txt pairs found to review.&quot;)
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())
+
+    # Launch feh ONCE in fullscreen mode (-F) with automatic image scaling (--auto-zoom)
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            # Refresh symlink &amp; signal feh (terminal retains focus)
+            update_symlink_and_reload(img_path, feh_proc)
+
+            # Clear terminal output for a clean card view
+            os.system(&quot;clear&quot;)
+
+            try:
+                ocr_text = txt_path.read_text(encoding=&quot;utf-8&quot;).strip()
+            except Exception:
+                ocr_text = &quot;&lt;Failed to read file&gt;&quot;
+
+            print(f&quot;=== Flashcard Review ({idx}/{len(pairs)}) ===&quot;)
+            print(f&quot;File: {img_path.name}&quot;)
+            print(&quot;=&quot; * 60)
+            print(f&quot;OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}&quot;)
+            print(&quot;=&quot; * 60)
+            print(&quot;Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)
+
+    finally:
+        # Clean termination of background feh and temp file on exit
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<h3>What Changed</h3>
+<ol>
+<li><strong>Focus Lock:</strong> Because <code>feh</code> is started only once in the background, window focus never leaves your terminal.</li>
+<li><strong>Persistent Fullscreen:</strong> <code>-F</code> keeps <code>feh</code> maximized across monitor boundaries, and <code>--auto-zoom</code> scales every image automatically to fit the screen.</li>
+<li><strong>Clean Interface:</strong> <code>os.system(&quot;clear&quot;)</code> wipes the terminal on every iteration, displaying only the active card's OCR payload and action prompt.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231852_capture.md&quot;)</p>
+<hr />
