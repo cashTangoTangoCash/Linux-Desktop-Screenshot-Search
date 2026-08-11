@@ -5,6 +5,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 WORK_DIR = Path.cwd()
@@ -29,7 +30,6 @@ def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
         TEMP_LINK.unlink()
     TEMP_LINK.symlink_to(image_path.resolve())
 
-    # Send SIGUSR1 to feh to force an immediate image refresh in the background
     if feh_proc and feh_proc.poll() is None:
         os.kill(feh_proc.pid, signal.SIGUSR1)
 
@@ -50,31 +50,17 @@ def review_flashcards():
         TEMP_LINK.unlink()
     TEMP_LINK.symlink_to(pairs[0][0].resolve())
 
-    # 1. Print and verify the symlink target
-    print(f"[DEBUG] Symlink created: {TEMP_LINK} -> {TEMP_LINK.resolve()}")
-    print(f"[DEBUG] Target file exists? {TEMP_LINK.resolve().exists()}")
-
-    # 2. Launch feh WITHOUT silencing stderr
+    # Launch feh once in background
     feh_proc = subprocess.Popen(
-        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)]
-        # Removed stderr=subprocess.DEVNULL so error prints directly to console
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
     )
+    time.sleep(0.1) # Brief pause to allow window initialization
 
-    # 3. Give feh 0.2 seconds to initialize and check if it crashed
-    import time
-    time.sleep(0.2)
-    poll_status = feh_proc.poll()
-    print(f"[DEBUG] feh PID: {feh_proc.pid} | Exit status: {poll_status}")
-    if poll_status is not None:
-        print("[DEBUG] ERROR: feh died immediately after starting!")
-        
     try:
         for idx, (img_path, txt_path) in enumerate(pairs, 1):
-            # Refresh symlink & signal feh (terminal retains focus)
             update_symlink_and_reload(img_path, feh_proc)
-
-            # Clear terminal output for a clean card view
-            # os.system("clear")
+            os.system("clear")
 
             try:
                 ocr_text = txt_path.read_text(encoding="utf-8").strip()
@@ -104,13 +90,12 @@ def review_flashcards():
                 txt_path.unlink(missing_ok=True)
 
     finally:
-        # Clean termination of background feh and temp file on exit
         if feh_proc and feh_proc.poll() is None:
             feh_proc.terminate()
         if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
             TEMP_LINK.unlink()
 
-        # os.system("clear")
+        os.system("clear")
         print("Flashcard review complete.")
 
 if __name__ == "__main__":
