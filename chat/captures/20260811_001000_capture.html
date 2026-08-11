@@ -1,0 +1,35 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 29</h1>
+<p><strong><a href="20260811_000954_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_001108_capture.html">Next →</a></strong></p>
+<hr />
+<p>Git's terminology reads like a gothic novel—<em>detached HEAD</em>, <em>orphaned commits</em>, <em>prune</em>, <em>rebase</em>. &quot;Detached HEAD&quot; sounds like a fatal repository corruption, but mechanically, it's just Git's way of saying: &quot;Your cursor is standing directly on a commit hash instead of holding onto a branch name.&quot;</p>
+<hr />
+<h3>What Is Actually Happening</h3>
+<p>Under normal conditions, <code>HEAD</code> points to a branch label (<code>master</code>), and <code>master</code> points to a commit. When you make a new commit, Git slides the <code>master</code> label forward, and <code>HEAD</code> follows along automatically.</p>
+<pre><code>Normal State:
+HEAD  ---&gt;  master  ---&gt;  [ Commit A ]
+
+</code></pre>
+<p>When you enter a <strong>detached HEAD</strong> state (usually by checking out a specific commit hash, a tag, or a remote branch directly), <code>HEAD</code> bypasses the branch label completely:</p>
+<pre><code>Detached HEAD State:
+HEAD  -----------------&gt;  [ Commit A ]
+            master  ---&gt;  [ Commit A ]
+
+</code></pre>
+<h3>The Real Danger of a Detached HEAD</h3>
+<p>Being in a detached HEAD state is completely fine if you're just looking around or testing old code.</p>
+<p>The trap happens if you <strong>make new commits</strong> while detached. Git will gladly let you write code and commit it, but because no branch label (<code>master</code> or <code>debug-feh</code>) is attached to those commits, they float in space. The moment you run <code>git checkout master</code> to leave, those new commits are left behind without a label pointing to them.</p>
+<hr />
+<h3>Escaping Detached HEAD in Magit</h3>
+<p>If you ever realize Magit is showing a commit hash instead of a branch name in the header:</p>
+<ul>
+<li><strong>If you haven't made any new commits and just want to get back to safety:</strong>
+Press <strong><code>b b</code></strong> (checkout branch) and select <code>master</code> (or hit <code>Enter</code>). You're instantly back home.</li>
+<li><strong>If you <em>did</em> make commits and want to save them:</strong>
+Press <strong><code>b c</code></strong> (create and checkout branch) and type a name (e.g., <code>saved-work</code>). Magit will attach a real branch label directly to where you're currently standing, turning your floating commits into a proper, safe branch.</li>
+<li><strong>If you already navigated away and &quot;lost&quot; your work:</strong>
+Nothing in Git is actually deleted right away. You can press <strong><code>r l</code></strong> in Magit to open the <code>reflog</code> (a chronological history of everywhere <code>HEAD</code> has stood), find the commit hash where you made your changes, and branch off it.</li>
+</ul>
+<hr />
+<p><strong><a href="20260811_000954_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_001108_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001000_capture.md&quot;)</p>

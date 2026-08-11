@@ -1,0 +1,31 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 26</h1>
+<p><strong><a href="20260811_000938_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_000943_capture.html">Next →</a></strong></p>
+<hr />
+<p>Creating a dedicated branch for a quick, two-minute &quot;add three <code>print()</code> statements&quot; test is usually <strong>unnecessary overhead</strong>, though it is a valid Git technique.</p>
+<p>How experienced developers handle temporary debugging edits usually comes down to the scope of the fix:</p>
+<h3>1. In-Place Working Tree Edits (Best for Quick Debugging)</h3>
+<p>For adding temporary logging, <code>print()</code> statements, or commenting out <code>os.system(&quot;clear&quot;)</code>, keep the edits directly in your working directory on the current branch without committing them.</p>
+<ul>
+<li><strong>Review temporary changes:</strong> <code>git diff</code> lets you instantly see all temporary additions highlighted on screen.</li>
+<li><strong>Wipe temporary changes when done:</strong> Run <code>git restore review_script.py</code> (or <code>git checkout -- review_script.py</code> on older Git versions) to instantly discard all debug edits and return to clean code.</li>
+</ul>
+<hr />
+<h3>2. The <code>git stash</code> Workflow (Best for Quick Comparisons)</h3>
+<p>If you want to quickly test how the script behaves in its clean state versus your debug state without losing your debug edits:</p>
+<ul>
+<li><strong>Temporarily hide debug edits:</strong> <code>git stash</code> safely hides all uncommitted debug edits and resets the file to the last clean state.</li>
+<li><strong>Bring debug edits back:</strong> <code>git stash pop</code> re-applies your debug <code>print()</code> statements.</li>
+</ul>
+<hr />
+<h3>3. A Debug / Spike Branch (Best for Deep or Destructive Fixes)</h3>
+<p>Creating a temporary branch (e.g., <code>git checkout -b debug-feh-reload</code>) becomes worth it under three specific conditions:</p>
+<ol>
+<li><strong>Uncertainty:</strong> You don't know why it's failing and expect to spend hours trying multiple structural fixes.</li>
+<li><strong>Commit History:</strong> You want to make intermediate commits (e.g., &quot;tried X approach&quot;, &quot;tried Y signal&quot;) without dirtying your main branch history.</li>
+<li><strong>Context Switching:</strong> You need to pause debugging, work on something else in the main script, and return to the bug later.</li>
+</ol>
+<p>For this specific <code>feh</code> signal/launch check, staying on your current branch, making inline edits, and wiping them with <code>git restore</code> when finished is the cleanest and fastest route.</p>
+<hr />
+<p><strong><a href="20260811_000938_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_000943_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000941_capture.md&quot;)</p>

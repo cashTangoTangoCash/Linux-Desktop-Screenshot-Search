@@ -1,9 +1,19 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 24</h1>
-<p><strong><a href="20260810_231846_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_235535_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 30</h1>
+<p><strong><a href="20260811_001108_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
 <hr />
-<p>To solve all three requirements cleanly, the script runs a single persistent <code>feh</code> process in native fullscreen mode (<code>-F</code>) pointing to a temporary symlink (<code>/tmp/review_current_flashcard.jpg</code>).</p>
-<p>When advancing to the next card, Python updates the symlink and sends a <code>SIGUSR1</code> signal to <code>feh</code>. This forces <code>feh</code> to instantly reload the image on your display without reopening windows, shifting OS focus away from your terminal, or losing its fullscreen state.</p>
+<p>The mystery of the missing debug messages comes down to one line inside your loop: <strong><code>os.system(&quot;clear&quot;)</code></strong>.</p>
+<p>When the script starts:</p>
+<ol>
+<li>It prints your <code>[DEBUG]</code> messages to standard output.</li>
+<li>It launches <code>feh</code> and pauses for 0.2 seconds.</li>
+<li>It immediately enters the <code>for</code> loop for Card 1.</li>
+<li>It hits <code>os.system(&quot;clear&quot;)</code> and wipes the terminal screen in less than a millisecond—erasing the debug output before your eyes could catch it.</li>
+</ol>
+<p>As for why <code>feh</code> started working: setting up the <code>/tmp/review_current_flashcard.jpg</code> symlink <em>before</em> calling <code>subprocess.Popen</code> gave <code>feh</code> a valid target on its exact millisecond of launch, and <code>time.sleep(0.2)</code> gave the X server enough breathing room to map the window cleanly.</p>
+<hr />
+<h3>Clean, Production-Ready Version</h3>
+<p>Now that the mechanism is proven to work, here is the script cleaned up—with debug code removed, <code>feh</code> error messages silenced again, and a tiny <code>time.sleep(0.1)</code> retained right after <code>feh</code> spawns to guarantee window initialization on older or busier hardware:</p>
 <pre><code class="language-python">#!/usr/bin/env python3
 import os
 import re
@@ -11,6 +21,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 WORK_DIR = Path.cwd()
@@ -35,7 +46,6 @@ def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
         TEMP_LINK.unlink()
     TEMP_LINK.symlink_to(image_path.resolve())
 
-    # Send SIGUSR1 to feh to force an immediate image refresh in the background
     if feh_proc and feh_proc.poll() is None:
         os.kill(feh_proc.pid, signal.SIGUSR1)
 
@@ -56,18 +66,16 @@ def review_flashcards():
         TEMP_LINK.unlink()
     TEMP_LINK.symlink_to(pairs[0][0].resolve())
 
-    # Launch feh ONCE in fullscreen mode (-F) with automatic image scaling (--auto-zoom)
+    # Launch feh once in background
     feh_proc = subprocess.Popen(
         [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
         stderr=subprocess.DEVNULL
     )
+    time.sleep(0.1) # Brief pause to allow window initialization
 
     try:
         for idx, (img_path, txt_path) in enumerate(pairs, 1):
-            # Refresh symlink &amp; signal feh (terminal retains focus)
             update_symlink_and_reload(img_path, feh_proc)
-
-            # Clear terminal output for a clean card view
             os.system(&quot;clear&quot;)
 
             try:
@@ -98,7 +106,6 @@ def review_flashcards():
                 txt_path.unlink(missing_ok=True)
 
     finally:
-        # Clean termination of background feh and temp file on exit
         if feh_proc and feh_proc.poll() is None:
             feh_proc.terminate()
         if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
@@ -111,12 +118,6 @@ if __name__ == &quot;__main__&quot;:
     review_flashcards()
 
 </code></pre>
-<h3>What Changed</h3>
-<ol>
-<li><strong>Focus Lock:</strong> Because <code>feh</code> is started only once in the background, window focus never leaves your terminal.</li>
-<li><strong>Persistent Fullscreen:</strong> <code>-F</code> keeps <code>feh</code> maximized across monitor boundaries, and <code>--auto-zoom</code> scales every image automatically to fit the screen.</li>
-<li><strong>Clean Interface:</strong> <code>os.system(&quot;clear&quot;)</code> wipes the terminal on every iteration, displaying only the active card's OCR payload and action prompt.</li>
-</ol>
 <hr />
-<p><strong><a href="20260810_231846_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260810_235535_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231852_capture.md&quot;)</p>
+<p><strong><a href="20260811_001108_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001112_capture.md&quot;)</p>

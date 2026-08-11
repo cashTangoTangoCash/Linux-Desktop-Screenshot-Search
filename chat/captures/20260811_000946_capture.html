@@ -1,0 +1,42 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 27</h1>
+<p><strong><a href="20260811_000943_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_000950_capture.html">Next →</a></strong></p>
+<hr />
+<p>If preserving non-trivial diagnostic edits in the log is the goal, creating a local branch is actually the safest option—and it only takes three commands to keep it completely hassle-free.</p>
+<p>Branching usually causes trouble when multiple people edit the same lines or when branches live for months and diverge significantly. For a single-user local project, a Git branch is literally just a <strong>lightweight label pointing to a specific commit</strong>. It gives you a sandbox where you can commit freely without worrying about breaking your working <code>main</code> script.</p>
+<h3>The Low-Stress 3-Step Branching Workflow</h3>
+<ol>
+<li><strong>Create and switch to a debug branch:</strong></li>
+</ol>
+<pre><code class="language-bash">git checkout -b debug-feh
+
+</code></pre>
+<p><em>(This creates the <code>debug-feh</code> branch and moves your focus there immediately.)</em>
+2. <strong>Make your changes and commit them:</strong></p>
+<pre><code class="language-bash">git commit -am &quot;Add diagnostic logging and pause screen clears for feh&quot;
+
+</code></pre>
+<p><em>(Your debug code is now permanently recorded in Git's log on this branch.)</em>
+3. <strong>Switch back to <code>main</code> whenever you want:</strong></p>
+<pre><code class="language-bash">git checkout main
+
+</code></pre>
+<p><em>(Your working directory instantly snaps back to your clean, production script.)</em></p>
+<hr />
+<h3>What to Do When Debugging Is Done</h3>
+<p>Once you run the debug script on <code>debug-feh</code> and identify why <code>feh</code> isn't displaying:</p>
+<ul>
+<li><strong>If the fix is good and you want to keep it on main:</strong></li>
+</ul>
+<pre><code class="language-bash">git checkout main
+git merge debug-feh
+
+</code></pre>
+<p>Because <code>main</code> hasn't changed in the meantime, Git performs a <strong>fast-forward merge</strong>—it simply slides the <code>main</code> pointer forward to include your debug commits with zero merge conflicts.</p>
+<ul>
+<li><strong>If you just want to keep the debug branch as an archive for future reference:</strong>
+Do nothing! Just leave <code>debug-feh</code> sitting there. You can switch back to <code>main</code> to run your normal sorting script, and <code>debug-feh</code> will stay safely stored in your repository history whenever you need to inspect those diagnostic print statements again.</li>
+</ul>
+<hr />
+<p><strong><a href="20260811_000943_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_000950_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000946_capture.md&quot;)</p>

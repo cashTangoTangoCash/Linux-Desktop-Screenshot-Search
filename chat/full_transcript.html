@@ -1901,3 +1901,422 @@ if __name__ == &quot;__main__&quot;:
 </ol>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_231852_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 25</h1>
+<p>feh is not appearing AFAIK.  I wonder how to debug this complex-seeming script without getting back up to speed with pudb?  targeted print statements?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_235535_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 25</h1>
+<p>The most likely reason <code>feh</code> isn't appearing is that <code>feh</code> is exiting immediately on launch, and because <code>stderr=subprocess.DEVNULL</code> is set and <code>os.system(&quot;clear&quot;)</code> runs on every loop, the error message gets instantly erased.</p>
+<p>You can debug this in under a minute with three targeted <code>print()</code> statements and disabling the screen clears—no debugger required.</p>
+<hr />
+<h3>Step 1: Add Quick Diagnostics to <code>review_flashcards()</code></h3>
+<p>Modify the launch and loop logic temporarily to print the symlink target, check if <code>feh</code> crashed, and capture any <code>feh</code> error messages:</p>
+<pre><code class="language-python">    # 1. Print and verify the symlink target
+    print(f&quot;[DEBUG] Symlink created: {TEMP_LINK} -&gt; {TEMP_LINK.resolve()}&quot;)
+    print(f&quot;[DEBUG] Target file exists? {TEMP_LINK.resolve().exists()}&quot;)
+
+    # 2. Launch feh WITHOUT silencing stderr
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)]
+        # Removed stderr=subprocess.DEVNULL so error prints directly to console
+    )
+
+    # 3. Give feh 0.2 seconds to initialize and check if it crashed
+    import time
+    time.sleep(0.2)
+    poll_status = feh_proc.poll()
+    print(f&quot;[DEBUG] feh PID: {feh_proc.pid} | Exit status: {poll_status}&quot;)
+    if poll_status is not None:
+        print(&quot;[DEBUG] ERROR: feh died immediately after starting!&quot;)
+
+</code></pre>
+<p>Also, comment out <code>os.system(&quot;clear&quot;)</code> inside the loop so the diagnostic text stays on screen:</p>
+<pre><code class="language-python">    for idx, (img_path, txt_path) in enumerate(pairs, 1):
+        update_symlink_and_reload(img_path, feh_proc)
+
+        # os.system(&quot;clear&quot;)  &lt;-- COMMENT THIS OUT FOR NOW
+
+</code></pre>
+<hr />
+<h3>Most Common Culprits Revealed by This Test</h3>
+<ol>
+<li><strong><code>feh</code> Exit Code <code>1</code> or <code>127</code>:</strong></li>
+</ol>
+<ul>
+<li><strong><code>127</code>:</strong> <code>feh</code> is not installed or not in <code>$PATH</code>. Test running <code>feh</code> directly in your terminal.</li>
+<li><strong><code>1</code>:</strong> <code>feh</code> failed to open the image format or couldn't resolve the symlink.</li>
+</ul>
+<ol start="2">
+<li><strong><code>SIGUSR1</code> Reload Behavior:</strong>
+Certain builds of <code>feh</code> require the <code>--reload</code> parameter (e.g., <code>feh -F --auto-zoom --reload 0 str(TEMP_LINK)</code>) to correctly hook into <code>SIGUSR1</code> image refreshes on X11.</li>
+<li><strong>Window Manager / Workspace Placement:</strong>
+On multi-monitor or tiled window manager setups, <code>feh -F</code> can sometimes spawn behind the terminal window or on an adjacent workspace.</li>
+</ol>
+<hr />
+<h3>Step 2: Test <code>feh</code> + <code>SIGUSR1</code> Manually in Terminal</h3>
+<p>Before running the full script again, run this two-line Bash test to confirm <code>feh</code> reacts to signals on your system:</p>
+<pre><code class="language-bash"># 1. Start feh on an image in the background
+feh -F /home/dad84/Documents/2026/screenshots/test4/craigslist/2026-01-21-10:19-52_2560x1440.jpg &amp;
+
+# 2. Send SIGUSR1 to feh (substitute $! for feh's PID or use killall)
+killall -USR1 feh
+
+</code></pre>
+<p>If the window flashes or reloads, the signal works natively on your system; if <code>feh</code> closes, <code>feh</code> on your machine requires explicit file reload flags.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260810_235540_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 26</h1>
+<p>now, as a git user, do we use a branch to do the debugging, as we are making temporary alterations to the script?  is that a good use of a branch?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000938_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 26</h1>
+<p>Creating a dedicated branch for a quick, two-minute &quot;add three <code>print()</code> statements&quot; test is usually <strong>unnecessary overhead</strong>, though it is a valid Git technique.</p>
+<p>How experienced developers handle temporary debugging edits usually comes down to the scope of the fix:</p>
+<h3>1. In-Place Working Tree Edits (Best for Quick Debugging)</h3>
+<p>For adding temporary logging, <code>print()</code> statements, or commenting out <code>os.system(&quot;clear&quot;)</code>, keep the edits directly in your working directory on the current branch without committing them.</p>
+<ul>
+<li><strong>Review temporary changes:</strong> <code>git diff</code> lets you instantly see all temporary additions highlighted on screen.</li>
+<li><strong>Wipe temporary changes when done:</strong> Run <code>git restore review_script.py</code> (or <code>git checkout -- review_script.py</code> on older Git versions) to instantly discard all debug edits and return to clean code.</li>
+</ul>
+<hr />
+<h3>2. The <code>git stash</code> Workflow (Best for Quick Comparisons)</h3>
+<p>If you want to quickly test how the script behaves in its clean state versus your debug state without losing your debug edits:</p>
+<ul>
+<li><strong>Temporarily hide debug edits:</strong> <code>git stash</code> safely hides all uncommitted debug edits and resets the file to the last clean state.</li>
+<li><strong>Bring debug edits back:</strong> <code>git stash pop</code> re-applies your debug <code>print()</code> statements.</li>
+</ul>
+<hr />
+<h3>3. A Debug / Spike Branch (Best for Deep or Destructive Fixes)</h3>
+<p>Creating a temporary branch (e.g., <code>git checkout -b debug-feh-reload</code>) becomes worth it under three specific conditions:</p>
+<ol>
+<li><strong>Uncertainty:</strong> You don't know why it's failing and expect to spend hours trying multiple structural fixes.</li>
+<li><strong>Commit History:</strong> You want to make intermediate commits (e.g., &quot;tried X approach&quot;, &quot;tried Y signal&quot;) without dirtying your main branch history.</li>
+<li><strong>Context Switching:</strong> You need to pause debugging, work on something else in the main script, and return to the bug later.</li>
+</ol>
+<p>For this specific <code>feh</code> signal/launch check, staying on your current branch, making inline edits, and wiping them with <code>git restore</code> when finished is the cleanest and fastest route.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000941_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 27</h1>
+<p>in my mind, the debugging edits are nontrivial (at my level) and are to be preserved in the git log.  I guess they will just stay in the main line.  branching is supposed to be the 'killer feature' so it comes to mind - I haven't done much with it except cause trouble.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000943_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 27</h1>
+<p>If preserving non-trivial diagnostic edits in the log is the goal, creating a local branch is actually the safest option—and it only takes three commands to keep it completely hassle-free.</p>
+<p>Branching usually causes trouble when multiple people edit the same lines or when branches live for months and diverge significantly. For a single-user local project, a Git branch is literally just a <strong>lightweight label pointing to a specific commit</strong>. It gives you a sandbox where you can commit freely without worrying about breaking your working <code>main</code> script.</p>
+<h3>The Low-Stress 3-Step Branching Workflow</h3>
+<ol>
+<li><strong>Create and switch to a debug branch:</strong></li>
+</ol>
+<pre><code class="language-bash">git checkout -b debug-feh
+
+</code></pre>
+<p><em>(This creates the <code>debug-feh</code> branch and moves your focus there immediately.)</em>
+2. <strong>Make your changes and commit them:</strong></p>
+<pre><code class="language-bash">git commit -am &quot;Add diagnostic logging and pause screen clears for feh&quot;
+
+</code></pre>
+<p><em>(Your debug code is now permanently recorded in Git's log on this branch.)</em>
+3. <strong>Switch back to <code>main</code> whenever you want:</strong></p>
+<pre><code class="language-bash">git checkout main
+
+</code></pre>
+<p><em>(Your working directory instantly snaps back to your clean, production script.)</em></p>
+<hr />
+<h3>What to Do When Debugging Is Done</h3>
+<p>Once you run the debug script on <code>debug-feh</code> and identify why <code>feh</code> isn't displaying:</p>
+<ul>
+<li><strong>If the fix is good and you want to keep it on main:</strong></li>
+</ul>
+<pre><code class="language-bash">git checkout main
+git merge debug-feh
+
+</code></pre>
+<p>Because <code>main</code> hasn't changed in the meantime, Git performs a <strong>fast-forward merge</strong>—it simply slides the <code>main</code> pointer forward to include your debug commits with zero merge conflicts.</p>
+<ul>
+<li><strong>If you just want to keep the debug branch as an archive for future reference:</strong>
+Do nothing! Just leave <code>debug-feh</code> sitting there. You can switch back to <code>main</code> to run your normal sorting script, and <code>debug-feh</code> will stay safely stored in your repository history whenever you need to inspect those diagnostic print statements again.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000946_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 28</h1>
+<p>I am trying the magit version of creating a branch and it is prompting me to choose between master and HEAD.  I think they are the same?  In magit, is HEAD indicated by a rectangle drawn around e.g. in my case the word master in magit-status view of recent commits?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000950_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 28</h1>
+<p>Yes, in your situation, <strong><code>HEAD</code> and <code>master</code> point to the exact same commit</strong>, so choosing either one as the starting point for your new branch will yield the exact same result.</p>
+<p>Here is why they appear together and what Magit is showing you visually:</p>
+<h3><code>HEAD</code> vs <code>master</code></h3>
+<ul>
+<li><strong><code>HEAD</code></strong> is Git's pointer to <em>where you are currently standing</em>.</li>
+<li><strong><code>master</code></strong> is the name of the branch.</li>
+</ul>
+<p>Because you are currently checked out on <code>master</code>, <code>HEAD</code> is pointing directly at <code>master</code>.</p>
+<p>Magit prompts you for a starting point because Git allows you to branch off from named branches (<code>master</code>), tags, or the current state (<code>HEAD</code>). If you were to detach your state or check out an older commit, <code>HEAD</code> would move to that commit while <code>master</code> stayed behind. Right now, they are identical.</p>
+<hr />
+<h3>Magit Visual Indicators</h3>
+<p><strong>Yes</strong>, that rectangle/box drawn around <code>master</code> in the <code>magit-status</code> view (or commit log) is Magit's visual face for the currently checked-out <strong><code>HEAD</code></strong>.</p>
+<p>In Magit's interface:</p>
+<ul>
+<li><strong>The Boxed/Outlined Name (<code>master</code>):</strong> Indicates the active branch/commit that <code>HEAD</code> points to.</li>
+<li><strong>Unboxed/Plain Names:</strong> Represent other local branches, remote tracking branches (<code>origin/master</code>), or tags that are not currently checked out.</li>
+</ul>
+<p>You can safely hit <strong><code>Enter</code></strong> on either choice (<code>HEAD</code> or <code>master</code>) and proceed with your debug branch.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000952_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 29</h1>
+<p>you just reminded me of &quot;detached HEAD&quot; which has afflicted me in the past.  git seems to have a mean sense of humor...</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_000954_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 29</h1>
+<p>Git's terminology reads like a gothic novel—<em>detached HEAD</em>, <em>orphaned commits</em>, <em>prune</em>, <em>rebase</em>. &quot;Detached HEAD&quot; sounds like a fatal repository corruption, but mechanically, it's just Git's way of saying: &quot;Your cursor is standing directly on a commit hash instead of holding onto a branch name.&quot;</p>
+<hr />
+<h3>What Is Actually Happening</h3>
+<p>Under normal conditions, <code>HEAD</code> points to a branch label (<code>master</code>), and <code>master</code> points to a commit. When you make a new commit, Git slides the <code>master</code> label forward, and <code>HEAD</code> follows along automatically.</p>
+<pre><code>Normal State:
+HEAD  ---&gt;  master  ---&gt;  [ Commit A ]
+
+</code></pre>
+<p>When you enter a <strong>detached HEAD</strong> state (usually by checking out a specific commit hash, a tag, or a remote branch directly), <code>HEAD</code> bypasses the branch label completely:</p>
+<pre><code>Detached HEAD State:
+HEAD  -----------------&gt;  [ Commit A ]
+            master  ---&gt;  [ Commit A ]
+
+</code></pre>
+<h3>The Real Danger of a Detached HEAD</h3>
+<p>Being in a detached HEAD state is completely fine if you're just looking around or testing old code.</p>
+<p>The trap happens if you <strong>make new commits</strong> while detached. Git will gladly let you write code and commit it, but because no branch label (<code>master</code> or <code>debug-feh</code>) is attached to those commits, they float in space. The moment you run <code>git checkout master</code> to leave, those new commits are left behind without a label pointing to them.</p>
+<hr />
+<h3>Escaping Detached HEAD in Magit</h3>
+<p>If you ever realize Magit is showing a commit hash instead of a branch name in the header:</p>
+<ul>
+<li><strong>If you haven't made any new commits and just want to get back to safety:</strong>
+Press <strong><code>b b</code></strong> (checkout branch) and select <code>master</code> (or hit <code>Enter</code>). You're instantly back home.</li>
+<li><strong>If you <em>did</em> make commits and want to save them:</strong>
+Press <strong><code>b c</code></strong> (create and checkout branch) and type a name (e.g., <code>saved-work</code>). Magit will attach a real branch label directly to where you're currently standing, turning your floating commits into a proper, safe branch.</li>
+<li><strong>If you already navigated away and &quot;lost&quot; your work:</strong>
+Nothing in Git is actually deleted right away. You can press <strong><code>r l</code></strong> in Magit to open the <code>reflog</code> (a chronological history of everywhere <code>HEAD</code> has stood), find the commit hash where you made your changes, and branch off it.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001000_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 30</h1>
+<p>I slacked off on trying the branching - my mind is sufficiently occupied with making the script work.  I added the debugging code.  Weirdly, the script now behaves the way I wanted it to, and I see no debugging messages printed.</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter.&quot;&quot;&quot;
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch</p>
+<p>def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())</p>
+<p>    # Send SIGUSR1 to feh to force an immediate image refresh in the background
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)</p>
+<p>def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            if txt.is_file():
+                pairs.append((img, txt))</p>
+<p>    if not pairs:
+        print(&quot;No image / .url.txt pairs found to review.&quot;)
+        return</p>
+<p>    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())</p>
+<p>    # 1. Print and verify the symlink target
+    print(f&quot;[DEBUG] Symlink created: {TEMP_LINK} -&gt; {TEMP_LINK.resolve()}&quot;)
+    print(f&quot;[DEBUG] Target file exists? {TEMP_LINK.resolve().exists()}&quot;)</p>
+<p>    # 2. Launch feh WITHOUT silencing stderr
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)]
+        # Removed stderr=subprocess.DEVNULL so error prints directly to console
+    )</p>
+<p>    # 3. Give feh 0.2 seconds to initialize and check if it crashed
+    import time
+    time.sleep(0.2)
+    poll_status = feh_proc.poll()
+    print(f&quot;[DEBUG] feh PID: {feh_proc.pid} | Exit status: {poll_status}&quot;)
+    if poll_status is not None:
+        print(&quot;[DEBUG] ERROR: feh died immediately after starting!&quot;)
+        
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            # Refresh symlink &amp; signal feh (terminal retains focus)
+            update_symlink_and_reload(img_path, feh_proc)</p>
+<p>            # Clear terminal output for a clean card view
+            os.system(&quot;clear&quot;)</p>
+<p>            try:
+                ocr_text = txt_path.read_text(encoding=&quot;utf-8&quot;).strip()
+            except Exception:
+                ocr_text = &quot;<Failed to read file>&quot;</p>
+<p>            print(f&quot;=== Flashcard Review ({idx}/{len(pairs)}) ===&quot;)
+            print(f&quot;File: {img_path.name}&quot;)
+            print(&quot;=&quot; * 60)
+            print(f&quot;OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}&quot;)
+            print(&quot;=&quot; * 60)
+            print(&quot;Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -&gt; &quot;, end=&quot;&quot;, flush=True)</p>
+<p>            key = get_key()</p>
+<p>            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)</p>
+<p>    finally:
+        # Clean termination of background feh and temp file on exit
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()</p>
+<p>        # os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001108_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 30</h1>
+<p>The mystery of the missing debug messages comes down to one line inside your loop: <strong><code>os.system(&quot;clear&quot;)</code></strong>.</p>
+<p>When the script starts:</p>
+<ol>
+<li>It prints your <code>[DEBUG]</code> messages to standard output.</li>
+<li>It launches <code>feh</code> and pauses for 0.2 seconds.</li>
+<li>It immediately enters the <code>for</code> loop for Card 1.</li>
+<li>It hits <code>os.system(&quot;clear&quot;)</code> and wipes the terminal screen in less than a millisecond—erasing the debug output before your eyes could catch it.</li>
+</ol>
+<p>As for why <code>feh</code> started working: setting up the <code>/tmp/review_current_flashcard.jpg</code> symlink <em>before</em> calling <code>subprocess.Popen</code> gave <code>feh</code> a valid target on its exact millisecond of launch, and <code>time.sleep(0.2)</code> gave the X server enough breathing room to map the window cleanly.</p>
+<hr />
+<h3>Clean, Production-Ready Version</h3>
+<p>Now that the mechanism is proven to work, here is the script cleaned up—with debug code removed, <code>feh</code> error messages silenced again, and a tiny <code>time.sleep(0.1)</code> retained right after <code>feh</code> spawns to guarantee window initialization on older or busier hardware:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter.&quot;&quot;&quot;
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            if txt.is_file():
+                pairs.append((img, txt))
+
+    if not pairs:
+        print(&quot;No image / .url.txt pairs found to review.&quot;)
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1) # Brief pause to allow window initialization
+
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+            os.system(&quot;clear&quot;)
+
+            try:
+                ocr_text = txt_path.read_text(encoding=&quot;utf-8&quot;).strip()
+            except Exception:
+                ocr_text = &quot;&lt;Failed to read file&gt;&quot;
+
+            print(f&quot;=== Flashcard Review ({idx}/{len(pairs)}) ===&quot;)
+            print(f&quot;File: {img_path.name}&quot;)
+            print(&quot;=&quot; * 60)
+            print(f&quot;OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}&quot;)
+            print(&quot;=&quot; * 60)
+            print(&quot;Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001112_capture.md&quot;)</p>
+<hr />

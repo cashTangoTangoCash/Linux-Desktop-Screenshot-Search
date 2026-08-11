@@ -1,0 +1,107 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 30</h1>
+<p><strong><a href="20260811_001000_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_001112_capture.html">Next →</a></strong></p>
+<hr />
+<p>I slacked off on trying the branching - my mind is sufficiently occupied with making the script work.  I added the debugging code.  Weirdly, the script now behaves the way I wanted it to, and I see no debugging messages printed.</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter.&quot;&quot;&quot;
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch</p>
+<p>def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())</p>
+<p>    # Send SIGUSR1 to feh to force an immediate image refresh in the background
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)</p>
+<p>def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            if txt.is_file():
+                pairs.append((img, txt))</p>
+<p>    if not pairs:
+        print(&quot;No image / .url.txt pairs found to review.&quot;)
+        return</p>
+<p>    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())</p>
+<p>    # 1. Print and verify the symlink target
+    print(f&quot;[DEBUG] Symlink created: {TEMP_LINK} -&gt; {TEMP_LINK.resolve()}&quot;)
+    print(f&quot;[DEBUG] Target file exists? {TEMP_LINK.resolve().exists()}&quot;)</p>
+<p>    # 2. Launch feh WITHOUT silencing stderr
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)]
+        # Removed stderr=subprocess.DEVNULL so error prints directly to console
+    )</p>
+<p>    # 3. Give feh 0.2 seconds to initialize and check if it crashed
+    import time
+    time.sleep(0.2)
+    poll_status = feh_proc.poll()
+    print(f&quot;[DEBUG] feh PID: {feh_proc.pid} | Exit status: {poll_status}&quot;)
+    if poll_status is not None:
+        print(&quot;[DEBUG] ERROR: feh died immediately after starting!&quot;)
+        
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            # Refresh symlink &amp; signal feh (terminal retains focus)
+            update_symlink_and_reload(img_path, feh_proc)</p>
+<p>            # Clear terminal output for a clean card view
+            os.system(&quot;clear&quot;)</p>
+<p>            try:
+                ocr_text = txt_path.read_text(encoding=&quot;utf-8&quot;).strip()
+            except Exception:
+                ocr_text = &quot;<Failed to read file>&quot;</p>
+<p>            print(f&quot;=== Flashcard Review ({idx}/{len(pairs)}) ===&quot;)
+            print(f&quot;File: {img_path.name}&quot;)
+            print(&quot;=&quot; * 60)
+            print(f&quot;OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}&quot;)
+            print(&quot;=&quot; * 60)
+            print(&quot;Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -&gt; &quot;, end=&quot;&quot;, flush=True)</p>
+<p>            key = get_key()</p>
+<p>            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)</p>
+<p>    finally:
+        # Clean termination of background feh and temp file on exit
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()</p>
+<p>        # os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<hr />
+<p><strong><a href="20260811_001000_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260811_001112_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260811_001108_capture.md&quot;)</p>
