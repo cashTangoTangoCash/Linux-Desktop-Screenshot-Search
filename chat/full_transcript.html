@@ -3365,3 +3365,192 @@ if __name__ == &quot;__main__&quot;:
 </ol>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_170617_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 36</h1>
+<p>when we are in the pager and we just want to go to the next screenshot or quit entirely, we should have those options (going to the next screenshot I believe will drop us into the pager that is viewing the text files for it as well as advance feh to the next screenshot).  AFAIK that should be a great aspect of being in a custom pager - you can make it do custom stuff.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_170953_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 36</h1>
+<p>Bypassing the separate &quot;Action Menu&quot; entirely and executing actions directly from inside the pager makes the workflow significantly smoother. Because it's a custom Python pager, the display and the keybindings are completely unified: <strong>the pager <em>is</em> the application UI</strong>.</p>
+<p>Now, as you view a card in the pager:</p>
+<ul>
+<li>**<code>[Enter]</code> / <code>[n]**</code> immediately advances to the next screenshot (reloading <code>feh</code> and loading its text in the pager).</li>
+<li><strong><code>[q]</code></strong> terminates the application immediately.</li>
+<li><strong><code>[m]</code></strong> prompts for a folder at the bottom of the pager, moves the bundle, and automatically advances.</li>
+<li><strong><code>[d]</code></strong> deletes the sidecars and automatically advances.</li>
+<li>**<code>[Space]</code> / <code>[j]**</code> scrolls down (<code>[b]</code> / <code>[k]</code> scrolls up).</li>
+</ul>
+<hr />
+<h3>Unified Pager Flashcard Reviewer (<code>review_flashcards.py</code>)</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;
+    Unified Pager UI: Handles scrolling AND direct workflow actions.
+    Returns: 'next', 'move', 'delete', or 'quit'
+    &quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        # Reserve 3 header lines and 3 footer lines
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        # Render visible slice of text
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])  # Truncate wide lines
+
+        # Pad remaining screen height
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+        key = get_key()
+
+        # --- SCROLLING CONTROLS ---
+        if key in (' ', 'j'):  # Page / Line Down
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                # Pressing Space at bottom of page advances to next card
+                return &quot;next&quot;
+        elif key in ('b', 'k'):  # Page / Line Up
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+
+        # --- DIRECT WORKFLOW ACTIONS ---
+        elif key in ('\r', '\n', 'n', 'N'):  # Next Screenshot
+            return &quot;next&quot;
+        elif key in ('m', 'M'):              # Move Bundle
+            return &quot;move&quot;
+        elif key in ('d', 'D'):              # Delete Sidecars
+            return &quot;delete&quot;
+        elif key in ('q', 'Q', '\x03'):      # Quit Application
+            return &quot;quit&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    # Initialize symlink for feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;
+
+            # Run pager directly as the primary interactive interface
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_170959_capture.md&quot;)</p>
+<hr />
