@@ -1,0 +1,197 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 35</h1>
+<p><strong><a href="20260812_170609_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Building a custom Python pager directly into the script avoids the unpredictable keybindings and modal state of <code>less</code>. By measuring the terminal height with <code>shutil.get_terminal_size()</code>, the script can paginate long OCR text cleanly, using only simple keypresses (<code>Space</code> for next page, <code>b</code> for previous page, <code>q</code> or <code>Enter</code> to open the action menu).</p>
+<p>When a card loads, it enters the pager view automatically. Exiting the pager drops you into the action menu, where you can move, delete, advance to the next card, or re-open the pager (<code>[v]</code>).</p>
+<h3>Updated Flashcard Reviewer with Built-in Custom Pager</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def custom_pager(title: str, url_text: str, full_text: str):
+    &quot;&quot;&quot;Simple terminal pager that fits text to terminal height.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        # Reserve lines for header (4 lines) and status bar (2 lines)
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        # Slice lines for current page view
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])  # Truncate wide lines to avoid unwanted wraps
+
+        # Pad empty lines if content is short
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} lines ({pct}%)] -&gt; [Space] Down | [b] Up | [q/Enter] Action Menu&quot;, end=&quot;&quot;, flush=True)
+
+        key = get_key()
+
+        if key in (' ', 'j'):  # Page Down
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += chunk_size
+        elif key == 'b':      # Page Up
+            line_pointer = max(0, line_pointer - chunk_size)
+        elif key in ('q', 'Q', '\r', '\n', '\x03'):  # Exit Pager to Menu
+            break
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    # Initialize symlink
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard Review ({idx}/{len(items)}) - {img_path.name}&quot;
+
+            # Step 1: Automatically open in custom pager view
+            custom_pager(title_str, url_text, full_text)
+
+            # Step 2: Action Menu Loop
+            while True:
+                os.system(&quot;clear&quot;)
+                print(f&quot;=== {title_str} ===&quot;)
+                print(&quot;=&quot; * 60)
+                print(f&quot;URL OCR  : {url_text[:70]}...&quot;)
+                print(f&quot;Full OCR : {full_text[:70].replace(chr(10), ' ')}...&quot;)
+                print(&quot;=&quot; * 60)
+                print(&quot;ACTION MENU:&quot;)
+                print(&quot;  [Space/Enter] Next Card&quot;)
+                print(&quot;  [v]           Re-open Pager (View Full OCR)&quot;)
+                print(&quot;  [m]           Move bundle to subfolder&quot;)
+                print(&quot;  [d]           Delete sidecar files&quot;)
+                print(&quot;  [q]           Quit program&quot;)
+                print(&quot;-&quot; * 60)
+                print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+                key = get_key()
+
+                if key in (' ', '\r', '\n'):  # Next Card
+                    break
+                elif key in ('v', 'V'):      # Re-open Pager
+                    custom_pager(title_str, url_text, full_text)
+                elif key in ('m', 'M'):
+                    print(&quot;\n&quot;)
+                    target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                    if target_folder:
+                        dest = WORK_DIR / target_folder
+                        dest.mkdir(parents=True, exist_ok=True)
+                        shutil.move(str(img_path), str(dest / img_path.name))
+                        if url_txt_path.is_file():
+                            shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                        if full_txt_path.is_file():
+                            shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                        break  # Move complete, proceed to next card
+                elif key in ('d', 'D'):
+                    url_txt_path.unlink(missing_ok=True)
+                    full_txt_path.unlink(missing_ok=True)
+                    print(&quot;\n[Sidecars deleted]&quot;)
+                    time.sleep(0.5)
+                    break
+                elif key in ('q', 'Q', '\x03'):  # Quit
+                    return
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<h3>Key Enhancements</h3>
+<ol>
+<li><strong>Self-Contained Paging:</strong> Uses <code>shutil.get_terminal_size()</code> dynamically to calculate page breaks.</li>
+<li><strong>Simple Controls:</strong> <code>Space</code> / <code>j</code> pages down, <code>b</code> pages up, and <code>q</code> / <code>Enter</code> immediately drops you into the action menu.</li>
+<li><strong>Menu Summary:</strong> The action menu displays a 1-line snippet of the URL and Full OCR text so you retain context without needing to reopen the pager every time.</li>
+</ol>
+<hr />
+<p><strong><a href="20260812_170609_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_170617_capture.md&quot;)</p>

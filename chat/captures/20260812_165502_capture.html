@@ -1,6 +1,6 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
 <h1>RESPONSE 34</h1>
-<p><strong><a href="20260812_165459_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260812_165459_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260812_170609_capture.html">Next →</a></strong></p>
 <hr />
 <p>That &quot;staircase effect&quot; (where each line begins at the exact column where the previous line ended) happens when the terminal receives a <strong>Line Feed</strong> (<code>\n</code>) without a <strong>Carriage Return</strong> (<code>\r</code>). Instead of returning the cursor to column 0 at the start of a new line, the terminal simply drops the cursor straight down one row.</p>
 <h3>The Cause: <code>tty.setraw()</code></h3>
@@ -26,5 +26,5 @@
 </code></pre>
 <p>If you ever encounter residual staircasing in raw terminal states, printing <code>\r\n</code> explicitly instead of <code>\n</code> forces a return to column 0 regardless of terminal flags.</p>
 <hr />
-<p><strong><a href="20260812_165459_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260812_165459_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260812_170609_capture.html">Next →</a></strong></p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_165502_capture.md&quot;)</p>
