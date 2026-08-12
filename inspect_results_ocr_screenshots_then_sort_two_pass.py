@@ -13,17 +13,17 @@ TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
 PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
 
 def get_key():
-    """Reads a single keypress without needing Enter."""
+    """Reads a single keypress without needing Enter, preserving output formatting."""
     import tty, termios
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
-        tty.setraw(sys.stdin.fileno())
+        tty.setcbreak(fd)  # Replaces tty.setraw(fd)
         ch = sys.stdin.read(1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
-
+    
 def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
     """Updates the target symlink and signals feh to reload without stealing focus."""
     if TEMP_LINK.is_symlink() or TEMP_LINK.exists():

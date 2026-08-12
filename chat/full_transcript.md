@@ -3722,3 +3722,64 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_164249_capture.md")
 
 ---
+
+# PROMPT 34
+how come this terminal output is so oddly formatted?  any guesses?
+
+=== Flashcard Review (3/57) ===
+                               File: 2026-08-10-22:41-44_561x125.jpg
+                                                                    ============================================================
+                                                                                                                                URL OCR:
+                                                                                                                                        [EMPTY / NO TEXT DETECTED]
+   ------------------------------------------------------------
+                                                               Full Image OCR:
+                                                                              @ wireD
+                                                                                     How to Disable the Al Features in Gmail and Google Docs
+
+                                                                                                                                            2 days ago - By Justin Pot
+       ============================================================
+                                                                   Action: [Space/Enter] Next | [m] Move bundle | [d] Delete sidecars | [q] Quit ->
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_165459_capture.md")
+
+---
+
+# RESPONSE 34
+That "staircase effect" (where each line begins at the exact column where the previous line ended) happens when the terminal receives a **Line Feed** (`\n`) without a **Carriage Return** (`\r`). Instead of returning the cursor to column 0 at the start of a new line, the terminal simply drops the cursor straight down one row.
+
+### The Cause: `tty.setraw()`
+
+In Linux, `sys.stdin` and `sys.stdout` point to the same underlying TTY device (`/dev/pts/N`).
+
+When `get_key()` calls `tty.setraw(fd)`, it disables the terminal's `OPOST` (output processing) and `ONLCR` (translate newline to carriage return + newline) flags.
+
+Even though `get_key()` attempts to restore the attributes with `termios.tcsetattr()`, using `setraw()` alters output processing across the shared TTY device. If keypresses or signals interrupt the flow—or if stdout flushes while the TTY flags are dirty—`\n` stops returning the cursor to the left margin.
+
+---
+
+### The Fix: Use `tty.setcbreak()`
+
+`tty.setcbreak()` disables line buffering so you can read a single character immediately, **without** disabling `OPOST` output formatting.
+
+Update your `get_key()` function to use `setcbreak`:
+
+```python
+def get_key():
+    """Reads a single keypress without needing Enter, preserving output formatting."""
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)  # Replaces tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+```
+
+If you ever encounter residual staircasing in raw terminal states, printing `\r\n` explicitly instead of `\n` forces a return to column 0 regardless of terminal flags.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_165502_capture.md")
+
+---
