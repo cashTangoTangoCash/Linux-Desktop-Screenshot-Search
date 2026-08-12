@@ -8,10 +8,14 @@ from pathlib import Path
 WORK_DIR = Path.cwd()
 
 # Exact GIMP crop coordinates for Firefox URL bar
-CROP_W = 1603
-CROP_H = 31
-CROP_X = 323
-CROP_Y = 56
+# CROP_W = 1603
+# CROP_H = 31
+# CROP_X = 323
+# CROP_Y = 56
+CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50
 
 # Rules mapping: (Regex pattern -> Subfolder name)
 RULES = [
