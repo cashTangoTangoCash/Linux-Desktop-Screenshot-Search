@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter."""
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Updates the target symlink and signals feh to reload without stealing focus."""
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            # Include image if either sidecar exists
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)  # Brief pause for window initialization
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+            os.system("clear")
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+
+            print(f"=== Flashcard Review ({idx}/{len(items)}) ===")
+            print(f"File: {img_path.name}")
+            print("=" * 60)
+            print(f"URL OCR:\n{url_text}")
+            print("-" * 60)
+            print(f"Full Image OCR:\n{full_text}")
+            print("=" * 60)
+            print("Action: [Space/Enter] Next | [m] Move bundle | [d] Delete sidecars | [q] Quit -> ", end="", flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif key in ('d', 'D'):
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()

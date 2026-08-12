@@ -3208,3 +3208,517 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_134830_capture.md")
 
 ---
+
+# PROMPT 32
+I didn't test any of that - it doesn't quite match my intention.  Sorting screenshots into folders is desired but is not the total driving force in this project - I am very interested in searching the ocr text file of the entire screenshot as a way to located and visit useful old screenshots.  so it is necessary to get the full image ocr text file of every screenshot.  then once we have both url text and full text, it seems very desirable to have a two pass sorting into folders:
+
+first pass: sort by url text, using RULES_url
+
+second pass: sort by full image text, using a 2nd set of rules: RULES_full
+
+then we move to a design where the script reads the RULES from a text file in the folder where the script is called.  this lets us have custom rules for each collection of screenshots.  I start a new folder for each new month of screenshots.  in a given month, I might be focused on bike mirrors.  so I can use RULES_full to sort into a bike mirrors folder all the screenshots with mirror in the full text.
+
+I wonder why this project is oddly 'gripping' and not boring - it could easily be very boring.  maybe just because it moves fast enough given ai assistance.  if it were moving at the pre-ai pace, I would have a lot of ideas and not much code.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_141033_capture.md")
+
+---
+
+# RESPONSE 32
+That shift changes the architecture in an important way: **the sidecar files (`.url.txt` and `.full.txt`) are primary deliverables**, not temporary staging files for sorting. Having every screenshot fully indexed gives you a searchable text archive across your entire history (e.g., via `grep`, `rg`, or `dired`).
+
+The speed of AI-assisted iteration fundamentally alters project momentum. When the time between "What if I organized this month's batch by mirror research?" and having a custom regex rules engine running on hundreds of files shrinks from three hours of boilerplate to two minutes, the project stays in a state of flow rather than turning into a tedious coding chore.
+
+Here is the revised architecture designed around complete text extraction, localized rules files, and two-pass sorting.
+
+---
+
+### 1. Local Rules Files Format
+
+In whatever monthly directory you run the script, create two plain text files alongside your screenshots. Lines starting with `#` or left empty are ignored.
+
+#### `rules_url.txt`
+
+```text
+# Regex pattern | Target Subfolder
+craigslist\.org | craigslist
+wikipedia\.org | wikipedia
+howard\s*hanna|mls\s*#?\s*[a-z]?\d{6,8}|new\s*listing | housing-listings
+news\.google\.com | google-news
+cambriabike\.com | shopping-cambria-bike
+jensonusa\.com | shopping-jenson-usa-bike
+amazon\.com | shopping-amazon
+bikeradar\.com | shopping-bikeradar-bike
+rottentomatoes\.com | movies
+audioclassics\.com | audioclassics
+forecast\.weather\.gov | weather
+npr\.org | news
+ebay\.com | shopping-ebay
+github\.com | github
+arstechnica\.com | technology
+gizmodo\.com | news
+nytimes\.com | news
+theguardian\.com | news
+techcrunch\.com | technology
+
+```
+
+#### `rules_full.txt`
+
+```text
+# Regex pattern | Target Subfolder
+mirror|handlebar\s*mirror|viewpoint | bike-mirrors
+shimano|derailleur|cassette|drivetrain | bike-drivetrain
+
+```
+
+---
+
+### 2. Complete-Indexing & Two-Pass Sorting Script
+
+This script:
+
+1. **Guarantees 100% OCR coverage:** Runs both URL OCR and Full Image OCR for *every* screenshot (skipping only if the sidecar `.txt` already exists).
+2. **Logs timing:** Appends execution metrics for every full-image OCR run to `ocr_timing.csv`.
+3. **Loads local rules:** Dynamically parses `rules_url.txt` and `rules_full.txt` from the working directory.
+4. **Executes Two-Pass Sorting:** Passes over files with URL rules first, then applies Full-Text rules to whatever remains in the folder.
+
+```python
+#!/usr/bin/env python3
+import csv
+import os
+import re
+import shutil
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / "ocr_timing.csv"
+
+# Exact crop coordinates for Firefox URL bar (2560x1440)
+CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50
+
+PC_SCREENSHOT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
+    """Loads rules from a pipe-separated text file (pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            pattern_str, folder = line.split("|", 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f"Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}")
+    return rules
+
+def run_url_ocr(image_path: Path) -> str:
+    """Cropped URL bar OCR using ImageMagick + Tesseract."""
+    cmd = (
+        f'magick "{image_path}" '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: URL OCR failed for {image_path.name}: {e}")
+        return ""
+
+def run_full_image_ocr(image_path: Path) -> tuple[str, float]:
+    """Runs Tesseract on the entire screenshot and measures execution time in seconds."""
+    cmd = ["tesseract", str(image_path), "stdout"]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f"Warning: Full OCR failed for {image_path.name}: {e}")
+        return "", elapsed
+
+def log_timing(image_name: str, seconds: float):
+    """Appends full image Tesseract timing data to CSV."""
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode="a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(["timestamp", "filename", "duration_seconds"])
+        writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
+
+def move_bundle(image_path: Path, target_folder_name: str):
+    """Moves image along with its sidecar .url.txt and .full.txt files."""
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    url_txt = WORK_DIR / f"{image_path.name}.url.txt"
+    full_txt = WORK_DIR / f"{image_path.name}.full.txt"
+
+    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))
+
+def process_batch():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f"No unprocessed PC screenshots found in {WORK_DIR}")
+        return
+
+    rules_url = load_rules(WORK_DIR / "rules_url.txt")
+    rules_full = load_rules(WORK_DIR / "rules_full.txt")
+
+    print(f"Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.")
+    print(f"Ensuring full OCR indexing for {len(pc_images)} screenshot(s)...\n")
+
+    # --- STAGE 1: GUARANTEE OCR SIDECARS FOR EVERY IMAGE ---
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f"{image_path.name}.url.txt"
+        full_txt_path = WORK_DIR / f"{image_path.name}.full.txt"
+
+        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding="utf-8")
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding="utf-8")
+            log_timing(image_path.name, duration)
+            print(f"Indexed full image '{image_path.name}' ({duration:.2f}s)")
+
+    # --- STAGE 2: PASS 1 (SORT BY URL RULES) ---
+    remaining_images = []
+    sorted_pass_1 = 0
+
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f"{image_path.name}.url.txt"
+        url_text = url_txt_path.read_text(encoding="utf-8", errors="ignore")
+
+        matched_folder = None
+        for pattern, folder in rules_url:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f"[Pass 1 - URL] Moved '{image_path.name}' -> {matched_folder}/")
+            sorted_pass_1 += 1
+        else:
+            remaining_images.append(image_path)
+
+    # --- STAGE 3: PASS 2 (SORT REMAINING BY FULL TEXT RULES) ---
+    sorted_pass_2 = 0
+    unmatched_count = 0
+
+    for image_path in remaining_images:
+        full_txt_path = WORK_DIR / f"{image_path.name}.full.txt"
+        full_text = full_txt_path.read_text(encoding="utf-8", errors="ignore")
+
+        matched_folder = None
+        for pattern, folder in rules_full:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f"[Pass 2 - Full Text] Moved '{image_path.name}' -> {matched_folder}/")
+            sorted_pass_2 += 1
+        else:
+            unmatched_count += 1
+            print(f"[Unmatched] '{image_path.name}' remains in root (indexed)")
+
+    print("\n" + "=" * 50)
+    print(f"Processing Complete:")
+    print(f"  Total Screenshots : {len(pc_images)}")
+    print(f"  Pass 1 (URL)      : {sorted_pass_1} moved")
+    print(f"  Pass 2 (Full Text): {sorted_pass_2} moved")
+    print(f"  Unsorted Remaining: {unmatched_count}")
+    print("=" * 50)
+
+if __name__ == "__main__":
+    process_batch()
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_141042_capture.md")
+
+---
+
+# PROMPT 33
+let's update this useful script for the newer situation where each image file has a url.txt file and a full.txt file:
+
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter."""
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Updates the target symlink and signals feh to reload without stealing focus."""
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def review_flashcards():
+    pairs = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            txt = WORK_DIR / f"{img.name}.url.txt"
+            if txt.is_file():
+                pairs.append((img, txt))
+
+    if not pairs:
+        print("No image / .url.txt pairs found to review.")
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(pairs[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1) # Brief pause to allow window initialization
+
+    try:
+        for idx, (img_path, txt_path) in enumerate(pairs, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+            os.system("clear")
+
+            try:
+                ocr_text = txt_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                ocr_text = "<Failed to read file>"
+
+            print(f"=== Flashcard Review ({idx}/{len(pairs)}) ===")
+            print(f"File: {img_path.name}")
+            print("=" * 60)
+            print(f"OCR Text:\n{ocr_text if ocr_text else '[EMPTY / NO TEXT DETECTED]'}")
+            print("=" * 60)
+            print("Action: [Space/Enter] Next | [m] Move | [d] Delete sidecar | [q] Quit -> ", end="", flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    shutil.move(str(txt_path), str(dest / txt_path.name))
+            elif key in ('d', 'D'):
+                txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+I realize there may be an issue when the full image OCR has a lot of text and it fills up the terminal - maybe that is not common?  let's first see what happens if we just simply try to print that full text to the 'flashcard.'  usually I like to have emacsclient display something like that full text, but I have 2 monitors.  one is showing feh full-screen.  the other has the terminal full-screen.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_164243_capture.md")
+
+---
+
+# RESPONSE 33
+Here is the updated script configured to process both `.url.txt` and `.full.txt` sidecars concurrently.
+
+### Updated Flashcard Review Script (`review_flashcards.py`)
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter."""
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Updates the target symlink and signals feh to reload without stealing focus."""
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            # Include image if either sidecar exists
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)  # Brief pause for window initialization
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+            os.system("clear")
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+
+            print(f"=== Flashcard Review ({idx}/{len(items)}) ===")
+            print(f"File: {img_path.name}")
+            print("=" * 60)
+            print(f"URL OCR:\n{url_text}")
+            print("-" * 60)
+            print(f"Full Image OCR:\n{full_text}")
+            print("=" * 60)
+            print("Action: [Space/Enter] Next | [m] Move bundle | [d] Delete sidecars | [q] Quit -> ", end="", flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif key in ('d', 'D'):
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+```
+
+---
+
+### Key Updates
+
+1. **Dual Sidecar Association:** Tracks `(img_path, url_txt_path, full_txt_path)` tuples.
+2. **Bundle Operations:**
+* **Move (`[m]`):** Relocates the `.jpg`, `.url.txt`, and `.full.txt` together into the designated subfolder.
+* **Delete (`[d]`):** Unlinks both `.url.txt` and `.full.txt` sidecar files simultaneously while preserving the source image.
+
+
+3. **Structured Screen Output:** Displays **URL OCR** and **Full Image OCR** under distinct divider headers.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_164249_capture.md")
+
+---

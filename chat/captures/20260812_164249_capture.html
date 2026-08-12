@@ -1,0 +1,142 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 33</h1>
+<p><strong><a href="20260812_164243_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here is the updated script configured to process both <code>.url.txt</code> and <code>.full.txt</code> sidecars concurrently.</p>
+<h3>Updated Flashcard Review Script (<code>review_flashcards.py</code>)</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter.&quot;&quot;&quot;
+    import tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates the target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            # Include image if either sidecar exists
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    # Point symlink to the first image prior to launching feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)  # Brief pause for window initialization
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+            os.system(&quot;clear&quot;)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+
+            print(f&quot;=== Flashcard Review ({idx}/{len(items)}) ===&quot;)
+            print(f&quot;File: {img_path.name}&quot;)
+            print(&quot;=&quot; * 60)
+            print(f&quot;URL OCR:\n{url_text}&quot;)
+            print(&quot;-&quot; * 60)
+            print(f&quot;Full Image OCR:\n{full_text}&quot;)
+            print(&quot;=&quot; * 60)
+            print(&quot;Action: [Space/Enter] Next | [m] Move bundle | [d] Delete sidecars | [q] Quit -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+            key = get_key()
+
+            if key in ('q', 'Q', '\x03'):  # 'q' or Ctrl+C
+                break
+            elif key in ('m', 'M'):
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif key in ('d', 'D'):
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<hr />
+<h3>Key Updates</h3>
+<ol>
+<li><strong>Dual Sidecar Association:</strong> Tracks <code>(img_path, url_txt_path, full_txt_path)</code> tuples.</li>
+<li><strong>Bundle Operations:</strong></li>
+</ol>
+<ul>
+<li><strong>Move (<code>[m]</code>):</strong> Relocates the <code>.jpg</code>, <code>.url.txt</code>, and <code>.full.txt</code> together into the designated subfolder.</li>
+<li><strong>Delete (<code>[d]</code>):</strong> Unlinks both <code>.url.txt</code> and <code>.full.txt</code> sidecar files simultaneously while preserving the source image.</li>
+</ul>
+<ol start="3">
+<li><strong>Structured Screen Output:</strong> Displays <strong>URL OCR</strong> and <strong>Full Image OCR</strong> under distinct divider headers.</li>
+</ol>
+<hr />
+<p><strong><a href="20260812_164243_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260812_164249_capture.md&quot;)</p>
