@@ -1,0 +1,35 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 39</h1>
+<p><strong><a href="20260815_155624_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>The culprit is <code>line.split(&quot;|&quot;, 1)</code>, which splits on the <strong>first</strong> pipe it encounters. As soon as your regex uses <code>|</code> for OR logic (<code>mirror|handlebar...</code>), Python cuts the string right at <code>mirror</code> and treats the rest of your regex as the folder name.</p>
+<p>Changing <code>.split(&quot;|&quot;, 1)</code> to <code>.rsplit(&quot;|&quot;, 1)</code> fixes this immediately by splitting from the <strong>right</strong> on the final pipe instead.</p>
+<pre><code class="language-python">def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules
+
+</code></pre>
+<h3>Cleanup Command</h3>
+<p>To get rid of that accidental directory created in <code>202608</code>, run this in your terminal (or inside Emacs Dired):</p>
+<pre><code class="language-bash">rmdir &quot;/home/dad84/Documents/2026/temp/202608/handlebar\s*mirror|viewpoint | bike-mirrors&quot;
+
+</code></pre>
+<hr />
+<p><strong><a href="20260815_155624_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_155627_capture.md&quot;)</p>

@@ -30,7 +30,8 @@ def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
         if not line or line.startswith("#"):
             continue
         if "|" in line:
-            pattern_str, folder = line.split("|", 1)
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit("|", 1)
             try:
                 compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
                 rules.append((compiled, folder.strip()))

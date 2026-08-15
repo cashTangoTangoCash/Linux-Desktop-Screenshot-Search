@@ -1,0 +1,28 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 38</h1>
+<p><strong><a href="20260815_132530_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_155624_capture.html">Next →</a></strong></p>
+<hr />
+<p>You nailed the syntax interpretation: <code>|</code> is OR, and <code>\s*</code> matches zero or more whitespace characters.</p>
+<p>The <code>handlebar\s*mirror</code> pattern isn't meant to anticipate every spelling typo, but rather to catch <strong>spacing jitter</strong>—one of the most common, low-hanging quirks in OCR output.</p>
+<ul>
+<li><strong><code>mirror</code></strong>: A broad catch-all for any appearance of the standalone word.</li>
+<li><strong><code>handlebar\s*mirror</code></strong>: Matches <code>&quot;handlebar mirror&quot;</code>, <code>&quot;handlebar   mirror&quot;</code> (extra whitespace from layout kerning), and <code>&quot;handlebarmirror&quot;</code> (collapsed spacing when text wrapping or fonts run tight).</li>
+<li><strong><code>viewpoint</code></strong>: A specific brand name (e.g., Viewpoint bike mirrors) that might appear without the word &quot;mirror&quot; present at all.</li>
+</ul>
+<hr />
+<h3>The OCR Regex Trait: What to Do (and What to Avoid)</h3>
+<p>Trying to catch actual OCR character typos (like mistaking <code>l</code> for <code>1</code> or <code>o</code> for <code>0</code>) via regex is a trap that quickly turns your rules file into unmaintainable gibberish like <code>h[a4]ndleb[a4]r</code>.</p>
+<p><strong>Good use of regex for OCR:</strong></p>
+<ul>
+<li><strong>Flexible spacing:</strong> Use <code>\s*</code> between compound terms (<code>chain\s*ring</code>, <code>seat\s*post</code>, <code>handlebar\s*bag</code>).</li>
+<li><strong>Optional plurals/suffixes:</strong> <code>mirrors?</code> or <code>bikes?</code>.</li>
+<li><strong>Case insensitivity:</strong> Always run the python regex engine with <code>re.IGNORECASE</code> so <code>MIRROR</code>, <code>Mirror</code>, and <code>mirror</code> all match automatically.</li>
+</ul>
+<p><strong>Bad use of regex for OCR:</strong></p>
+<ul>
+<li>Trying to anticipate character substitution errors (<code>m[i1|l]rror</code>).</li>
+</ul>
+<p>If an OCR engine consistently mangles a specific word (e.g., it always turns &quot;Shimano&quot; into &quot;Sh1mano&quot;), just add <code>Sh1mano</code> as a separate, plain OR term in your rule file. Let exact matches and simple space-flexibility do 95% of the heavy lifting.</p>
+<hr />
+<p><strong><a href="20260815_132530_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_155624_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_132532_capture.md&quot;)</p>
