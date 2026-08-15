@@ -1,0 +1,43 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 37</h1>
+<p><strong><a href="20260815_130818_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here is interactive Emacs Lisp function designed to parse the <code>YYYY-MM-DD</code> prefix, dynamically create the <code>YYYYMM</code> destination directory if it doesn't already exist, and relocate all matching screenshots and associated sidecars.</p>
+<pre><code class="language-elisp">(defun my/organize-screenshots-by-month (&amp;optional dir)
+  &quot;Move dated screenshots (YYYY-MM-DD-*) in DIR into YYYYMM subdirectories.&quot;
+  (interactive &quot;DDirectory: &quot;)
+  (let* ((target-dir (file-name-as-directory (expand-file-name (or dir default-directory))))
+         ;; Matches standard timestamp pattern YYYY-MM-DD- at start of filename
+         (regex &quot;^\\([0-9]\\{4\\}\\)-\\([0-9]\\{2\\}\\)-[0-9]\\{2\\}-&quot;)
+         (files (directory-files target-dir t regex))
+         (moved-count 0))
+    (dolist (file files)
+      (when (file-regular-p file)
+        (let* ((fname (file-name-nondirectory file)))
+          (when (string-match regex fname)
+            (let* ((year (match-string 1 fname))
+                   (month (match-string 2 fname))
+                   (dest-dir (expand-file-name (concat year month) target-dir))
+                   (dest-file (expand-file-name fname dest-dir)))
+              (unless (file-directory-p dest-dir)
+                (make-directory dest-dir t))
+              (rename-file file dest-file t)
+              (setq moved-count (1+ moved-count)))))))
+    (message &quot;Organized %d file(s) into monthly folders.&quot; moved-count)))
+
+</code></pre>
+<p><strong>Key Behaviors</strong></p>
+<ul>
+<li><strong>Sidecar Support:</strong> The regex <code>^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}-</code> matches the leading date string directly. This ensures that both <code>.jpg</code> images and any accompanying <code>.url.txt</code> or <code>.full.txt</code> sidecar files move together automatically.</li>
+<li><strong>Directory Creation:</strong> Calls <code>(make-directory dest-dir t)</code> to construct missing target directories (e.g., <code>202608/</code>) on the fly.</li>
+<li><strong>Interactive Usage:</strong> Run <code>M-x my/organize-screenshots-by-month</code>. If called inside a Dired buffer viewing your <code>screenshots</code> folder, pressing <code>RET</code> accepts the <code>default-directory</code>.</li>
+</ul>
+<p><strong>Dired Keybinding</strong></p>
+<p>To run this instantly while navigating Dired, add this binding to your configuration:</p>
+<pre><code class="language-elisp">(with-eval-after-load 'dired
+  (define-key dired-mode-map (kbd &quot;C-c m&quot;) #'my/organize-screenshots-by-month))
+
+</code></pre>
+<hr />
+<p><strong><a href="20260815_130818_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_130821_capture.md&quot;)</p>

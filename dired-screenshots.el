@@ -1,0 +1,23 @@
+(defun my/dired-organize-screenshots-by-month (&optional dir)
+  "Move dated screenshots (YYYY-MM-DD-*) in DIR into YYYYMM subdirectories."
+  (interactive "DDirectory: ")
+  (let* ((target-dir (file-name-as-directory (expand-file-name (or dir default-directory))))
+         ;; Matches standard timestamp pattern YYYY-MM-DD- at start of filename
+         (regex "^\\([0-9]\\{4\\}\\)-\\([0-9]\\{2\\}\\)-[0-9]\\{2\\}-")
+         (files (directory-files target-dir t regex))
+         (moved-count 0))
+    (dolist (file files)
+      (when (file-regular-p file)
+        (let* ((fname (file-name-nondirectory file)))
+          (when (string-match regex fname)
+            (let* ((year (match-string 1 fname))
+                   (month (match-string 2 fname))
+                   (dest-dir (expand-file-name (concat year month) target-dir))
+                   (dest-file (expand-file-name fname dest-dir)))
+              (unless (file-directory-p dest-dir)
+                (make-directory dest-dir t))
+              (rename-file file dest-file t)
+              (setq moved-count (1+ moved-count)))))))
+    (message "Organized %d file(s) into monthly folders." moved-count)))
+
+(provide 'dired-screenshots)
