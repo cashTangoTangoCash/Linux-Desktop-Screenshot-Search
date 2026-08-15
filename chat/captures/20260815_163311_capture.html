@@ -1,0 +1,20 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 45</h1>
+<p><strong><a href="20260815_163306_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_163319_capture.html">Next →</a></strong></p>
+<hr />
+<p>If you put <code>(eval-buffer)</code> inside <code>local_helpers.el</code>, it causes an <strong>infinite recursion error</strong> (<code>Lisp nesting exceeds 'max-lisp-eval-depth'</code>).</p>
+<p>Here is what happens under the hood:</p>
+<ul>
+<li><strong>When pressing <code>C-x C-e</code> on <code>(eval-buffer)</code>:</strong> You trigger <code>eval-buffer</code>, which starts reading the buffer from top to bottom. It hits line 3 (<code>(eval-buffer)</code>), which calls <code>eval-buffer</code> again, which hits line 3, calling <code>eval-buffer</code> again—endlessly looping until Emacs hits its max call depth and aborts.</li>
+<li><strong>When loading via <code>load-file</code>:</strong> As <code>load-file</code> reads the file line by line, it hits <code>(eval-buffer)</code> and tries to evaluate whatever buffer is currently active in your window (like your Dired buffer or a text file), throwing Elisp syntax errors against the raw text.</li>
+</ul>
+<p><code>(eval-buffer)</code> is an interactive command meant to be called from the minibuffer (<code>M-x eval-buffer</code>) or as a top-level interactive keypress, rather than embedded as an executable form inside the file itself.</p>
+<p>If you use <code>load-file</code> (or your new <code>my/dired-load-local-lisp-functions-from-this-file</code> command), <code>load-file</code> automatically reads and evaluates every <code>defun</code> in the file sequentially without needing any explicit evaluation code inside <code>local_helpers.el</code>.</p>
+<p>If you prefer opening the file manually and triggering it yourself, the cleanest approach is keeping it as a pure comment at the top:</p>
+<pre><code class="language-elisp">;; -*- lexical-binding: t; -*-
+;; Run 'M-x eval-buffer' in this file to activate helpers for this session.
+
+</code></pre>
+<hr />
+<p><strong><a href="20260815_163306_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_163319_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_163311_capture.md&quot;)</p>

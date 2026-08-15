@@ -1,0 +1,35 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 43</h1>
+<p><strong><a href="20260815_163251_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_163259_capture.html">Next →</a></strong></p>
+<hr />
+<pre><code class="language-elisp">;; -*- lexical-binding: t; -*-
+;; To load all helper functions in this file, place point after (eval-buffer) and press C-x C-e:
+(eval-buffer)
+
+;; =============================================================================
+;; Local Helpers - Screenshot Sorting
+;; =============================================================================
+
+(defun my/dired-move-folder-contents-up ()
+  &quot;Move all contents of the directory at point in Dired into the parent directory.&quot;
+  (interactive)
+  (let ((target-dir (dired-get-filename nil t)))
+    (if (not (and target-dir (file-directory-p target-dir)))
+        (user-error &quot;Point is not on a valid directory&quot;)
+      (let* ((parent-dir default-directory)
+             (files (directory-files target-dir t &quot;^\\([^.]\\|\\.[^.]\\)&quot;))
+             (moved-count 0))
+        (dolist (file files)
+          (let ((dest (expand-file-name (file-name-nondirectory file) parent-dir)))
+            (rename-file file dest t)
+            (setq moved-count (1+ moved-count))))
+        (delete-directory target-dir)
+        (revert-buffer)
+        (message &quot;Moved %d file(s) out of '%s' and removed directory.&quot;
+                 moved-count (file-name-nondirectory (directory-file-name target-dir)))))))
+
+</code></pre>
+<p>Putting <code>(eval-buffer)</code> at the very top is a great trick. Whenever you open <code>local_helpers.el</code>, hitting <code>C-x C-e</code> right on line 3 executes <code>(eval-buffer)</code> immediately, loading every function defined below it without needing to type <code>M-x eval-buffer</code> manually.</p>
+<hr />
+<p><strong><a href="20260815_163251_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_163259_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_163255_capture.md&quot;)</p>
