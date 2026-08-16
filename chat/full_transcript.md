@@ -5923,3 +5923,311 @@ def process_ocr():
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_000610_capture.md")
 
 ---
+
+# PROMPT 52
+I am having trouble with inspect_screenshot_ocr_results.py.  The screenshots in feh are not consistently advancing along with the present 'position' in the pager.  if I try pudb, feh seems to mercilessly steal focus from the terminal and pudb becomes unusable (maybe I just have pudb.set_trace() in the wrong spot?).  earlier today I installed i3 window manager in order to use tiling to better use inspect_screenshot...py, and I thought i3 was screwing things up, but the python script is having issues in Mate desktop as well.
+
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter, preserving output formatting."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Updates target symlink and signals feh to reload without stealing focus."""
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def custom_pager(title: str, url_text: str, full_text: str) -> str:
+    """
+    Unified Pager UI: Handles scrolling AND direct workflow actions.
+    Returns: 'next', 'move', 'delete', or 'quit'
+    """
+    url_lines = [f"URL OCR: {url_text}", "-" * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        # Reserve 3 header lines and 3 footer lines
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system("clear")
+        print(f"=== {title} ===")
+        print("=" * 60)
+
+        # Render visible slice of text
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])  # Truncate wide lines
+
+        # Pad remaining screen height
+        for _ in range(chunk_size - len(page_lines)):
+            print("")
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print("=" * 60)
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] "
+              f"[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit")
+        print("Choice -> ", end="", flush=True)
+
+        key = get_key()
+
+        # --- SCROLLING CONTROLS ---
+        if key in (' ', 'j'):  # Page / Line Down
+            if line_pointer + chunk_size < total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                # Pressing Space at bottom of page advances to next card
+                return "next"
+        elif key in ('b', 'k'):  # Page / Line Up
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+
+        # --- DIRECT WORKFLOW ACTIONS ---
+        elif key in ('\r', '\n', 'n', 'N'):  # Next Screenshot
+            return "next"
+        elif key in ('m', 'M'):              # Move Bundle
+            return "move"
+        elif key in ('d', 'D'):              # Delete Sidecars
+            return "delete"
+        elif key in ('q', 'Q', '\x03'):      # Quit Application
+            return "quit"
+
+def review_flashcards():
+    
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Initialize symlink for feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())
+
+    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
+
+            # Run pager directly as the primary interactive interface
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == "quit":
+                break
+            elif action == "move":
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_171428_capture.md")
+
+---
+
+# RESPONSE 52
+The inconsistent image updates and the focus-stealing behavior are caused by a race condition during symlink updates, exacerbated by how X11 window managers handle `feh` in fullscreen mode.
+
+---
+
+### The Cause of Both Issues
+
+1. **Inconsistent Advancement (Non-Atomic Symlinks):**
+In `update_symlink_and_reload()`, running `TEMP_LINK.unlink()` followed by `TEMP_LINK.symlink_to()` creates a split-second window where `/tmp/review_current_flashcard.jpg` **does not exist on disk**. When `os.kill(..., signal.SIGUSR1)` fires while `feh` checks a missing file, `feh` fails silently, drops its image buffer, or re-initializes its X11 surface.
+2. **Focus Stealing (PuDB & Window Managers):**
+Because `feh` was occasionally failing to read the broken symlink, it re-created its render window on subsequent reloads. In both MATE and i3, a newly created fullscreen window (`-F`) immediately grabs input focus away from your terminal—breaking PuDB debugging sessions.
+
+---
+
+### The Solution
+
+To fix both issues:
+
+* **Use atomic symlink replacement:** Create a temporary symlink first, then use `os.replace()` to overwrite `TEMP_LINK` instantaneously. The symlink never ceases to exist.
+* **Assign a distinct window title:** Pass `--title "feh_flashcard_review"` to `feh`. This allows i3 or MATE to apply window rules (like preventing focus steals or routing `feh` to a secondary monitor).
+
+---
+
+### Updated Code
+
+Replace `update_symlink_and_reload()` and the `feh` launch sequence in `review_flashcards()` with the following:
+
+```python
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    """Atomically updates target symlink and signals feh to reload without breaking window state."""
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    
+    # 1. Ensure temp link is clear
+    tmp_symlink.unlink(missing_ok=True)
+    
+    # 2. Point temp link to current image
+    tmp_symlink.symlink_to(image_path.resolve())
+    
+    # 3. Atomic replacement: TEMP_LINK never disappears for feh
+    os.replace(tmp_symlink, TEMP_LINK)
+
+    # 4. Signal feh to reload
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Initialize symlink atomically before feh launches
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(items[0][0].resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
+
+    # Launch feh with a dedicated title for WM rules
+    feh_proc = subprocess.Popen(
+        ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.15)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == "quit":
+                break
+            elif action == "move":
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        TEMP_LINK.unlink(missing_ok=True)
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+```
+
+---
+
+### Managing Focus in i3 & PuDB
+
+If you are using **i3** and want `feh` to stay out of your way while debugging with `pudb` in the terminal, add this rule to your `~/.config/i3/config`:
+
+```i3config
+for_window [title="feh_flashcard_review"] no_focus
+
+```
+
+Alternatively, if running a dual-monitor setup, you can set i3 to automatically route `feh` windows to your secondary monitor:
+
+```i3config
+for_window [title="feh_flashcard_review"] move container to output HDMI-A-0
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_171433_capture.md")
+
+---

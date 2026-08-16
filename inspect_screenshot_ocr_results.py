@@ -26,11 +26,19 @@ def get_key():
     return ch
 
 def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
-    """Updates target symlink and signals feh to reload without stealing focus."""
-    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
-        TEMP_LINK.unlink()
-    TEMP_LINK.symlink_to(image_path.resolve())
+    """Atomically updates target symlink and signals feh to reload without breaking window state."""
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    
+    # 1. Ensure temp link is clear
+    tmp_symlink.unlink(missing_ok=True)
+    
+    # 2. Point temp link to current image
+    tmp_symlink.symlink_to(image_path.resolve())
+    
+    # 3. Atomic replacement: TEMP_LINK never disappears for feh
+    os.replace(tmp_symlink, TEMP_LINK)
 
+    # 4. Signal feh to reload
     if feh_proc and feh_proc.poll() is None:
         os.kill(feh_proc.pid, signal.SIGUSR1)
 
@@ -116,17 +124,18 @@ def review_flashcards():
         print("No screenshots with sidecar text files found to review.")
         return
 
-    # Initialize symlink for feh
-    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
-        TEMP_LINK.unlink()
-    TEMP_LINK.symlink_to(items[0][0].resolve())
+    # Initialize symlink atomically before feh launches
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(items[0][0].resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
 
-    # Launch feh once in background
+    # Launch feh with a dedicated title for WM rules
     feh_proc = subprocess.Popen(
-        ["feh", "-F", "--auto-zoom", str(TEMP_LINK)],
+        ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(TEMP_LINK)],
         stderr=subprocess.DEVNULL
     )
-    time.sleep(0.1)
+    time.sleep(0.15)
 
     try:
         for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
@@ -136,7 +145,6 @@ def review_flashcards():
             full_text = read_sidecar(full_txt_path)
             title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
 
-            # Run pager directly as the primary interactive interface
             action = custom_pager(title_str, url_text, full_text)
 
             if action == "quit":
@@ -159,8 +167,7 @@ def review_flashcards():
     finally:
         if feh_proc and feh_proc.poll() is None:
             feh_proc.terminate()
-        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
-            TEMP_LINK.unlink()
+        TEMP_LINK.unlink(missing_ok=True)
 
         os.system("clear")
         print("Flashcard review complete.")
