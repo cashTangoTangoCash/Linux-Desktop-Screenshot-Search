@@ -6231,3 +6231,120 @@ for_window [title="feh_flashcard_review"] move container to output HDMI-A-0
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_171433_capture.md")
 
 ---
+
+# PROMPT 53
+screenshots are still not advancing consistently - feh lags behind for a number of screenshots and then instantly 'catches up'.  I changed the python script as directed but did nothing with window managers - I am in Mate desktop because that is the one I know better and I'm sure it's more stable / reliable than i3.  I notice the code is not using "next" which I think custom-pager returns.  I didn't try pudb again yet.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_173604_capture.md")
+
+---
+
+# RESPONSE 53
+The behavior where `feh` lags behind and then suddenly "catches up" is caused by how X11 window events work in Linux when a program is in the background.
+
+---
+
+### Why `feh` Lags and Catches Up
+
+When `feh` loses window focus in MATE, its internal X11 event loop enters a blocking sleep state (`XNextEvent`) waiting for mouse or keyboard activity on its own window.
+
+When your Python script sends `SIGUSR1`, Linux delivers the signal and `feh` sets an internal "reload needed" flag. However, because `feh` is unfocused and sleeping in `XNextEvent`, it doesn't actually wake up to redraw the screen until an X11 window event occurs (such as moving the mouse cursor over the `feh` window or switching workspaces). When that happens, `feh` wakes up, sees the pending reload flag, and rapidly applies all the queued updates at once.
+
+---
+
+### The Fix
+
+Pass the `--reload 0.2` flag to `feh`.
+
+This forces `feh` to use a 200ms timer inside its event loop rather than sleeping indefinitely for X11 input. When `SIGUSR1` arrives, `feh` processes the redraw within a fraction of a second, even while running silently in the background under MATE.
+
+---
+
+### Addressing `action == "next"`
+
+In your previous loop, returning `"next"` worked because it simply fell through the `if/elif` block without triggering `"quit"`, `"move"`, or `"delete"`, causing Python to advance to the next iteration of the `for` loop.
+
+Adding an explicit `elif action == "next": pass` block makes this intention clear.
+
+---
+
+### Updated Code
+
+Here is the updated `review_flashcards()` function with `--reload 0.2` added and `"next"` explicitly handled:
+
+```python
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Initialize symlink atomically before feh launches
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(items[0][0].resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
+
+    # --reload 0.2 prevents feh from sleeping indefinitely when unfocused
+    feh_proc = subprocess.Popen(
+        [
+            "feh",
+            "--title", "feh_flashcard_review",
+            "--reload", "0.2",
+            "-F",
+            "--auto-zoom",
+            str(TEMP_LINK)
+        ],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.15)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == "quit":
+                break
+            elif action == "next":
+                pass  # Explicitly fall through to advance loop
+            elif action == "move":
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        TEMP_LINK.unlink(missing_ok=True)
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_173608_capture.md")
+
+---

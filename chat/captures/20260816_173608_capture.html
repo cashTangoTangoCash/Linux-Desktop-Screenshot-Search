@@ -1,0 +1,94 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 53</h1>
+<p><strong><a href="20260816_173604_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>The behavior where <code>feh</code> lags behind and then suddenly &quot;catches up&quot; is caused by how X11 window events work in Linux when a program is in the background.</p>
+<hr />
+<h3>Why <code>feh</code> Lags and Catches Up</h3>
+<p>When <code>feh</code> loses window focus in MATE, its internal X11 event loop enters a blocking sleep state (<code>XNextEvent</code>) waiting for mouse or keyboard activity on its own window.</p>
+<p>When your Python script sends <code>SIGUSR1</code>, Linux delivers the signal and <code>feh</code> sets an internal &quot;reload needed&quot; flag. However, because <code>feh</code> is unfocused and sleeping in <code>XNextEvent</code>, it doesn't actually wake up to redraw the screen until an X11 window event occurs (such as moving the mouse cursor over the <code>feh</code> window or switching workspaces). When that happens, <code>feh</code> wakes up, sees the pending reload flag, and rapidly applies all the queued updates at once.</p>
+<hr />
+<h3>The Fix</h3>
+<p>Pass the <code>--reload 0.2</code> flag to <code>feh</code>.</p>
+<p>This forces <code>feh</code> to use a 200ms timer inside its event loop rather than sleeping indefinitely for X11 input. When <code>SIGUSR1</code> arrives, <code>feh</code> processes the redraw within a fraction of a second, even while running silently in the background under MATE.</p>
+<hr />
+<h3>Addressing <code>action == &quot;next&quot;</code></h3>
+<p>In your previous loop, returning <code>&quot;next&quot;</code> worked because it simply fell through the <code>if/elif</code> block without triggering <code>&quot;quit&quot;</code>, <code>&quot;move&quot;</code>, or <code>&quot;delete&quot;</code>, causing Python to advance to the next iteration of the <code>for</code> loop.</p>
+<p>Adding an explicit <code>elif action == &quot;next&quot;: pass</code> block makes this intention clear.</p>
+<hr />
+<h3>Updated Code</h3>
+<p>Here is the updated <code>review_flashcards()</code> function with <code>--reload 0.2</code> added and <code>&quot;next&quot;</code> explicitly handled:</p>
+<pre><code class="language-python">def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    # Initialize symlink atomically before feh launches
+    tmp_symlink = Path(f&quot;/tmp/review_tmp_{os.getpid()}.jpg&quot;)
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(items[0][0].resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
+
+    # --reload 0.2 prevents feh from sleeping indefinitely when unfocused
+    feh_proc = subprocess.Popen(
+        [
+            &quot;feh&quot;,
+            &quot;--title&quot;, &quot;feh_flashcard_review&quot;,
+            &quot;--reload&quot;, &quot;0.2&quot;,
+            &quot;-F&quot;,
+            &quot;--auto-zoom&quot;,
+            str(TEMP_LINK)
+        ],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.15)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                pass  # Explicitly fall through to advance loop
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        TEMP_LINK.unlink(missing_ok=True)
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+</code></pre>
+<hr />
+<p><strong><a href="20260816_173604_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_173608_capture.md&quot;)</p>
