@@ -6348,3 +6348,432 @@ def review_flashcards():
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_173608_capture.md")
 
 ---
+
+# PROMPT 54
+I believe I can see feh 'reloading' as indicated by a very twitchy feh icon at teh bottom of the screen in Mate.  but screenshots are still not advancing properly.  for debugging, maybe we print the target of TEMP_LINK often enough / at the right points in script execution (I am fuzzy on this because I really need to pudb around in this script to get a better idea of what is going on with it)?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175117_capture.md")
+
+---
+
+# RESPONSE 54
+That twitchy MATE panel icon explains a lot: `--reload 0.2` was forcing `feh` to re-read and redraw disk state 5 times every second. That polling storm was thrashing the X11 render pipeline and keeping `feh` locked in a continuous reload loop instead of waiting for your signals.
+
+The main reason debug prints disappear in your terminal is because `custom_pager()` runs `os.system("clear")` at the start of every render loop, wiping stdout instantly.
+
+Here is how to fix the `feh` caching issue and surface live `TEMP_LINK` target debugging right in your pager header and terminal.
+
+---
+
+### Key Fixes
+
+1. **Remove `--reload 0.2`:** Drop continuous polling so `feh` only reloads when receiving `SIGUSR1`.
+2. **Force Symlink Timestamp Updates:** `imlib2` (the library behind `feh`) caches images by path and `mtime`. Running `os.utime(TEMP_LINK, follow_symlinks=False)` forces the symlink's timestamp to update, guaranteeing `feh` invalidates its image cache on `SIGUSR1`.
+3. **Embed Symlink Debug Info in Pager:** Pass the resolved target of `TEMP_LINK` directly into `custom_pager()` so you can verify the symlink destination on screen in real time.
+
+---
+
+### Updated Script with Symlink Debugging
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TEMP_LINK = Path("/tmp/review_current_flashcard.jpg")
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter, preserving output formatting."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen) -> str:
+    """Atomically updates target symlink, updates mtime, and signals feh."""
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(image_path.resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
+    
+    # Touch the symlink itself (not the target file) to break feh's imlib2 cache
+    os.utime(TEMP_LINK, follow_symlinks=False)
+
+    # Read active symlink destination for debug display
+    try:
+        resolved_target = str(TEMP_LINK.readlink())
+    except Exception as e:
+        resolved_target = f"<Error reading link: {e}>"
+
+    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)
+
+    return resolved_target
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def custom_pager(title: str, symlink_target: str, url_text: str, full_text: str) -> str:
+    """Unified Pager UI with embedded symlink debug display."""
+    url_lines = [f"URL OCR: {url_text}", "-" * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 7)
+        
+        os.system("clear")
+        print(f"=== {title} ===")
+        print(f"[DEBUG LINK TARGET] -> {symlink_target}")
+        print("=" * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print("")
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print("=" * 60)
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] "
+              f"[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit")
+        print("Choice -> ", end="", flush=True)
+
+        key = get_key()
+
+        if key in (' ', 'j'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                return "next"
+        elif key in ('b', 'k'):
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+        elif key in ('\r', '\n', 'n', 'N'):
+            return "next"
+        elif key in ('m', 'M'):
+            return "move"
+        elif key in ('d', 'D'):
+            return "delete"
+        elif key in ('q', 'Q', '\x03'):
+            return "quit"
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    # Initial symlink setup
+    tmp_symlink = Path(f"/tmp/review_tmp_{os.getpid()}.jpg")
+    tmp_symlink.unlink(missing_ok=True)
+    tmp_symlink.symlink_to(items[0][0].resolve())
+    os.replace(tmp_symlink, TEMP_LINK)
+    os.utime(TEMP_LINK, follow_symlinks=False)
+
+    # Clean feh invocation: backgrounded with no continuous reload flag
+    feh_proc = subprocess.Popen(
+        ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.15)
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            # Update symlink and retrieve target path for debug header
+            active_target = update_symlink_and_reload(img_path, feh_proc)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
+
+            action = custom_pager(title_str, active_target, url_text, full_text)
+
+            if action == "quit":
+                break
+            elif action == "next":
+                pass
+            elif action == "move":
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        TEMP_LINK.unlink(missing_ok=True)
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+```
+
+---
+
+### How to use `pudb` with this script
+
+Now that the 200ms `feh` event loop is gone, `pudb` won't be disrupted by window updates. You can set a breakpoint inside `review_flashcards()` right before `custom_pager()`:
+
+```python
+import pudb; pudb.set_trace()
+action = custom_pager(title_str, active_target, url_text, full_text)
+
+```
+
+Running the script in your terminal will open `pudb` cleanly, allowing you to step through `update_symlink_and_reload()` line by line.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175129_capture.md")
+
+---
+
+# PROMPT 55
+I can do:
+
+right click in feh to do Reload.  this sometimes 'works' and sometimes doesn't, giving me some real confusion.
+
+right click in feh and turn on display of filename: /tmp/review_current_flashcard.jpg
+
+go into dired and look at /tmp/review_current_flashcard.jpg.  right now it looks 'right' and feh is showing the 'wrong' screenshot even though I manually right click and reload.
+
+I think common sense says this script is doing overcomplicated things.  it's hard to quit on it because it's otherwise a great script that is very handy for this project.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175131_capture.md")
+
+---
+
+# RESPONSE 55
+Great troubleshooting—checking the symlink target directly in Dired was the move that exposed the true culprit.
+
+If Dired showed `/tmp/review_current_flashcard.jpg` pointing to the new screenshot, **Python was doing its job perfectly.** The issue is `imlib2` (the rendering library behind `feh`). `imlib2` caches image data in memory keyed by the file path string (`/tmp/review_current_flashcard.jpg`). Even when `feh` receives a `Reload` signal or manual right-click, `imlib2` sees the exact same path string and serves the old image directly from RAM.
+
+You are completely right: keeping a long-lived `feh` background daemon alive, swapping symlinks on disk, and firing POSIX `SIGUSR1` signals is an over-engineered IPC hack that is fighting against `imlib2`'s architecture.
+
+---
+
+### The Simplified Fix: Kill and Re-spawn `feh`
+
+Instead of keeping one `feh` process alive and trying to force-feed it symlinks, **kill the old `feh` window and spawn a new one pointing directly to the actual image file** on every card turn.
+
+This completely eliminates:
+
+* Symlinks and atomic file swapping.
+* `SIGUSR1` signal handling.
+* `imlib2` RAM caching bugs.
+
+---
+
+### Refactored Script
+
+Here is the clean, simplified version:
+
+```python
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+
+def get_key():
+    """Reads a single keypress without needing Enter, preserving output formatting."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def custom_pager(title: str, url_text: str, full_text: str) -> str:
+    """Unified Pager UI: Handles scrolling AND direct workflow actions."""
+    url_lines = [f"URL OCR: {url_text}", "-" * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system("clear")
+        print(f"=== {title} ===")
+        print("=" * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print("")
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print("=" * 60)
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] "
+              f"[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit")
+        print("Choice -> ", end="", flush=True)
+
+        key = get_key()
+
+        if key in (' ', 'j'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                return "next"
+        elif key in ('b', 'k'):
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+        elif key in ('\r', '\n', 'n', 'N'):
+            return "next"
+        elif key in ('m', 'M'):
+            return "move"
+        elif key in ('d', 'D'):
+            return "delete"
+        elif key in ('q', 'Q', '\x03'):
+            return "quit"
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f"{img.name}.url.txt"
+            full_txt = WORK_DIR / f"{img.name}.full.txt"
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print("No screenshots with sidecar text files found to review.")
+        return
+
+    feh_proc = None
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            # 1. Close previous feh window cleanly
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            # 2. Open new feh instance directly targeting the real image file
+            feh_proc = subprocess.Popen(
+                ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Flashcard ({idx}/{len(items)}) - {img_path.name}"
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == "quit":
+                break
+            elif action == "next":
+                pass
+            elif action == "move":
+                print("\n")
+                target_folder = input("Enter subfolder name to move into: ").strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system("clear")
+        print("Flashcard review complete.")
+
+if __name__ == "__main__":
+    review_flashcards()
+
+```
+
+---
+
+### Focus Handling Note for MATE
+
+If opening a fresh `feh` window causes MATE to pull focus away from your terminal, you can force focus back to your terminal right after spawning `feh` by adding a single `xdotool` line right after `subprocess.Popen`:
+
+```python
+subprocess.run(["xdotool", "search", "--onlyvisible", "--class", "terminal", "windowactivate"], check=False)
+
+```
+
+With no background signals or symlinks remaining, `pudb` will also function without interference.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175137_capture.md")
+
+---
