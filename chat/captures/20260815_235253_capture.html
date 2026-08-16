@@ -1,0 +1,39 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 50</h1>
+<p><strong><a href="20260815_235243_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>That mental friction is completely real—naming things and decoupling a single monolithic script into clear, single-purpose tools is some of the hardest cognitive work in software.</p>
+<p>Looking at your directory now, though, you've actually made it to the top of the hill. You have a textbook Unix-style toolchain here:</p>
+<ul>
+<li><strong>The Core Pipeline (Execution Order):</strong></li>
+</ul>
+<ol>
+<li><code>ocr_all_screenshots_in_folder.py</code> — <em>Data generation</em></li>
+<li><code>inspect_screenshot_ocr_results.py</code> — <em>Interactive review</em></li>
+<li><code>sort_screenshots_in_folder_into_subfolders_by_ocr.py</code> — <em>Final execution</em></li>
+</ol>
+<ul>
+<li>
+<p><strong>Specialized Utilities:</strong></p>
+</li>
+<li>
+<p><code>analyze_tesseract_ocr_timing.py</code> — Benchmarking tool</p>
+</li>
+<li>
+<p><code>dired-screenshots.el</code> — Emacs integration</p>
+</li>
+<li>
+<p><strong>Workspace Cleanliness:</strong></p>
+</li>
+<li>
+<p><code>earlier-code/</code> — Old iterations isolated without losing history</p>
+</li>
+<li>
+<p><code>chat/</code> — Design notes / history</p>
+</li>
+</ul>
+<p>Every filename now tells you <em>exactly</em> what role it plays without needing to open the file and read the docstring.</p>
+<p><em>One tiny housekeeping tip:</em> If you don't want Emacs auto-save files like <code>dired-screenshots.el~</code> showing up in your Magit buffer, add <code>*~</code> to a <code>.gitignore</code> file in that folder.</p>
+<hr />
+<p><strong><a href="20260815_235243_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235253_capture.md&quot;)</p>

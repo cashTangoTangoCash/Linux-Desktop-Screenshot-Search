@@ -20,4 +20,21 @@
               (setq moved-count (1+ moved-count)))))))
     (message "Organized %d file(s) into monthly folders." moved-count)))
 
+(defun my/dired-move-folder-contents-up ()
+  "Move all contents of the directory at point in Dired into the parent directory."
+  (interactive)
+  (let ((target-dir (dired-get-filename nil t)))
+    (if (not (and target-dir (file-directory-p target-dir)))
+        (user-error "Point is not on a valid directory")
+      (let* ((parent-dir default-directory)
+             (files (directory-files target-dir t "^\\([^.]\\|\\.[^.]\\)"))
+             (moved-count 0))
+        (dolist (file files)
+          (let ((dest (expand-file-name (file-name-nondirectory file) parent-dir)))
+            (rename-file file dest t)
+            (setq moved-count (1+ moved-count))))
+        (revert-buffer)
+        (message "Moved %d file(s) out of '%s'."
+                 moved-count (file-name-nondirectory (directory-file-name target-dir)))))))
+
 (provide 'dired-screenshots)

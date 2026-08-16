@@ -1,0 +1,39 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 48</h1>
+<p><strong><a href="20260815_235153_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_235230_capture.html">Next →</a></strong></p>
+<hr />
+<p>Both approaches are completely valid, but they serve two different needs depending on how often you expect to look back at the old logic.</p>
+<h3>1. The Pure Git Approach: Delete Them Entirely</h3>
+<p>In standard Git philosophy, <strong>deleted code is never truly gone</strong>. Once a script is committed, removing it from your working directory keeps your workspace clean while leaving its entire history intact in the <code>.git</code> repository.</p>
+<ul>
+<li><strong>Best for:</strong> Code you are confident you won't need to look at anytime soon.</li>
+<li><strong>How to do it:</strong></li>
+</ul>
+<pre><code class="language-bash">git rm ocr_screenshots_then_sort_two_pass.py
+git commit -m &quot;Remove monolithic script superseded by split OCR/Sort pipeline&quot;
+
+</code></pre>
+<ul>
+<li><strong>How to inspect/restore later:</strong></li>
+<li>View file contents without restoring: <code>git show HEAD~1:ocr_screenshots_then_sort_two_pass.py</code></li>
+<li>Bring the deleted file back: <code>git checkout HEAD~1 -- ocr_screenshots_then_sort_two_pass.py</code></li>
+</ul>
+<hr />
+<h3>2. The Pragmatic Approach: Move to an <code>archive/</code> Subfolder</h3>
+<p>While Git preserves history, digging through <code>git log</code> to find a specific old function takes extra commands. Moving old scripts into an <code>archive/</code> or <code>old_scripts/</code> folder cleans up your root directory while keeping the reference code instantly accessible in Dired or Emacs.</p>
+<ul>
+<li><strong>Best for:</strong> Active transition periods where you frequently want to open an old script side-by-side to copy logic or verify regex behavior.</li>
+<li><strong>How to do it:</strong></li>
+</ul>
+<pre><code class="language-bash">mkdir archive
+git mv ocr_screenshots_then_sort_two_pass.py archive/
+git commit -m &quot;Move superseded scripts to archive/&quot;
+
+</code></pre>
+<hr />
+<h3>Recommendation</h3>
+<p>If you like having the code immediate and readable in Dired without remembering Git history flags, use <strong><code>git mv</code> into an <code>archive/</code> folder</strong>.</p>
+<p>When that <code>archive/</code> folder eventually starts feeling like a dust bin six months down the line, you can do a single <code>git rm -r archive/</code> knowing Git still retains its entire evolution if you ever need it.</p>
+<hr />
+<p><strong><a href="20260815_235153_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_235230_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235157_capture.md&quot;)</p>

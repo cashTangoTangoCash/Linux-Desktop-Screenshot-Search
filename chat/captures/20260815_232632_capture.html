@@ -1,0 +1,169 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 47</h1>
+<p><strong><a href="20260815_163323_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_232638_capture.html">Next →</a></strong></p>
+<hr />
+<p>I would like to split up the ocr_screenshots_then_sort_two_pass.py into two separate functions:</p>
+<ol>
+<li>ocr_all_screenshots_in_folder.py</li>
+<li>sort_screenshots_in_folder_into_subfolders_by_ocr.py</li>
+</ol>
+<p>single script to split up is:</p>
+<p>#!/usr/bin/env python3
+import csv
+import os
+import re
+import shutil
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;</p>
+<h1>Exact crop coordinates for Firefox URL bar (2560x1440)</h1>
+<p>CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50</p>
+<p>PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules</p>
+<p>    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules</p>
+<p>def run_url_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;</p>
+<p>def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed</p>
+<p>def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])</p>
+<p>def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)</p>
+<p>    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))</p>
+<p>def sort_by_full_text(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - Full Text&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+        full_text = full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if full_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def sort_by_url(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - URL&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL bar sidecars (.url.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        url_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if url_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def process_batch():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No unprocessed PC screenshots found in {WORK_DIR}&quot;)
+        return</p>
+<p>    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)</p>
+<p>    print(f&quot;Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.&quot;)
+    print(f&quot;Ensuring full OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    # --- STAGE 1: GUARANTEE OCR SIDECARS FOR EVERY IMAGE ---
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding=&quot;utf-8&quot;)</p>
+<p>        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed full image '{image_path.name}' ({duration:.2f}s)&quot;)</p>
+<p>    # --- STAGE 2 &amp; 3: SORT PASSES (Order swapped for this month) ---
+    remaining_images, sorted_pass_1 = sort_by_full_text(pc_images, rules_full, &quot;Pass 1 - Full Text&quot;)
+    remaining_images, sorted_pass_2 = sort_by_url(remaining_images, rules_url, &quot;Pass 2 - URL&quot;)</p>
+<p>    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot;Processing Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Full Text): {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (URL)      : {sorted_pass_2} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_batch()</p>
+<hr />
+<p><strong><a href="20260815_163323_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260815_232638_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_232632_capture.md&quot;)</p>

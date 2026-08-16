@@ -4244,3 +4244,641 @@ if __name__ == &quot;__main__&quot;:
 <p>Commenting out <code>;; (eval-buffer)</code> gives you the best of both worlds: a safe, 1-keystroke manual trigger when viewing the file, with zero risk of crashing when loaded programmatically.</p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_163323_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 47</h1>
+<p>I would like to split up the ocr_screenshots_then_sort_two_pass.py into two separate functions:</p>
+<ol>
+<li>ocr_all_screenshots_in_folder.py</li>
+<li>sort_screenshots_in_folder_into_subfolders_by_ocr.py</li>
+</ol>
+<p>single script to split up is:</p>
+<p>#!/usr/bin/env python3
+import csv
+import os
+import re
+import shutil
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;</p>
+<h1>Exact crop coordinates for Firefox URL bar (2560x1440)</h1>
+<p>CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50</p>
+<p>PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules</p>
+<p>    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules</p>
+<p>def run_url_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;</p>
+<p>def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed</p>
+<p>def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])</p>
+<p>def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)</p>
+<p>    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))</p>
+<p>def sort_by_full_text(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - Full Text&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+        full_text = full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if full_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def sort_by_url(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - URL&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL bar sidecars (.url.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        url_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if url_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def process_batch():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No unprocessed PC screenshots found in {WORK_DIR}&quot;)
+        return</p>
+<p>    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)</p>
+<p>    print(f&quot;Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.&quot;)
+    print(f&quot;Ensuring full OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    # --- STAGE 1: GUARANTEE OCR SIDECARS FOR EVERY IMAGE ---
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding=&quot;utf-8&quot;)</p>
+<p>        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed full image '{image_path.name}' ({duration:.2f}s)&quot;)</p>
+<p>    # --- STAGE 2 &amp; 3: SORT PASSES (Order swapped for this month) ---
+    remaining_images, sorted_pass_1 = sort_by_full_text(pc_images, rules_full, &quot;Pass 1 - Full Text&quot;)
+    remaining_images, sorted_pass_2 = sort_by_url(remaining_images, rules_url, &quot;Pass 2 - URL&quot;)</p>
+<p>    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot;Processing Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Full Text): {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (URL)      : {sorted_pass_2} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_batch()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_232632_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 47</h1>
+<p>Here are the two standalone scripts, completely decoupled so you can run indexing and sorting independently.</p>
+<h3>1. <code>ocr_all_screenshots_in_folder.py</code></h3>
+<p>This script only handles generating the <code>.url.txt</code> and <code>.full.txt</code> sidecar files and logging Tesseract execution timing.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import csv
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;
+
+# Exact crop coordinates for Firefox URL bar (2560x1440)
+CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50
+
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def run_url_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;
+
+def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed
+
+def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])
+
+def process_ocr():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+
+        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding=&quot;utf-8&quot;)
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed '{image_path.name}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+        else:
+            print(f&quot;Skipped '{image_path.name}' (already indexed)&quot;)
+
+    print(f&quot;\nOCR Indexing Complete. {indexed_count} new file(s) processed.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    process_ocr()
+
+</code></pre>
+<hr />
+<h3>2. <code>sort_screenshots_in_folder_into_subfolders_by_ocr.py</code></h3>
+<p>This script loads rule files, evaluates existing <code>.url.txt</code> and <code>.full.txt</code> sidecars, and moves image/text bundles into their destination subfolders.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules
+
+def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+
+    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))
+
+def sort_by_full_text(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - Full Text&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+        full_text = full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if full_txt_path.is_file() else &quot;&quot;
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+def sort_by_url(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - URL&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL bar sidecars (.url.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        url_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if url_txt_path.is_file() else &quot;&quot;
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+def process_sort():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to sort in {WORK_DIR}&quot;)
+        return
+
+    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)
+
+    print(f&quot;Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.&quot;)
+    print(f&quot;Sorting {len(pc_images)} screenshot(s)...\n&quot;)
+
+    # --- EXECUTE SORT PASSES ---
+    # Swap these two lines if you want URL matching to take priority over Full Text
+    remaining_images, sorted_pass_1 = sort_by_full_text(pc_images, rules_full, &quot;Pass 1 - Full Text&quot;)
+    remaining_images, sorted_pass_2 = sort_by_url(remaining_images, rules_url, &quot;Pass 2 - URL&quot;)
+
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot;Sorting Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Full Text): {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (URL)      : {sorted_pass_2} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)
+
+if __name__ == &quot;__main__&quot;:
+    process_sort()
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_232638_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 48</h1>
+<p>my project folder is getting crowded with old superceded scripts.  since I am using git, why not feel free to delete them?  what is the recommended approach?  I guess they would be quicker and easier to refer to if they were moved into a folder for old scripts.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235153_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 48</h1>
+<p>Both approaches are completely valid, but they serve two different needs depending on how often you expect to look back at the old logic.</p>
+<h3>1. The Pure Git Approach: Delete Them Entirely</h3>
+<p>In standard Git philosophy, <strong>deleted code is never truly gone</strong>. Once a script is committed, removing it from your working directory keeps your workspace clean while leaving its entire history intact in the <code>.git</code> repository.</p>
+<ul>
+<li><strong>Best for:</strong> Code you are confident you won't need to look at anytime soon.</li>
+<li><strong>How to do it:</strong></li>
+</ul>
+<pre><code class="language-bash">git rm ocr_screenshots_then_sort_two_pass.py
+git commit -m &quot;Remove monolithic script superseded by split OCR/Sort pipeline&quot;
+
+</code></pre>
+<ul>
+<li><strong>How to inspect/restore later:</strong></li>
+<li>View file contents without restoring: <code>git show HEAD~1:ocr_screenshots_then_sort_two_pass.py</code></li>
+<li>Bring the deleted file back: <code>git checkout HEAD~1 -- ocr_screenshots_then_sort_two_pass.py</code></li>
+</ul>
+<hr />
+<h3>2. The Pragmatic Approach: Move to an <code>archive/</code> Subfolder</h3>
+<p>While Git preserves history, digging through <code>git log</code> to find a specific old function takes extra commands. Moving old scripts into an <code>archive/</code> or <code>old_scripts/</code> folder cleans up your root directory while keeping the reference code instantly accessible in Dired or Emacs.</p>
+<ul>
+<li><strong>Best for:</strong> Active transition periods where you frequently want to open an old script side-by-side to copy logic or verify regex behavior.</li>
+<li><strong>How to do it:</strong></li>
+</ul>
+<pre><code class="language-bash">mkdir archive
+git mv ocr_screenshots_then_sort_two_pass.py archive/
+git commit -m &quot;Move superseded scripts to archive/&quot;
+
+</code></pre>
+<hr />
+<h3>Recommendation</h3>
+<p>If you like having the code immediate and readable in Dired without remembering Git history flags, use <strong><code>git mv</code> into an <code>archive/</code> folder</strong>.</p>
+<p>When that <code>archive/</code> folder eventually starts feeling like a dust bin six months down the line, you can do a single <code>git rm -r archive/</code> knowing Git still retains its entire evolution if you ever need it.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235157_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 49</h1>
+<p>my name &quot;inspect_results_ocr_screenshots_then_sort_two_pass.py&quot; is striking me as too confusing.  does inspect_results_of_ocr_of_screenshots.py  work?</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import tty
+import termios
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TEMP_LINK = Path(&quot;/tmp/review_current_flashcard.jpg&quot;)
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch</p>
+<p>def update_symlink_and_reload(image_path: Path, feh_proc: subprocess.Popen):
+    &quot;&quot;&quot;Updates target symlink and signals feh to reload without stealing focus.&quot;&quot;&quot;
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(image_path.resolve())</p>
+<p>    if feh_proc and feh_proc.poll() is None:
+        os.kill(feh_proc.pid, signal.SIGUSR1)</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;
+    Unified Pager UI: Handles scrolling AND direct workflow actions.
+    Returns: 'next', 'move', 'delete', or 'quit'
+    &quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        # Reserve 3 header lines and 3 footer lines
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        # Render visible slice of text
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])  # Truncate wide lines</p>
+<p>        # Pad remaining screen height
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)</p>
+<p>        key = get_key()</p>
+<p>        # --- SCROLLING CONTROLS ---
+        if key in (' ', 'j'):  # Page / Line Down
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                # Pressing Space at bottom of page advances to next card
+                return &quot;next&quot;
+        elif key in ('b', 'k'):  # Page / Line Up
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))</p>
+<p>        # --- DIRECT WORKFLOW ACTIONS ---
+        elif key in ('\r', '\n', 'n', 'N'):  # Next Screenshot
+            return &quot;next&quot;
+        elif key in ('m', 'M'):              # Move Bundle
+            return &quot;move&quot;
+        elif key in ('d', 'D'):              # Delete Sidecars
+            return &quot;delete&quot;
+        elif key in ('q', 'Q', '\x03'):      # Quit Application
+            return &quot;quit&quot;</p>
+<p>def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))</p>
+<p>    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return</p>
+<p>    # Initialize symlink for feh
+    if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+        TEMP_LINK.unlink()
+    TEMP_LINK.symlink_to(items[0][0].resolve())</p>
+<p>    # Launch feh once in background
+    feh_proc = subprocess.Popen(
+        [&quot;feh&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(TEMP_LINK)],
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)</p>
+<p>    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            update_symlink_and_reload(img_path, feh_proc)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            # Run pager directly as the primary interactive interface
+            action = custom_pager(title_str, url_text, full_text)</p>
+<p>            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+        if TEMP_LINK.is_symlink() or TEMP_LINK.exists():
+            TEMP_LINK.unlink()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235230_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 49</h1>
+<p><code>inspect_results_of_ocr_of_screenshots.py</code> is definitely a major improvement over the original name, but the double &quot;of&quot; makes it a bit wordy for quick tab-completion.</p>
+<p>A few slightly tighter alternatives that keep the exact same clarity:</p>
+<ul>
+<li><strong><code>inspect_screenshot_ocr.py</code></strong> – Clean, direct, and puts the focus right on what you're inspecting.</li>
+<li><strong><code>review_screenshot_ocr.py</code></strong> – Matches the internal <code>review_flashcards()</code> function and the interactive nature of the script.</li>
+<li><strong><code>inspect_ocr_results.py</code></strong> – Shortest option while still being completely clear in your project directory.</li>
+</ul>
+<p>If you like <code>inspect_results_of_ocr_of_screenshots.py</code> best, it works completely fine—otherwise, <strong><code>inspect_screenshot_ocr.py</code></strong> gives you the best balance of clarity and short tab-completion.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235236_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 50</h1>
+<p>ok, here is what the working folder looks like at this point.  it's tough to try to struggle towards clarity - it feels like making water go uphill</p>
+<p>  /home/dad84/Documents/2026/20260806-gemini-sort-screenshots:
+  drwxr-xr-x   5 4.0K Aug 15 23:47 .
+  drwxr-xr-x 355  36K Aug 15 13:30 ..
+  drwxr-xr-x   3 4.0K Aug  6 16:34 chat
+  drwxr-xr-x   2 4.0K Aug 15 23:40 earlier-code
+  drwxr-xr-x   7 4.0K Aug 15 23:44 .git
+  -rwxr-xr-x   1 2.0K Aug 12 13:47 analyze_tesseract_ocr_timing.py
+  -rw-r--r--   1 2.0K Aug 15 23:40 dired-screenshots.el
+  -rw-r--r--   1 1.2K Aug 15 12:59 dired-screenshots.el~
+  -rwxr-xr-x   1 6.0K Aug 12 17:07 inspect_screenshot_ocr_results.py
+  -rw-r--r--   1 3.3K Aug 15 23:24 ocr_all_screenshots_in_folder.py
+  -rw-r--r--   1 4.6K Aug 15 23:25 sort_screenshots_in_folder_into_subfolders_by_ocr.py</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235243_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 50</h1>
+<p>That mental friction is completely real—naming things and decoupling a single monolithic script into clear, single-purpose tools is some of the hardest cognitive work in software.</p>
+<p>Looking at your directory now, though, you've actually made it to the top of the hill. You have a textbook Unix-style toolchain here:</p>
+<ul>
+<li><strong>The Core Pipeline (Execution Order):</strong></li>
+</ul>
+<ol>
+<li><code>ocr_all_screenshots_in_folder.py</code> — <em>Data generation</em></li>
+<li><code>inspect_screenshot_ocr_results.py</code> — <em>Interactive review</em></li>
+<li><code>sort_screenshots_in_folder_into_subfolders_by_ocr.py</code> — <em>Final execution</em></li>
+</ol>
+<ul>
+<li>
+<p><strong>Specialized Utilities:</strong></p>
+</li>
+<li>
+<p><code>analyze_tesseract_ocr_timing.py</code> — Benchmarking tool</p>
+</li>
+<li>
+<p><code>dired-screenshots.el</code> — Emacs integration</p>
+</li>
+<li>
+<p><strong>Workspace Cleanliness:</strong></p>
+</li>
+<li>
+<p><code>earlier-code/</code> — Old iterations isolated without losing history</p>
+</li>
+<li>
+<p><code>chat/</code> — Design notes / history</p>
+</li>
+</ul>
+<p>Every filename now tells you <em>exactly</em> what role it plays without needing to open the file and read the docstring.</p>
+<p><em>One tiny housekeeping tip:</em> If you don't want Emacs auto-save files like <code>dired-screenshots.el~</code> showing up in your Magit buffer, add <code>*~</code> to a <code>.gitignore</code> file in that folder.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260815_235253_capture.md&quot;)</p>
+<hr />
