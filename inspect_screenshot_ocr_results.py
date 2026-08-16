@@ -130,9 +130,16 @@ def review_flashcards():
     tmp_symlink.symlink_to(items[0][0].resolve())
     os.replace(tmp_symlink, TEMP_LINK)
 
-    # Launch feh with a dedicated title for WM rules
+    # --reload 0.2 prevents feh from sleeping indefinitely when unfocused
     feh_proc = subprocess.Popen(
-        ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(TEMP_LINK)],
+        [
+            "feh",
+            "--title", "feh_flashcard_review",
+            "--reload", "0.2",
+            "-F",
+            "--auto-zoom",
+            str(TEMP_LINK)
+        ],
         stderr=subprocess.DEVNULL
     )
     time.sleep(0.15)
@@ -149,6 +156,8 @@ def review_flashcards():
 
             if action == "quit":
                 break
+            elif action == "next":
+                pass  # Explicitly fall through to advance loop
             elif action == "move":
                 print("\n")
                 target_folder = input("Enter subfolder name to move into: ").strip()
@@ -171,6 +180,6 @@ def review_flashcards():
 
         os.system("clear")
         print("Flashcard review complete.")
-
+        
 if __name__ == "__main__":
     review_flashcards()
