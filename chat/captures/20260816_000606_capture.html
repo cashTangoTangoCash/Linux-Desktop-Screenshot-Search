@@ -1,0 +1,86 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 51</h1>
+<p><strong><a href="20260815_235253_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_000610_capture.html">Next →</a></strong></p>
+<hr />
+<p>I will eventually get around to ocr-ing of all my old screenshots from past months, going back years.  In this case, the screenshots were manually sorted into subfolders.  I believe ocr_all_screenshots_in_folder.py can be changed so that it dives into all subfolders and performs ocr on screenshots in subfolders - I am thinking this will work for the current month (unsorted) and for past months (already hand-sorted but not ocr-ed).  Alternatively, a new but very similar script can be created for the task of ocr of old already sorted screenshots, but this seems like 'bad coding' (it grows the code in the project with very similar code).  my limited book-learning from entry-level coding books has me guessing/second-guessing how to 'best' move forward.</p>
+<p>#!/usr/bin/env python3
+import csv
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;</p>
+<h1>Exact crop coordinates for Firefox URL bar (2560x1440)</h1>
+<p>CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50</p>
+<p>PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def run_url_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;</p>
+<p>def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed</p>
+<p>def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])</p>
+<p>def process_ocr():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return</p>
+<p>    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding=&quot;utf-8&quot;)</p>
+<p>        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed '{image_path.name}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+        else:
+            print(f&quot;Skipped '{image_path.name}' (already indexed)&quot;)</p>
+<p>    print(f&quot;\nOCR Indexing Complete. {indexed_count} new file(s) processed.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_ocr()</p>
+<hr />
+<p><strong><a href="20260815_235253_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_000610_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_000606_capture.md&quot;)</p>
