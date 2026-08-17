@@ -78,18 +78,34 @@ def custom_pager(title: str, url_text: str, full_text: str) -> str:
         pct = int((end_idx / total_lines) * 100) if total_lines else 100
 
         print("=" * 60)
-        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] "
-              f"[Enter/j] Down | [b/k] Up | [p] Prev | [n] Next | [m] Move | [d] Delete | [q] Quit")
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]")
+        print("[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up")
+        print("[p] Prev Card | [n] Next Card | [m] Move | [d] Delete | [q] Quit")
         
         choice = input("Choice -> ").strip().lower()
 
-        if choice in ('', 'j'):  # Enter or 'j' moves down line-by-line or triggers next card at end
+        # --- Screenful (Page) Controls ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size < total_lines:
+                # Advance by chunk_size, but don't scroll past the bottom content
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return "next"  # Paging past the bottom advances to the next card
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        # --- Line-by-Line Controls ---
+        elif choice in ('j', 'down'):
             if line_pointer + chunk_size < total_lines:
                 line_pointer += 1
             else:
                 return "next"
-        elif choice in ('b', 'k'):
+
+        elif choice in ('k', 'up'):
             line_pointer = max(0, line_pointer - 1)
+
+        # --- Flashcard Workflow Actions ---
         elif choice in ('p', 'prev', 'back'):
             return "prev"
         elif choice in ('n', 'next'):

@@ -1,0 +1,85 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 64</h1>
+<p><strong><a href="20260817_120304_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here is the updated <code>custom_pager</code> with standard <code>less</code>/<code>vim</code> paging controls restored.</p>
+<p><code>f</code> (or <code>space</code>) jumps down by a full screenful (<code>chunk_size</code>), while <code>b</code> jumps backward by a full screenful. Line-by-line scrolling is preserved on <code>j</code> / Enter and <code>k</code>.</p>
+<pre><code class="language-python">def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/space] Screen Down | [b] Screen Up | [Enter/j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # --- Screenful (Page) Controls ---
+        if choice in ('f', 'space', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                # Advance by chunk_size, but don't scroll past the bottom content
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;  # Paging past the bottom advances to the next card
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        # --- Line-by-Line Controls ---
+        elif choice in ('', 'j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        # --- Flashcard Workflow Actions ---
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<h3>Key Navigation Summary</h3>
+<ul>
+<li><strong><code>f</code> or <code>space</code> + Enter:</strong> Page down (advances by <code>chunk_size</code> lines). If already at the bottom, moves to the next flashcard.</li>
+<li><strong><code>b</code> + Enter:</strong> Page up (reverses by <code>chunk_size</code> lines).</li>
+<li><strong>Enter or <code>j</code>:</strong> Line down.</li>
+<li><strong><code>k</code> + Enter:</strong> Line up.</li>
+<li><strong><code>p</code> / <code>n</code>:</strong> Previous / Next flashcard.</li>
+</ul>
+<hr />
+<p><strong><a href="20260817_120304_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_120309_capture.md&quot;)</p>
