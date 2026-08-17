@@ -1,0 +1,28 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 66</h1>
+<p><strong><a href="20260817_121529_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_122011_capture.html">Next →</a></strong></p>
+<hr />
+<p>Across this refactoring, we transformed a brittle low-level TTY script into a stable, non-blocking terminal workflow.</p>
+<p><strong>TTY State Corruption &amp; Escapes</strong></p>
+<ul>
+<li>Toggling <code>termios</code> raw or <code>cbreak</code> modes on every keypress is inherently fragile. Unhandled exceptions, <code>Ctrl+C</code>, or multi-byte escape sequences (like arrow keys) corrupt terminal flags and leave <code>stdin</code> permanently wedged without character echo.</li>
+<li>Switching to standard <code>input()</code> eliminates terminal state corruption completely while making user input visible and predictable.</li>
+</ul>
+<p><strong>Subprocess Input Locking (<code>stdin=DEVNULL</code>)</strong></p>
+<ul>
+<li>GUI apps launched via <code>subprocess.Popen</code> inherit the shell's standard input stream by default.</li>
+<li><code>feh</code> and Python's <code>input()</code> were actively competing for the same keyboard buffer, causing typed commands to disappear until <code>feh</code> was closed.</li>
+<li>Explicitly detaching <code>feh</code> with <code>stdin=subprocess.DEVNULL</code> prevents child processes from hijacking the terminal's input handle.</li>
+</ul>
+<p><strong>Dynamic Queue Navigation</strong></p>
+<ul>
+<li>Replacing rigid <code>for</code> loops with an index-driven <code>while</code> loop (<code>idx</code>) makes bi-directional navigation (<code>prev</code>/<code>next</code>) straightforward.</li>
+<li>Modifying active queues in-place with <code>items.pop(idx)</code> on <code>move</code> or <code>delete</code> keeps the index aligned with remaining items without array out-of-bounds errors.</li>
+</ul>
+<p><strong>Asynchronous External Tool Hooks</strong></p>
+<ul>
+<li>Invoking <code>emacsclient -n</code> (no-wait) delegates file editing to a running Emacs daemon instantaneously without hanging or blocking the terminal review loop.</li>
+</ul>
+<hr />
+<p><strong><a href="20260817_121529_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_122011_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_121532_capture.md&quot;)</p>

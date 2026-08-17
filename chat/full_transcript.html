@@ -6966,3 +6966,221 @@ if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_121039_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 66</h1>
+<p>here's a challenge question that maybe the free level of the gemini system won't fully deal with: so far in this project, what have we learned?  I think I should have done this every 20 turns or so?  I'm not sure I've tried this query before, but maybe I have.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_121529_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 66</h1>
+<p>Across this refactoring, we transformed a brittle low-level TTY script into a stable, non-blocking terminal workflow.</p>
+<p><strong>TTY State Corruption &amp; Escapes</strong></p>
+<ul>
+<li>Toggling <code>termios</code> raw or <code>cbreak</code> modes on every keypress is inherently fragile. Unhandled exceptions, <code>Ctrl+C</code>, or multi-byte escape sequences (like arrow keys) corrupt terminal flags and leave <code>stdin</code> permanently wedged without character echo.</li>
+<li>Switching to standard <code>input()</code> eliminates terminal state corruption completely while making user input visible and predictable.</li>
+</ul>
+<p><strong>Subprocess Input Locking (<code>stdin=DEVNULL</code>)</strong></p>
+<ul>
+<li>GUI apps launched via <code>subprocess.Popen</code> inherit the shell's standard input stream by default.</li>
+<li><code>feh</code> and Python's <code>input()</code> were actively competing for the same keyboard buffer, causing typed commands to disappear until <code>feh</code> was closed.</li>
+<li>Explicitly detaching <code>feh</code> with <code>stdin=subprocess.DEVNULL</code> prevents child processes from hijacking the terminal's input handle.</li>
+</ul>
+<p><strong>Dynamic Queue Navigation</strong></p>
+<ul>
+<li>Replacing rigid <code>for</code> loops with an index-driven <code>while</code> loop (<code>idx</code>) makes bi-directional navigation (<code>prev</code>/<code>next</code>) straightforward.</li>
+<li>Modifying active queues in-place with <code>items.pop(idx)</code> on <code>move</code> or <code>delete</code> keeps the index aligned with remaining items without array out-of-bounds errors.</li>
+</ul>
+<p><strong>Asynchronous External Tool Hooks</strong></p>
+<ul>
+<li>Invoking <code>emacsclient -n</code> (no-wait) delegates file editing to a running Emacs daemon instantaneously without hanging or blocking the terminal review loop.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_121532_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 67</h1>
+<p>I would have to wrack my brains quite a bit to go through the 132 chat captures and pick out the main takeaways.  I think the gemini free-level context window doesn't permit going back that far?  I think off the top of my head, one big finding early-on was: we found that at least in endeavourOS, pytesseract (install via pacman) runs slowly and has low accuracy in comparison to tesseract called at a terminal prompt.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_122011_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 67</h1>
+<p>Context limits inside any single session mean historic insights spanning dozens of distinct chat logs rely on external notes—like an Org-mode dev log—to keep track of long-term milestones.</p>
+<p>Your observation regarding <code>pytesseract</code> versus direct CLI <code>tesseract</code> was a major structural turning point for the screenshot toolchain.</p>
+<p>**Why Direct CLI Beats <code>pytesseract**</code></p>
+<ul>
+<li><strong>Temporary File &amp; PIL Overhead:</strong> <code>pytesseract</code> isn't a native binding; it's a wrapper that converts PIL/Pillow image objects into temporary disk files (<code>.bmp</code>/<code>.png</code>) inside <code>/tmp</code> before spawning the system binary anyway. This adds unnecessary serialization and disk I/O lag per image.</li>
+<li><strong>Hidden Default Arguments:</strong> The Python wrapper abstracts away low-level parameters. Explicit CLI calls let you pass direct Page Segmentation Modes (<code>--psm</code>) and engine modes (<code>--oem</code>) matched precisely to full-screen UI captures vs. single-line URLs.</li>
+<li><strong>Pipeline Cleanliness:</strong> Preprocessing images through native CLI utilities (like <code>magick</code> for contrast, binarization, and scaling) directly into <code>tesseract</code> keeps the memory footprint small and guarantees crisp input for the OCR engine.</li>
+</ul>
+<hr />
+<p><strong>Key Architecture Takeaways from the Flashcard Project</strong></p>
+<ol>
+<li><strong>Subprocess Isolation:</strong> GUI subprocesses (<code>feh</code>) must be explicitly decoupled from standard input (<code>stdin=subprocess.DEVNULL</code>) so they cannot lock or corrupt the shell's keyboard buffer.</li>
+<li><strong>Standard I/O over TTY Hacks:</strong> Standard <code>input()</code> with explicit command prompts is far more robust than raw/cbreak key-trapping (<code>termios</code>), which breaks during unhandled exceptions or Ctrl+C exits.</li>
+<li><strong>Index-Driven Loops:</strong> Index pointers (<code>idx</code>) over fixed iterator loops enable seamless bidirectional navigation (<code>prev</code>/<code>next</code>) while handling dynamic array mutation (<code>pop()</code>) on moves or deletes.</li>
+<li><strong>Non-Blocking External Tooling:</strong> Handing off text editing to <code>emacsclient -n</code> lets you edit sidecar data asynchronously without stalling or freezing the terminal review loop.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_122014_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 68</h1>
+<p>in i3, the inspect script is working very well for inspecting screenshots and the ocr text, and then writing rules_full.txt and rules_url.txt.  let's work on regex issues.  if I want a case-insensitive match to a phrase, I don't think this is working:</p>
+<p>&quot;vestal public library&quot; | vpl-friends-ebay-store</p>
+<p>what's the right way to do it?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_135911_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 68</h1>
+<p>That string is failing for three specific reasons:</p>
+<ol>
+<li><strong>Literal Quotes (<code>&quot;</code>):</strong> Regex treats quotes as literal characters, so it looks for actual <code>&quot;</code> marks in your OCR output.</li>
+<li><strong>Spaces Around the Pipe (<code>|</code>):</strong> Writing <code>library &quot; | vpl</code> requires a trailing space after the first phrase and a leading space before the second phrase.</li>
+<li><strong>Missing Case-Insensitive Flag:</strong> Standard regex is case-sensitive by default unless explicit flags are set.</li>
+</ol>
+<hr />
+<h3>Correct Syntax</h3>
+<p><strong>If your script reads rules directly from text files as raw regex:</strong>
+Prepend <code>(?i)</code> to turn on case-insensitivity inline, remove the quotes, and strip spaces around the pipe:</p>
+<pre><code class="language-regex">(?i)vestal public library|vpl-friends-ebay-store
+
+</code></pre>
+<p><strong>If you process the pattern in Python:</strong>
+Keep the pattern string clean in your rules file (<code>vestal public library|vpl-friends-ebay-store</code>) and pass <code>re.IGNORECASE</code> when calling <code>re.search()</code>:</p>
+<pre><code class="language-python">pattern = r&quot;vestal public library|vpl-friends-ebay-store&quot;
+
+if re.search(pattern, ocr_text, re.IGNORECASE):
+    # Match found
+
+</code></pre>
+<hr />
+<h3>OCR Robustness Tip</h3>
+<p>OCR text often inserts unexpected spaces, line breaks, or missing hyphens. To prevent subtle OCR glitches from breaking a match:</p>
+<ul>
+<li><strong>Flexible spacing (<code>\s+</code>):</strong> Replace standard spaces with <code>\s+</code> so it matches single spaces, multiple spaces, or line breaks between words:</li>
+</ul>
+<pre><code class="language-regex">(?i)vestal\s+public\s+library|vpl-friends-ebay-store
+
+</code></pre>
+<ul>
+<li><strong>Optional hyphens/spaces (<code>[- ]?</code>):</strong> If a term might appear as <code>vpl friends</code>, <code>vpl-friends</code>, or <code>vplfriends</code>:</li>
+</ul>
+<pre><code class="language-regex">(?i)vpl[- ]?friends[- ]?ebay[- ]?store
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_135917_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 69</h1>
+<p>to review, we are using sort_screenshots_in_folder_into_subfolders_by_ocr.py:</p>
+<p>#!/usr/bin/env python3
+import re
+import shutil
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules</p>
+<p>    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules</p>
+<p>def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)</p>
+<p>    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))</p>
+<p>def sort_by_full_text(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - Full Text&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+        full_text = full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if full_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def sort_by_url(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - URL&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL bar sidecars (.url.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        url_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if url_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def process_sort():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No PC screenshots found to sort in {WORK_DIR}&quot;)
+        return</p>
+<p>    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)</p>
+<p>    print(f&quot;Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.&quot;)
+    print(f&quot;Sorting {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    # --- EXECUTE SORT PASSES ---
+    # Swap these two lines if you want URL matching to take priority over Full Text
+    remaining_images, sorted_pass_1 = sort_by_full_text(pc_images, rules_full, &quot;Pass 1 - Full Text&quot;)
+    remaining_images, sorted_pass_2 = sort_by_url(remaining_images, rules_url, &quot;Pass 2 - URL&quot;)</p>
+<p>    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot;Sorting Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Full Text): {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (URL)      : {sorted_pass_2} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_sort()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_135919_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 69</h1>
+<p>Because <code>load_rules()</code> already compiles every rule with <code>re.IGNORECASE</code> automatically, case is already ignored. The exact reason the match failed was the literal double quotes <code>&quot;</code> added to the rule line.</p>
+<p>In <code>load_rules()</code>, <code>pattern_str.strip()</code> evaluates everything to the left of the last pipe <code>|</code>. If you include quotation marks in your rules file, Python compiles a regex searching for literal <code>&quot;</code> characters inside the OCR text file.</p>
+<h3>How to format the rule in <code>rules_full.txt</code> or <code>rules_url.txt</code></h3>
+<p><strong>1. Basic phrase match (no quotes, case-insensitive by default):</strong></p>
+<pre><code class="language-text">vestal public library | vpl-friends-ebay-store
+
+</code></pre>
+<p><strong>2. Matching multiple alternate phrases (using regex <code>|</code> OR logic):</strong>
+Because <code>load_rules()</code> uses <code>rsplit(&quot;|&quot;, 1)</code>, any pipes inside parentheses to the left are safely treated as regex <code>OR</code> conditions rather than the folder delimiter:</p>
+<pre><code class="language-text">(vestal public library|vpl friends) | vpl-friends-ebay-store
+
+</code></pre>
+<p><strong>3. OCR-resilient match (handles extra spaces or newlines between words):</strong>
+OCR engines occasionally output multiple spaces or line breaks between words. Replacing literal spaces with <code>\s+</code> keeps the rule reliable:</p>
+<pre><code class="language-text">vestal\s+public\s+library | vpl-friends-ebay-store
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_135924_capture.md&quot;)</p>
+<hr />
