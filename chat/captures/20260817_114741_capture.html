@@ -1,0 +1,58 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 63</h1>
+<p><strong><a href="20260817_114737_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>That detail about quitting <code>feh</code> with <code>q</code> to instantly unfreeze the prompt is the key to solving this.</p>
+<h3>The Root Cause</h3>
+<p>When Python launches <code>feh</code> via <code>subprocess.Popen</code>, <strong><code>feh</code> inherits the terminal's input handle (<code>stdin</code>) by default</strong>.</p>
+<p>Even though <code>feh</code> is a graphical application, it still listens to the TTY standard input stream it inherited from the shell. As a result, both Python's <code>input()</code> and the background <code>feh</code> process are actively fighting over the exact same terminal input file descriptor simultaneously. <code>feh</code> steals or locks the keyboard buffer, preventing <code>input()</code> from receiving or echoing your keystrokes.</p>
+<p>Once you press <code>q</code> inside <code>feh</code>, <code>feh</code> exits, releases its hold on <code>stdin</code>, and Python instantly regains full control of the terminal input.</p>
+<hr />
+<h3>The Fix</h3>
+<p>Explicitly detach <code>feh</code> from the terminal's input and output streams by setting <code>stdin=subprocess.DEVNULL</code> (and <code>stdout=subprocess.DEVNULL</code>) inside <code>subprocess.Popen</code>.</p>
+<p>Change the <code>feh</code> launch block in <code>review_flashcards()</code> to this:</p>
+<pre><code class="language-python">            # 2. Spawn new feh process completely detached from terminal stdin/stdout
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+</code></pre>
+<hr />
+<h3>Complete Corrected Section</h3>
+<p>Here is the updated loop in <code>review_flashcards()</code> with <code>stdin</code> redirected:</p>
+<pre><code class="language-python">    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]
+
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            time.sleep(.1)
+
+            # 2. Spawn new feh process - stdin=DEVNULL prevents feh from locking terminal input
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            time.sleep(.1)
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+</code></pre>
+<p>With <code>stdin=subprocess.DEVNULL</code> set, <code>feh</code> cannot touch your terminal's keyboard buffer, leaving Python's <code>input()</code> with 100% control over character echoing and responsiveness.</p>
+<hr />
+<p><strong><a href="20260817_114737_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_114741_capture.md&quot;)</p>

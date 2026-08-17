@@ -129,9 +129,11 @@ def review_flashcards():
 
             time.sleep(.1)
 
-            # 2. Spawn new feh process
+            # 2. Spawn new feh process - stdin=DEVNULL prevents feh from locking terminal input
             feh_proc = subprocess.Popen(
                 ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
 
@@ -143,7 +145,6 @@ def review_flashcards():
             title_str = f"Flashcard ({idx + 1}/{len(items)}) - {img_path.name}"
 
             action = custom_pager(title_str, url_text, full_text)
-
             if action == "quit":
                 break
             elif action == "next":
