@@ -80,17 +80,16 @@ def custom_pager(title: str, url_text: str, full_text: str) -> str:
         print("=" * 60)
         print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]")
         print("[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up")
-        print("[p] Prev Card | [n] Next Card | [m] Move | [d] Delete | [q] Quit")
+        print("[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit")
         
         choice = input("Choice -> ").strip().lower()
 
         # --- Screenful (Page) Controls ---
         if choice in ('f', '', 'pgdn'):
             if line_pointer + chunk_size < total_lines:
-                # Advance by chunk_size, but don't scroll past the bottom content
                 line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
             else:
-                return "next"  # Paging past the bottom advances to the next card
+                return "next"
 
         elif choice in ('b', 'pgup'):
             line_pointer = max(0, line_pointer - chunk_size)
@@ -110,13 +109,15 @@ def custom_pager(title: str, url_text: str, full_text: str) -> str:
             return "prev"
         elif choice in ('n', 'next'):
             return "next"
+        elif choice in ('e', 'emacs', 'edit'):
+            return "emacs"
         elif choice in ('m', 'move'):
             return "move"
         elif choice in ('d', 'del', 'delete'):
             return "delete"
         elif choice in ('q', 'quit'):
             return "quit"
-
+    
 def review_flashcards():
     items = []
     for img in sorted(WORK_DIR.iterdir()):
@@ -171,6 +172,22 @@ def review_flashcards():
                 else:
                     print("\nAlready at the first card!")
                     time.sleep(0.8)
+            elif action == "emacs":
+                if full_txt_path.is_file():
+                    try:
+                        # -n / --no-wait returns control to python immediately
+                        subprocess.run(
+                            ["emacsclient", "-n", str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print("\nemacsclient binary not found in PATH!")
+                        time.sleep(1)
+                else:
+                    print(f"\nSidecar file does not exist: {full_txt_path.name}")
+                    time.sleep(1)
             elif action == "move":
                 print("\n")
                 target_folder = input("Enter subfolder name to move into: ").strip()

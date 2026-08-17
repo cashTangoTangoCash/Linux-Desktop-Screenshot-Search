@@ -1,0 +1,121 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 65</h1>
+<p><strong><a href="20260817_121035_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>To integrate <code>emacsclient</code>, you need two simple additions:</p>
+<ol>
+<li>Add an <code>e</code> option to <code>custom_pager</code> that returns <code>&quot;emacs&quot;</code>.</li>
+<li>Add an <code>action == &quot;emacs&quot;</code> handler inside <code>review_flashcards</code> that invokes <code>emacsclient -n</code> to open <code>full_txt_path</code> without blocking the script.</li>
+</ol>
+<p>Because <code>idx</code> does not change when <code>action == &quot;emacs&quot;</code>, the loop simply re-displays the current pager screen while Emacs opens the file in the background.</p>
+<hr />
+<h3>1. Updated <code>custom_pager</code></h3>
+<pre><code class="language-python">def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # --- Screenful (Page) Controls ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        # --- Line-by-Line Controls ---
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        # --- Flashcard Workflow Actions ---
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<hr />
+<h3>2. Action Handler inside <code>review_flashcards</code></h3>
+<p>Add this branch into your <code>if action == ...</code> block in <code>review_flashcards()</code>:</p>
+<pre><code class="language-python">            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;emacs&quot;:
+                if full_txt_path.is_file():
+                    try:
+                        # -n / --no-wait returns control to python immediately
+                        subprocess.run(
+                            [&quot;emacsclient&quot;, &quot;-n&quot;, str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print(&quot;\nemacsclient binary not found in PATH!&quot;)
+                        time.sleep(1)
+                else:
+                    print(f&quot;\nSidecar file does not exist: {full_txt_path.name}&quot;)
+                    time.sleep(1)
+            elif action == &quot;move&quot;:
+                # ... existing move logic ...
+
+</code></pre>
+<h3>Notes</h3>
+<ul>
+<li>Using <code>emacsclient -n</code> opens the sidecar <code>.full.txt</code> file in your existing running Emacs daemon/instance instantly without hanging or locking your Python script terminal prompt.</li>
+</ul>
+<hr />
+<p><strong><a href="20260817_121035_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_121039_capture.md&quot;)</p>
