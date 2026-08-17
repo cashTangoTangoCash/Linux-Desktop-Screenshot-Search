@@ -1,0 +1,36 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 62</h1>
+<p><strong><a href="20260817_002447_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Your Python edits are completely correct. There are no syntax or logical errors in the script.</p>
+<p>When standard <code>input()</code> fails to display characters as you type, it is caused by one of two environment issues:</p>
+<hr />
+<h3>1. Terminal Focus Was Lost (Most Likely)</h3>
+<p>If <code>feh</code> stole window focus and <code>xdotool</code> failed to return it to your terminal, your keypresses are being sent to <code>feh</code> (or into the void) rather than the terminal process.</p>
+<ul>
+<li><strong>Quick Test:</strong> Click directly inside your terminal window with the mouse and try typing. If characters suddenly appear and hitting Enter works, the issue is window focus.</li>
+<li><strong>Why it happened:</strong> <code>get_terminal_window_id()</code> grabs the active window at startup. If you launched the script from Emacs (<code>eat</code>), a launcher, or a non-standard shell wrapper, <code>xdotool</code> may have recorded the wrong window ID or failed silently.</li>
+</ul>
+<hr />
+<h3>2. Leftover Terminal Mode Corruption (<code>stty -echo</code>)</h3>
+<p>Because earlier versions of the script manipulated <code>termios</code> and <code>tty</code> modes directly, a previous exit or crash may have left your terminal driver with <strong>character echo disabled</strong>. In this state, <code>input()</code> still receives your text, but the terminal refuses to draw the characters on screen as you type them.</p>
+<ul>
+<li><strong>Quick Test:</strong> Run this command in your terminal before launching the script:</li>
+</ul>
+<pre><code class="language-bash">stty sane
+
+</code></pre>
+<p>If typing works normally after running <code>stty sane</code>, the terminal flags were simply stuck in raw mode.</p>
+<hr />
+<h3>Permanent Fix</h3>
+<p>To ensure the script always forces a sane terminal state on startup and exit, add <code>os.system(&quot;stty sane&quot;)</code> right when the script starts:</p>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    # Reset terminal flags in case a previous script crashed and left stdin corrupted
+    os.system(&quot;stty sane&quot;)
+    review_flashcards()
+
+</code></pre>
+<p>If clicking the terminal window with your mouse solves the problem, consider removing <code>restore_terminal_focus(term_win_id)</code> and manually arranging your terminal and <code>feh</code> windows on separate monitors or i3 workspaces so focus never gets hijacked.</p>
+<hr />
+<p><strong><a href="20260817_002447_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002451_capture.md&quot;)</p>

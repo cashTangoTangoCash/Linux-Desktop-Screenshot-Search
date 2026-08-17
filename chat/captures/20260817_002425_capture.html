@@ -1,0 +1,67 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 59</h1>
+<p><strong><a href="20260817_002422_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_002427_capture.html">Next →</a></strong></p>
+<hr />
+<p>Your suspicion is spot on. Toggling <code>termios</code> attributes back and forth on <strong>every single keypress</strong> is exactly why your terminal ends up wedged. If the script exits via <code>Ctrl+C</code>, an unhandled exception, or a premature break while stdin is temporarily switched to <code>cbreak</code> mode, the terminal never gets its original flags restored—leaving input echo and line buffering permanently disabled in that shell.</p>
+<p>Whether you need this code depends on whether you mind pressing <strong>Enter</strong> after your navigation choices.</p>
+<hr />
+<h3>Option 1: Keep single-keypress navigation, but make it bulletproof</h3>
+<p>If you want to keep instant keypresses (<code>j</code>, <code>k</code>, <code>Space</code>) without hitting Enter, you don't need to rewrite <code>get_key()</code>. You just need to guarantee that the terminal resets its sanity on exit—no matter how or when the script terminates.</p>
+<p>Add an <code>atexit</code> handler right at the top of your script. It runs <code>stty sane</code> automatically whenever Python exits (even on <code>Ctrl+C</code> or crashes):</p>
+<pre><code class="language-python">import atexit
+import os
+
+# Guarantees terminal echo and canonical mode are restored on ANY exit
+atexit.register(lambda: os.system(&quot;stty sane&quot;))
+
+</code></pre>
+<p>Additionally, ensure <code>stty sane</code> is called in your <code>finally:</code> block inside <code>review_flashcards()</code>:</p>
+<pre><code class="language-python">    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;stty sane&quot;)  # Restores terminal state cleanly
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+</code></pre>
+<hr />
+<h3>Option 2: The ultra-simple alternative (<code>input()</code>)</h3>
+<p>If you want to completely throw out <code>termios</code>, <code>tty</code>, and low-level C-style terminal manipulation, replace <code>get_key()</code> with standard Python <code>input()</code>.</p>
+<p>The trade-off: <strong>You must press Enter after every command.</strong></p>
+<h4>1. Delete <code>get_key()</code> completely.</h4>
+<h4>2. Update <code>custom_pager()</code>:</h4>
+<p>Replace <code>key = get_key()</code> with a standard <code>input()</code> prompt:</p>
+<pre><code class="language-python">        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        # Plain input prompt - no termios/tty required
+        cmd = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        if cmd in ('', 'j'):  # Empty Enter or 'j' moves down
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+        elif cmd in ('b', 'k'):
+            line_pointer = max(0, line_pointer - 1)
+        elif cmd in ('n', 'next'):
+            return &quot;next&quot;
+        elif cmd in ('m', 'move'):
+            return &quot;move&quot;
+        elif cmd in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif cmd in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<hr />
+<h3>Which should you choose?</h3>
+<ul>
+<li><strong>Choose Option 1</strong> if you want to keep the fast, vim-like <code>j</code>/<code>k</code>/<code>Space</code> pacing without having to hit Enter every time. Adding <code>atexit.register(lambda: os.system(&quot;stty sane&quot;))</code> completely eliminates the wedged terminal bug.</li>
+<li><strong>Choose Option 2</strong> if you want zero platform-specific terminal code and maximum script simplicity, and don't mind hitting Enter after choices.</li>
+</ul>
+<hr />
+<p><strong><a href="20260817_002422_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_002427_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002425_capture.md&quot;)</p>

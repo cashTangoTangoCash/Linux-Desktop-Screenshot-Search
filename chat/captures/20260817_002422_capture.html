@@ -1,0 +1,166 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 59</h1>
+<p><strong><a href="20260816_225910_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_002425_capture.html">Next →</a></strong></p>
+<hr />
+<p>I am thinking that get_key is causing minor trouble.  sometimes the terminal seems to end up no longer accepting input, after the script has been exited from.  is the fancy-looking code in get_key really required for a decent user experience here?  is there something simpler that works ok?</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+import time</p>
+<p>WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully</p>
+<p>def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI: Handles scrolling AND direct workflow actions.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        page_lines = all_content[line_pointer : line_pointer + chunk_size]</p>
+<p>        time.sleep(.1)</p>
+<p>        for line in page_lines:
+            print(line[:term_cols])</p>
+<p>        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)</p>
+<p>        key = get_key()</p>
+<p>        if key in (' ', 'j'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                return &quot;next&quot;
+        elif key in ('b', 'k'):
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+        elif key in ('\r', '\n', 'n', 'N'):
+            return &quot;next&quot;
+        elif key in ('m', 'M'):
+            return &quot;move&quot;
+        elif key in ('d', 'D'):
+            return &quot;delete&quot;
+        elif key in ('q', 'Q', '\x03'):
+            return &quot;quit&quot;</p>
+<p>def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))</p>
+<p>    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return</p>
+<p>    # Capture terminal window ID once at startup
+    term_win_id = get_terminal_window_id()
+    feh_proc = None</p>
+<p>    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.2)</p>
+<p>            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.2)
+            
+            # 3. Immediately pull focus back to the terminal window
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, url_text, full_text)</p>
+<p>            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                pass
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<hr />
+<p><strong><a href="20260816_225910_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_002425_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002422_capture.md&quot;)</p>

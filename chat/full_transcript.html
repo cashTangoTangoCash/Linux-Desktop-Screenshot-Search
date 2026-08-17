@@ -5998,3 +5998,651 @@ if __name__ == &quot;__main__&quot;:
 <p>Whenever two independent executables on your system coordinate without sharing the exact same memory space, they are using IPC.</p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225910_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 59</h1>
+<p>I am thinking that get_key is causing minor trouble.  sometimes the terminal seems to end up no longer accepting input, after the script has been exited from.  is the fancy-looking code in get_key really required for a decent user experience here?  is there something simpler that works ok?</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+import time</p>
+<p>WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully</p>
+<p>def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI: Handles scrolling AND direct workflow actions.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        page_lines = all_content[line_pointer : line_pointer + chunk_size]</p>
+<p>        time.sleep(.1)</p>
+<p>        for line in page_lines:
+            print(line[:term_cols])</p>
+<p>        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)</p>
+<p>        key = get_key()</p>
+<p>        if key in (' ', 'j'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                return &quot;next&quot;
+        elif key in ('b', 'k'):
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+        elif key in ('\r', '\n', 'n', 'N'):
+            return &quot;next&quot;
+        elif key in ('m', 'M'):
+            return &quot;move&quot;
+        elif key in ('d', 'D'):
+            return &quot;delete&quot;
+        elif key in ('q', 'Q', '\x03'):
+            return &quot;quit&quot;</p>
+<p>def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))</p>
+<p>    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return</p>
+<p>    # Capture terminal window ID once at startup
+    term_win_id = get_terminal_window_id()
+    feh_proc = None</p>
+<p>    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.2)</p>
+<p>            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.2)
+            
+            # 3. Immediately pull focus back to the terminal window
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, url_text, full_text)</p>
+<p>            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                pass
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002422_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 59</h1>
+<p>Your suspicion is spot on. Toggling <code>termios</code> attributes back and forth on <strong>every single keypress</strong> is exactly why your terminal ends up wedged. If the script exits via <code>Ctrl+C</code>, an unhandled exception, or a premature break while stdin is temporarily switched to <code>cbreak</code> mode, the terminal never gets its original flags restored—leaving input echo and line buffering permanently disabled in that shell.</p>
+<p>Whether you need this code depends on whether you mind pressing <strong>Enter</strong> after your navigation choices.</p>
+<hr />
+<h3>Option 1: Keep single-keypress navigation, but make it bulletproof</h3>
+<p>If you want to keep instant keypresses (<code>j</code>, <code>k</code>, <code>Space</code>) without hitting Enter, you don't need to rewrite <code>get_key()</code>. You just need to guarantee that the terminal resets its sanity on exit—no matter how or when the script terminates.</p>
+<p>Add an <code>atexit</code> handler right at the top of your script. It runs <code>stty sane</code> automatically whenever Python exits (even on <code>Ctrl+C</code> or crashes):</p>
+<pre><code class="language-python">import atexit
+import os
+
+# Guarantees terminal echo and canonical mode are restored on ANY exit
+atexit.register(lambda: os.system(&quot;stty sane&quot;))
+
+</code></pre>
+<p>Additionally, ensure <code>stty sane</code> is called in your <code>finally:</code> block inside <code>review_flashcards()</code>:</p>
+<pre><code class="language-python">    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;stty sane&quot;)  # Restores terminal state cleanly
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+</code></pre>
+<hr />
+<h3>Option 2: The ultra-simple alternative (<code>input()</code>)</h3>
+<p>If you want to completely throw out <code>termios</code>, <code>tty</code>, and low-level C-style terminal manipulation, replace <code>get_key()</code> with standard Python <code>input()</code>.</p>
+<p>The trade-off: <strong>You must press Enter after every command.</strong></p>
+<h4>1. Delete <code>get_key()</code> completely.</h4>
+<h4>2. Update <code>custom_pager()</code>:</h4>
+<p>Replace <code>key = get_key()</code> with a standard <code>input()</code> prompt:</p>
+<pre><code class="language-python">        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        # Plain input prompt - no termios/tty required
+        cmd = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        if cmd in ('', 'j'):  # Empty Enter or 'j' moves down
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+        elif cmd in ('b', 'k'):
+            line_pointer = max(0, line_pointer - 1)
+        elif cmd in ('n', 'next'):
+            return &quot;next&quot;
+        elif cmd in ('m', 'move'):
+            return &quot;move&quot;
+        elif cmd in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif cmd in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<hr />
+<h3>Which should you choose?</h3>
+<ul>
+<li><strong>Choose Option 1</strong> if you want to keep the fast, vim-like <code>j</code>/<code>k</code>/<code>Space</code> pacing without having to hit Enter every time. Adding <code>atexit.register(lambda: os.system(&quot;stty sane&quot;))</code> completely eliminates the wedged terminal bug.</li>
+<li><strong>Choose Option 2</strong> if you want zero platform-specific terminal code and maximum script simplicity, and don't mind hitting Enter after choices.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002425_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 60</h1>
+<p>writing about the code prior to making any of the latest suggested changes: the buggy behavior is not only after script is quit out of.  it seems like there are times when I am hitting pager controlling keys and nothing seems to happen.  this is making me think I have to fall back to input().  at least I would see what key I actually typed - maybe I am not actually typing the right key for what I want to do, and then I am assuming the code is bad.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002427_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 60</h1>
+<p>That silent failure makes total sense—<code>sys.stdin.read(1)</code> in <code>cbreak</code> mode swallows input without echo, turning any unexpected keypress into an invisible black hole.</p>
+<p>When a script uses low-level key handling without visual feedback, three distinct issues cause it to feel &quot;frozen&quot; during execution:</p>
+<ul>
+<li><strong>Escape Sequence Corruption:</strong> If you accidentally touch an arrow key, Home, End, or Alt, your terminal sends a multi-character escape sequence (e.g., <code>\x1b[A</code>). <code>sys.stdin.read(1)</code> grabs only the initial <code>\x1b</code> byte, discards it as unmapped, and leaves <code>[A</code> sitting in the terminal buffer to ruin your <em>next</em> keypress.</li>
+<li><strong>Unmapped Characters:</strong> Typing any key not explicitly listed in your <code>if/elif</code> chain silently loops back to the top of <code>while True</code>. Because the screen clears instantly, it looks like the script ignored you or froze.</li>
+<li><strong>Focus Races:</strong> If <code>xdotool</code> or MATE window focus lags slightly when <code>feh</code> opens, keypresses intended for the terminal end up getting sent into the void.</li>
+</ul>
+<p>Switching to <code>input()</code> eliminates all three problems at once. You get visual feedback for what you typed, the terminal handle stays standard, and pressing Enter flushes any stray escape characters.</p>
+<hr />
+<h3>Clean <code>input()</code> Implementation</h3>
+<p>Here is <code>custom_pager</code> refactored to use standard <code>input()</code>. You can delete <code>get_key()</code> entirely:</p>
+<pre><code class="language-python">def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Enter/j] Down | [b/k] Up | [n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        # Standard visible input prompt
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        if choice in ('', 'j'):  # Hitting Enter alone or typing 'j' advances
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+        elif choice in ('b', 'k'):
+            line_pointer = max(0, line_pointer - 1)
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<h3>Why this is a better workflow fit</h3>
+<ol>
+<li><strong>Hitting Enter advances:</strong> Pressing Enter on an empty prompt defaults to scrolling down line-by-line (or moving to the next card once at the bottom), giving you a fast primary rhythm.</li>
+<li><strong>Explicit commands:</strong> Typing <code>d</code>, <code>m</code>, or <code>q</code> followed by Enter prevents accidental destructive actions from fat-fingering keys.</li>
+<li><strong>Zero terminal pollution:</strong> The script no longer manipulates <code>termios</code> flags, so your shell state remains completely stable whether the script exits normally, crashes, or is interrupted via <code>Ctrl+C</code>.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002435_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 61</h1>
+<p>please further tweak custom_pager so that I can return to the previous screenshot.  sometimes seeing later screenshots jogs the mind and you want to reconsider a previous one.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002438_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 61</h1>
+<p>To support moving backward, two adjustments are needed:</p>
+<ol>
+<li><strong>In <code>custom_pager</code>:</strong> Add <code>p</code> / <code>prev</code> as a valid choice option.</li>
+<li><strong>In <code>review_flashcards</code>:</strong> Convert the <code>for</code> loop into an index pointer <code>idx</code> while-loop so it can step backward (<code>idx -= 1</code>) or forward (<code>idx += 1</code>).</li>
+</ol>
+<p>If an item is moved or deleted, it is removed from the active queue so navigating backward skips items that no longer exist on disk.</p>
+<hr />
+<h3>Updated Code</h3>
+<pre><code class="language-python">def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Enter/j] Down | [b/k] Up | [p] Prev | [n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        if choice in ('', 'j'):  # Enter or 'j' moves down line-by-line or triggers next card at end
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+        elif choice in ('b', 'k'):
+            line_pointer = max(0, line_pointer - 1)
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append([img, url_txt, full_txt])
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0
+
+    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]
+
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            time.sleep(.1)
+
+            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )
+
+            time.sleep(.1)
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)  # Remove from queue; next item shifts into current idx
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                # Note: keeping image, unlinking sidecars as per original script
+                items.pop(idx)  # Remove from queue
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+</code></pre>
+<hr />
+<h3>Key Improvements</h3>
+<ul>
+<li>Typing <strong><code>p</code></strong> or <strong><code>prev</code></strong> moves back one card.</li>
+<li>If you move or delete a card, <code>items.pop(idx)</code> removes it from the list so the next card drops cleanly into position without messing up index navigation.</li>
+<li>If you try pressing <code>p</code> on the very first card (<code>idx == 0</code>), it displays a quick message and keeps you on card 1 instead of crashing.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002445_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 62</h1>
+<p>Now the user input for the pager is not responding.  I type and nothing appears.  Did I edit the script incorrectly or ?</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+import time</p>
+<p>WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        page_lines = all_content[line_pointer : line_pointer + chunk_size]</p>
+<p>        for line in page_lines:
+            print(line[:term_cols])</p>
+<p>        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Enter/j] Down | [b/k] Up | [p] Prev | [n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()</p>
+<p>        if choice in ('', 'j'):  # Enter or 'j' moves down line-by-line or triggers next card at end
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+        elif choice in ('b', 'k'):
+            line_pointer = max(0, line_pointer - 1)
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;</p>
+<p>def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append([img, url_txt, full_txt])</p>
+<p>    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return</p>
+<p>    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0</p>
+<p>    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]</p>
+<p>            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.1)</p>
+<p>            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.1)
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, url_text, full_text)</p>
+<p>            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)  # Remove from queue; next item shifts into current idx
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                # Note: keeping image, unlinking sidecars as per original script
+                items.pop(idx)  # Remove from queue</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+    
+if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002447_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 62</h1>
+<p>Your Python edits are completely correct. There are no syntax or logical errors in the script.</p>
+<p>When standard <code>input()</code> fails to display characters as you type, it is caused by one of two environment issues:</p>
+<hr />
+<h3>1. Terminal Focus Was Lost (Most Likely)</h3>
+<p>If <code>feh</code> stole window focus and <code>xdotool</code> failed to return it to your terminal, your keypresses are being sent to <code>feh</code> (or into the void) rather than the terminal process.</p>
+<ul>
+<li><strong>Quick Test:</strong> Click directly inside your terminal window with the mouse and try typing. If characters suddenly appear and hitting Enter works, the issue is window focus.</li>
+<li><strong>Why it happened:</strong> <code>get_terminal_window_id()</code> grabs the active window at startup. If you launched the script from Emacs (<code>eat</code>), a launcher, or a non-standard shell wrapper, <code>xdotool</code> may have recorded the wrong window ID or failed silently.</li>
+</ul>
+<hr />
+<h3>2. Leftover Terminal Mode Corruption (<code>stty -echo</code>)</h3>
+<p>Because earlier versions of the script manipulated <code>termios</code> and <code>tty</code> modes directly, a previous exit or crash may have left your terminal driver with <strong>character echo disabled</strong>. In this state, <code>input()</code> still receives your text, but the terminal refuses to draw the characters on screen as you type them.</p>
+<ul>
+<li><strong>Quick Test:</strong> Run this command in your terminal before launching the script:</li>
+</ul>
+<pre><code class="language-bash">stty sane
+
+</code></pre>
+<p>If typing works normally after running <code>stty sane</code>, the terminal flags were simply stuck in raw mode.</p>
+<hr />
+<h3>Permanent Fix</h3>
+<p>To ensure the script always forces a sane terminal state on startup and exit, add <code>os.system(&quot;stty sane&quot;)</code> right when the script starts:</p>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    # Reset terminal flags in case a previous script crashed and left stdin corrupted
+    os.system(&quot;stty sane&quot;)
+    review_flashcards()
+
+</code></pre>
+<p>If clicking the terminal window with your mouse solves the problem, consider removing <code>restore_terminal_focus(term_win_id)</code> and manually arranging your terminal and <code>feh</code> windows on separate monitors or i3 workspaces so focus never gets hijacked.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_002451_capture.md&quot;)</p>
+<hr />
