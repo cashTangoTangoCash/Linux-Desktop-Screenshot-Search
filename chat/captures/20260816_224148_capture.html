@@ -1,22 +1,12 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 55</h1>
-<p><strong><a href="20260816_175131_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_224141_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 56</h1>
+<p><strong><a href="20260816_224141_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_225900_capture.html">Next →</a></strong></p>
 <hr />
-<p>Great troubleshooting—checking the symlink target directly in Dired was the move that exposed the true culprit.</p>
-<p>If Dired showed <code>/tmp/review_current_flashcard.jpg</code> pointing to the new screenshot, <strong>Python was doing its job perfectly.</strong> The issue is <code>imlib2</code> (the rendering library behind <code>feh</code>). <code>imlib2</code> caches image data in memory keyed by the file path string (<code>/tmp/review_current_flashcard.jpg</code>). Even when <code>feh</code> receives a <code>Reload</code> signal or manual right-click, <code>imlib2</code> sees the exact same path string and serves the old image directly from RAM.</p>
-<p>You are completely right: keeping a long-lived <code>feh</code> background daemon alive, swapping symlinks on disk, and firing POSIX <code>SIGUSR1</code> signals is an over-engineered IPC hack that is fighting against <code>imlib2</code>'s architecture.</p>
+<p>That experiment is the exact missing link. Capturing the terminal's window ID at startup guarantees you return focus to the exact window running the script, regardless of terminal emulator or desktop environment setup.</p>
+<p>Using <code>windowactivate</code> with <code>--sync</code> works best because it both focuses and raises the terminal above <code>feh</code>.</p>
 <hr />
-<h3>The Simplified Fix: Kill and Re-spawn <code>feh</code></h3>
-<p>Instead of keeping one <code>feh</code> process alive and trying to force-feed it symlinks, <strong>kill the old <code>feh</code> window and spawn a new one pointing directly to the actual image file</strong> on every card turn.</p>
-<p>This completely eliminates:</p>
-<ul>
-<li>Symlinks and atomic file swapping.</li>
-<li><code>SIGUSR1</code> signal handling.</li>
-<li><code>imlib2</code> RAM caching bugs.</li>
-</ul>
-<hr />
-<h3>Refactored Script</h3>
-<p>Here is the clean, simplified version:</p>
+<h3>Updated Python Implementation</h3>
+<p>Here is how to integrate your <code>xdotool</code> logic directly into <code>inspect_screenshot_ocr_results.py</code>:</p>
 <pre><code class="language-python">#!/usr/bin/env python3
 import os
 import re
@@ -29,6 +19,34 @@ from pathlib import Path
 
 WORK_DIR = Path.cwd()
 PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None
+
+def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully
 
 def get_key():
     &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
@@ -113,20 +131,25 @@ def review_flashcards():
         print(&quot;No screenshots with sidecar text files found to review.&quot;)
         return
 
+    # Capture terminal window ID once at startup
+    term_win_id = get_terminal_window_id()
     feh_proc = None
 
     try:
         for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
-            # 1. Close previous feh window cleanly
+            # 1. Close previous feh instance
             if feh_proc and feh_proc.poll() is None:
                 feh_proc.terminate()
                 feh_proc.wait()
 
-            # 2. Open new feh instance directly targeting the real image file
+            # 2. Spawn new feh process
             feh_proc = subprocess.Popen(
                 [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
                 stderr=subprocess.DEVNULL
             )
+
+            # 3. Immediately pull focus back to the terminal window
+            restore_terminal_focus(term_win_id)
 
             url_text = read_sidecar(url_txt_path)
             full_text = read_sidecar(full_txt_path)
@@ -165,12 +188,12 @@ if __name__ == &quot;__main__&quot;:
 
 </code></pre>
 <hr />
-<h3>Focus Handling Note for MATE</h3>
-<p>If opening a fresh <code>feh</code> window causes MATE to pull focus away from your terminal, you can force focus back to your terminal right after spawning <code>feh</code> by adding a single <code>xdotool</code> line right after <code>subprocess.Popen</code>:</p>
-<pre><code class="language-python">subprocess.run([&quot;xdotool&quot;, &quot;search&quot;, &quot;--onlyvisible&quot;, &quot;--class&quot;, &quot;terminal&quot;, &quot;windowactivate&quot;], check=False)
-
-</code></pre>
-<p>With no background signals or symlinks remaining, <code>pudb</code> will also function without interference.</p>
+<h3>What Changed</h3>
+<ol>
+<li><strong><code>get_terminal_window_id()</code>:</strong> Checks if your terminal emulator exported <code>$WINDOWID</code>. If not, it executes <code>xdotool getactivewindow</code> immediately when the script launches (before <code>feh</code> ever spawns).</li>
+<li><strong><code>restore_terminal_focus(term_win_id)</code>:</strong> Runs <code>xdotool windowactivate --sync &lt;ID&gt;</code> directly after <code>subprocess.Popen</code> launches <code>feh</code>.</li>
+<li><strong>PuDB Ready:</strong> Because focus is actively returned to the terminal window ID on every iteration, stepping through with <code>pudb</code> won't lose focus to <code>feh</code>.</li>
+</ol>
 <hr />
-<p><strong><a href="20260816_175131_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_224141_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175137_capture.md&quot;)</p>
+<p><strong><a href="20260816_224141_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_225900_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_224148_capture.md&quot;)</p>

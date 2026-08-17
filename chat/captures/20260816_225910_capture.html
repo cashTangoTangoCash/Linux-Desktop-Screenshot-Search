@@ -1,0 +1,18 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 58</h1>
+<p><strong><a href="20260816_225907_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p><strong>IPC</strong> stands for <strong>Inter-Process Communication</strong>.</p>
+<p>It refers to the set of mechanisms provided by an operating system that allows separate, running programs (processes) to talk to one another—whether to exchange data, sync actions, or send control commands.</p>
+<p>Because modern operating systems strictly isolate memory space between running programs for security and stability, one process cannot directly touch another process's memory. IPC provides the authorized protocols and &quot;bridges&quot; to get around that wall.</p>
+<p><strong>Common IPC Examples in Linux:</strong></p>
+<ul>
+<li><strong>Unix Domain Sockets:</strong> This is what was referenced with &quot;i3's IPC.&quot; i3 creates a local Unix socket file (usually in <code>/tmp</code>). External tools like <code>i3-msg</code> or Python scripts open a socket connection to i3 to issue commands (e.g., <code>i3-msg &quot;focus left&quot;</code>) or listen for window events.</li>
+<li><strong>Signals:</strong> What your earlier script used with <code>os.kill(feh_proc.pid, signal.SIGUSR1)</code>. Python sends a lightweight asynchronous <code>SIGUSR1</code> signal directly to the <code>feh</code> process to trigger its internal reload function.</li>
+<li><strong>Pipes / Standard I/O:</strong> What <code>subprocess.check_output()</code> uses when executing <code>xdotool getactivewindow</code>. It opens an anonymous pipe between the child process's stdout and Python's memory to return the window ID string.</li>
+<li><strong>D-Bus:</strong> The higher-level IPC message bus used heavily in desktop environments like MATE, GNOME, and KDE for applications to control desktop notifications, media keys, system power states, or systemd units.</li>
+</ul>
+<p>Whenever two independent executables on your system coordinate without sharing the exact same memory space, they are using IPC.</p>
+<hr />
+<p><strong><a href="20260816_225907_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225910_capture.md&quot;)</p>

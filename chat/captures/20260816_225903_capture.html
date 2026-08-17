@@ -1,0 +1,15 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 57</h1>
+<p><strong><a href="20260816_225900_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_225907_capture.html">Next →</a></strong></p>
+<hr />
+<p>That <code>time.sleep(0.2)</code> was the missing piece to resolve an classic X11 race condition.</p>
+<p>When <code>subprocess.Popen</code> launches <code>feh</code>, Python moves to the next line of code in microseconds. However, the X11 server takes a brief moment to map <code>feh</code>'s window and register it with the window manager. Without the pause, <code>xdotool</code> was attempting to pull focus back to the terminal <em>before</em> <code>feh</code> had even finished creating its window and stealing focus in the first place.</p>
+<p>And having Magit right there in Emacs to pull up past diffs and commits is invaluable for tracking down details like that.</p>
+<p><strong>What to expect in i3:</strong></p>
+<ul>
+<li><strong><code>xdotool</code> compatibility:</strong> The script's current logic will work in i3 just as it does in MATE.</li>
+<li><strong>Native i3 alternative:</strong> If you want to bypass <code>xdotool</code> entirely while using i3, you can add <code>for_window [title=&quot;feh_flashcard_review&quot;] no_focus</code> to your <code>~/.config/i3/config</code>. That tells i3's IPC directly never to give input focus to <code>feh</code> when it spawns, eliminating the need for <code>time.sleep()</code> focus switches altogether.</li>
+</ul>
+<hr />
+<p><strong><a href="20260816_225900_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260816_225907_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225903_capture.md&quot;)</p>

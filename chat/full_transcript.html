@@ -5756,3 +5756,245 @@ if __name__ == &quot;__main__&quot;:
 <p>With no background signals or symlinks remaining, <code>pudb</code> will also function without interference.</p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_175137_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 56</h1>
+<p>I experimented in Mate with xdotool.  I think my example could be incorporated into / adapted to the python script.  in order to return focus to the terminal emulator which is running the python script, after feh 'steals' the focus from it.</p>
+<ul>
+<li>let's experiment with emacs and terminal: a simple exercise to switch focus from one to another</li>
+</ul>
+<p>two separate applications</p>
+<p>in emacs, use eat</p>
+<p>xdotool getactivewindow</p>
+<p>44040329</p>
+<p>in separate terminal emulator app e.g. gnome terminal:</p>
+<p>xdotool windowfocus --sync 44040329</p>
+<p>do you find focus switching to emacs?  yes</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_224141_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 56</h1>
+<p>That experiment is the exact missing link. Capturing the terminal's window ID at startup guarantees you return focus to the exact window running the script, regardless of terminal emulator or desktop environment setup.</p>
+<p>Using <code>windowactivate</code> with <code>--sync</code> works best because it both focuses and raises the terminal above <code>feh</code>.</p>
+<hr />
+<h3>Updated Python Implementation</h3>
+<p>Here is how to integrate your <code>xdotool</code> logic directly into <code>inspect_screenshot_ocr_results.py</code>:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None
+
+def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully
+
+def get_key():
+    &quot;&quot;&quot;Reads a single keypress without needing Enter, preserving output formatting.&quot;&quot;&quot;
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI: Handles scrolling AND direct workflow actions.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)] &quot;
+              f&quot;[Space/j] Down | [b/k] Up | [Enter/n] Next | [m] Move | [d] Delete | [q] Quit&quot;)
+        print(&quot;Choice -&gt; &quot;, end=&quot;&quot;, flush=True)
+
+        key = get_key()
+
+        if key in (' ', 'j'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += (chunk_size if key == ' ' else 1)
+            elif key == ' ':
+                return &quot;next&quot;
+        elif key in ('b', 'k'):
+            line_pointer = max(0, line_pointer - (chunk_size if key == 'b' else 1))
+        elif key in ('\r', '\n', 'n', 'N'):
+            return &quot;next&quot;
+        elif key in ('m', 'M'):
+            return &quot;move&quot;
+        elif key in ('d', 'D'):
+            return &quot;delete&quot;
+        elif key in ('q', 'Q', '\x03'):
+            return &quot;quit&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append((img, url_txt, full_txt))
+
+    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return
+
+    # Capture terminal window ID once at startup
+    term_win_id = get_terminal_window_id()
+    feh_proc = None
+
+    try:
+        for idx, (img_path, url_txt_path, full_txt_path) in enumerate(items, 1):
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stderr=subprocess.DEVNULL
+            )
+
+            # 3. Immediately pull focus back to the terminal window
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                pass
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<hr />
+<h3>What Changed</h3>
+<ol>
+<li><strong><code>get_terminal_window_id()</code>:</strong> Checks if your terminal emulator exported <code>$WINDOWID</code>. If not, it executes <code>xdotool getactivewindow</code> immediately when the script launches (before <code>feh</code> ever spawns).</li>
+<li><strong><code>restore_terminal_focus(term_win_id)</code>:</strong> Runs <code>xdotool windowactivate --sync &lt;ID&gt;</code> directly after <code>subprocess.Popen</code> launches <code>feh</code>.</li>
+<li><strong>PuDB Ready:</strong> Because focus is actively returned to the terminal window ID on every iteration, stepping through with <code>pudb</code> won't lose focus to <code>feh</code>.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_224148_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 57</h1>
+<p>The focus-controlling code wasn't working until I added some time.sleep(.2) lines.  magit really helps me out in that I can go back to an old script version to look up how to write those pauses.  well, the code seems to work in Mate.  will have to try i3 in a bit.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225900_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 57</h1>
+<p>That <code>time.sleep(0.2)</code> was the missing piece to resolve an classic X11 race condition.</p>
+<p>When <code>subprocess.Popen</code> launches <code>feh</code>, Python moves to the next line of code in microseconds. However, the X11 server takes a brief moment to map <code>feh</code>'s window and register it with the window manager. Without the pause, <code>xdotool</code> was attempting to pull focus back to the terminal <em>before</em> <code>feh</code> had even finished creating its window and stealing focus in the first place.</p>
+<p>And having Magit right there in Emacs to pull up past diffs and commits is invaluable for tracking down details like that.</p>
+<p><strong>What to expect in i3:</strong></p>
+<ul>
+<li><strong><code>xdotool</code> compatibility:</strong> The script's current logic will work in i3 just as it does in MATE.</li>
+<li><strong>Native i3 alternative:</strong> If you want to bypass <code>xdotool</code> entirely while using i3, you can add <code>for_window [title=&quot;feh_flashcard_review&quot;] no_focus</code> to your <code>~/.config/i3/config</code>. That tells i3's IPC directly never to give input focus to <code>feh</code> when it spawns, eliminating the need for <code>time.sleep()</code> focus switches altogether.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225903_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 58</h1>
+<p>what is an IPC?  i-something process controller?  internal process controller?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225907_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 58</h1>
+<p><strong>IPC</strong> stands for <strong>Inter-Process Communication</strong>.</p>
+<p>It refers to the set of mechanisms provided by an operating system that allows separate, running programs (processes) to talk to one another—whether to exchange data, sync actions, or send control commands.</p>
+<p>Because modern operating systems strictly isolate memory space between running programs for security and stability, one process cannot directly touch another process's memory. IPC provides the authorized protocols and &quot;bridges&quot; to get around that wall.</p>
+<p><strong>Common IPC Examples in Linux:</strong></p>
+<ul>
+<li><strong>Unix Domain Sockets:</strong> This is what was referenced with &quot;i3's IPC.&quot; i3 creates a local Unix socket file (usually in <code>/tmp</code>). External tools like <code>i3-msg</code> or Python scripts open a socket connection to i3 to issue commands (e.g., <code>i3-msg &quot;focus left&quot;</code>) or listen for window events.</li>
+<li><strong>Signals:</strong> What your earlier script used with <code>os.kill(feh_proc.pid, signal.SIGUSR1)</code>. Python sends a lightweight asynchronous <code>SIGUSR1</code> signal directly to the <code>feh</code> process to trigger its internal reload function.</li>
+<li><strong>Pipes / Standard I/O:</strong> What <code>subprocess.check_output()</code> uses when executing <code>xdotool getactivewindow</code>. It opens an anonymous pipe between the child process's stdout and Python's memory to return the window ID string.</li>
+<li><strong>D-Bus:</strong> The higher-level IPC message bus used heavily in desktop environments like MATE, GNOME, and KDE for applications to control desktop notifications, media keys, system power states, or systemd units.</li>
+</ul>
+<p>Whenever two independent executables on your system coordinate without sharing the exact same memory space, they are using IPC.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260816_225910_capture.md&quot;)</p>
+<hr />
