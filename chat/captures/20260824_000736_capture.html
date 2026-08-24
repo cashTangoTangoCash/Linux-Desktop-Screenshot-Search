@@ -1,0 +1,19 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 75</h1>
+<p><strong><a href="20260824_000734_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000739_capture.html">Next →</a></strong></p>
+<hr />
+<p>The bash coding in this part seems unfamiliar to me.  Can you give an explainer?  The 'matches part' in particular seems new to me:</p>
+<h1>Run ripgrep to grab matching .full.txt files</h1>
+<p>matches=$(rg -i &quot;$SEARCH_TERM&quot; --glob '*.full.txt' &quot;$SEARCH_FOLDER&quot; -l || true)</p>
+<p>if [[ -z &quot;$matches&quot; ]]; then
+    echo &quot;No matching screenshots found for term: '$SEARCH_TERM'&quot;
+    exit 0
+fi</p>
+<h1>Pipe results to fzf, strip .full.txt, and view image in eog</h1>
+<p>echo &quot;$matches&quot; | <br />
+    fzf --preview 'cat {}' | <br />
+    sed 's/.full.txt$//' | <br />
+    xargs -r eog</p>
+<hr />
+<p><strong><a href="20260824_000734_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000739_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260824_000736_capture.md&quot;)</p>

@@ -1,0 +1,114 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 70</h1>
+<p><strong><a href="20260817_163904_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_163912_capture.html">Next →</a></strong></p>
+<hr />
+<p>Since your rules file uses a simple <code>pattern | folder</code> format, you can solve this cleanly either inside Emacs using Elisp/interactive commands or by updating your Python script to automatically support global and monthly rules.</p>
+<p>Here are the best ways to structure and manage reusable rules.</p>
+<hr />
+<h3>Method 1: Interactive Emacs Lisp Commands</h3>
+<p>Instead of manually shuffling lines, you can use built-in Emacs capabilities or custom Elisp commands.</p>
+<h4>Option A: Quick Keep-Lines / Flush-Lines (No Lisp Required)</h4>
+<p>If you just want to quickly group news rules at the bottom using interactive commands:</p>
+<ol>
+<li><code>M-x keep-lines RET \| news$ RET</code> in your buffer to view only news rules.</li>
+<li>Cut them (<code>C-x h M-w</code>), undo (<code>C-_</code>), go to the bottom of the buffer (<code>M-&gt;</code>), and paste.</li>
+</ol>
+<h4>Option B: Elisp Command to Move Matching Category to Bottom</h4>
+<p>Add this interactive command to your <code>init.el</code> or <code>config.org</code>. It prompts you for a target folder name (e.g., <code>news</code>), finds all matching rule lines, removes them from their current position, and appends them to the end of the file under a category header.</p>
+<pre><code class="language-elisp">(defun my/rules-move-folder-to-bottom (folder)
+  &quot;Move all rule lines for FOLDER to the bottom of the current buffer.&quot;
+  (interactive &quot;sTarget folder to move to bottom: &quot;)
+  (save-excursion
+    (goto-char (point-min))
+    (let ((pattern (concat &quot;|\\s-*&quot; (regexp-quote folder) &quot;\\s-*$&quot;))
+          (matching-lines '()))
+      ;; Collect and delete matching lines
+      (while (re-search-forward pattern nil t)
+        (let ((line (string-trim (thing-at-point 'line t))))
+          (push line matching-lines)
+          (delete-region (line-beginning-position) (line-beginning-position 2))))
+      ;; Append to bottom if matches were found
+      (when matching-lines
+        (goto-char (point-max))
+        (unless (bolp) (insert &quot;\n&quot;))
+        (insert (format &quot;\n# --- %s ---\n&quot; folder))
+        (dolq (line (nreverse matching-lines))
+          (insert line &quot;\n&quot;))
+        (message &quot;Moved %d rules for '%s' to bottom.&quot; (length matching-lines) folder)))))
+
+</code></pre>
+<hr />
+<h3>Method 2: Separate <code>rules_global.txt</code> and <code>rules_monthly.txt</code></h3>
+<p>The cleanest long-term workflow is to separate long-term rules from transient monthly project rules at the file system level.</p>
+<p>Instead of keeping temporary project rules mixed in with permanent rules (like <code>news</code>, <code>craigslist</code>, or printer setup), split them into two files:</p>
+<ul>
+<li><code>rules_global.txt</code>: Stored in a central location (e.g., <code>~/.config/screenshot-sorter/rules_global.txt</code> or <code>~/.local/bin/</code>). Contains permanent mappings like <code>cnn | news</code> or <code>craigslist | craigslist</code>.</li>
+<li><code>rules_full.txt</code> / <code>rules_url.txt</code>: Resides in the current monthly work directory for temporary project rules.</li>
+</ul>
+<h4>Update <code>load_rules()</code> in Python to Support Global Rule Merging</h4>
+<p>Modify your Python loader to read both the global rules and local rules sequentially. Local/monthly rules take precedence by running first:</p>
+<pre><code class="language-python">def load_combined_rules(local_filename: str) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from local work dir first, then appends global rules.&quot;&quot;&quot;
+    rules = []
+    
+    # 1. Load monthly/local rules (higher priority)
+    local_path = WORK_DIR / local_filename
+    rules.extend(load_rules(local_path))
+    
+    # 2. Load global reusable rules (lower priority fallback)
+    global_path = Path.home() / &quot;.config/screenshot-sorter/rules_global.txt&quot;
+    rules.extend(load_rules(global_path))
+    
+    return rules
+
+</code></pre>
+<hr />
+<h3>Method 3: Grouped Rules File Structure</h3>
+<p>If you prefer keeping everything in one file per month, organize <code>rules_full.txt</code> using comments as section anchors. <code>load_rules()</code> already ignores lines starting with <code>#</code>:</p>
+<pre><code class="language-text"># ==============================================================================
+# PERMANENT / GLOBAL RULES (Reusable every month)
+# ==============================================================================
+the new york times | news
+page six | news
+pirro | news
+cnn | news
+the guardian | news
+nbc news | news
+the independent | news
+cbs | news
+marketwatch | news
+
+hakka | craigslist
+yukon | craigslist
+olympus | craigslist
+soulution | craigslist
+middletown | craigslist
+yeti | craigslist
+
+# ==============================================================================
+# TEMPORARY / CURRENT MONTH PROJECT RULES
+# ==============================================================================
+mirror|handlebar\s*mirror|viewpoint | bike-mirrors
+concave | bike-mirrors
+ocr | ocr-and-sort-screenshots-project
+gimagereader | ocr-and-sort-screenshots-project
+tesseract | ocr-and-sort-screenshots-project
+imagemagick | ocr-and-sort-screenshots-project
+imagepro | ocr-and-sort-screenshots-project
+glendale | endicott-glendale-labs
+maher | bill-maher-right-wing
+rothrock | finding-joe-rothrock-from-bike-club
+vestal public library | vpl-friends-ebay-store
+wilson audio | audioclassics
+bridget fonda | women-newsmakers
+confirmed dead | news
+hplip | set-up-hp-laserjet-4200-printer-in-endeavourOS-and-android
+firewalld | set-up-hp-laserjet-4200-printer-in-endeavourOS-and-android
+printer | set-up-hp-laserjet-4200-printer-in-endeavourOS-and-android
+ax1800 | set-up-hp-laserjet-4200-printer-in-endeavourOS-and-android
+git version control | learn-about-git-version-control
+
+</code></pre>
+<hr />
+<p><strong><a href="20260817_163904_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_163912_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_163909_capture.md&quot;)</p>

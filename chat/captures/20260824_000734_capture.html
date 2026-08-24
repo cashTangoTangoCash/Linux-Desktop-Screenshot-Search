@@ -1,0 +1,97 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 74</h1>
+<p><strong><a href="20260824_000730_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000736_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is a clean, modular Bash script adhering to your template structure.</p>
+<p>It validates required inputs, defaults <code>--folder</code> to <code>~/Documents/2026/screenshots</code> if omitted, checks that <code>ripgrep</code>, <code>fzf</code>, <code>sed</code>, and <code>eog</code> are installed, and safely handles cases where no matches are found or <code>fzf</code> is exited without selecting a file.</p>
+<pre><code class="language-bash">#!/usr/bin/usr/bin/env bash
+set -euo pipefail
+
+# Default values
+SEARCH_TERM=&quot;&quot;
+SEARCH_FOLDER=&quot;$HOME/Documents/2026/screenshots&quot;
+
+# Function to display help text
+show_help() {
+    cat &lt;&lt; EOF
+Usage: $(basename &quot;$0&quot;) -s &quot;SEARCH_TERM&quot; [-f FOLDER]
+
+Searches OCR full-text sidecar files (.full.txt) using ripgrep, launches an
+interactive fzf preview panel, and opens the selected screenshot in Eye of GNOME (eog).
+
+Options:
+  -s, --search-term TERM   Search pattern or string for ripgrep (required)
+  -f, --folder PATH        Directory to search (default: ~/Documents/2026/screenshots)
+  -h, --help               Display this help message and exit
+EOF
+}
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case &quot;$1&quot; in
+        -s|--search-term)
+            SEARCH_TERM=&quot;$2&quot;
+            shift 2
+            ;;
+        -f|--folder)
+            SEARCH_FOLDER=&quot;$2&quot;
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo &quot;Error: Unknown option $1&quot; &gt;&amp;2
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# --- Input &amp; Dependency Checks ---
+
+if [[ -z &quot;$SEARCH_TERM&quot; ]]; then
+    echo &quot;Error: --search-term (-s) is required.&quot; &gt;&amp;2
+    show_help
+    exit 1
+fi
+
+if [[ ! -d &quot;$SEARCH_FOLDER&quot; ]]; then
+    echo &quot;Error: Directory '$SEARCH_FOLDER' does not exist.&quot; &gt;&amp;2
+    exit 1
+fi
+
+for cmd in rg fzf sed eog; do
+    if ! command -v &quot;$cmd&quot; &amp;&gt;/dev/null; then
+        echo &quot;Error: Required command '$cmd' is not installed or not in PATH.&quot; &gt;&amp;2
+        exit 1
+    fi
+done
+
+# --- Script Logic ---
+
+# Run ripgrep to grab matching .full.txt files
+matches=$(rg -i &quot;$SEARCH_TERM&quot; --glob '*.full.txt' &quot;$SEARCH_FOLDER&quot; -l || true)
+
+if [[ -z &quot;$matches&quot; ]]; then
+    echo &quot;No matching screenshots found for term: '$SEARCH_TERM'&quot;
+    exit 0
+fi
+
+# Pipe results to fzf, strip .full.txt, and view image in eog
+echo &quot;$matches&quot; | \
+    fzf --preview 'cat {}' | \
+    sed 's/\.full\.txt$//' | \
+    xargs -r eog
+
+</code></pre>
+<h3>Key Enhancements Added</h3>
+<ol>
+<li><strong><code>set -euo pipefail</code>:</strong> Prevents unexpected behavior or silent fails across pipeline stages.</li>
+<li><strong>Graceful Fallback on Zero Matches (<code>|| true</code>):</strong> <code>ripgrep</code> exits with return code <code>1</code> when no matches are found. The <code>|| true</code> prevents <code>set -e</code> from aborting the script, allowing the custom <code>&quot;No matching screenshots found&quot;</code> message to print cleanly.</li>
+<li><strong>Requirement Verification:</strong> Checks for <code>rg</code>, <code>fzf</code>, <code>sed</code>, and <code>eog</code> binaries upfront so the script fails gracefully with an informative error if any dependency is missing.</li>
+</ol>
+<hr />
+<p><strong><a href="20260824_000730_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000736_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260824_000734_capture.md&quot;)</p>

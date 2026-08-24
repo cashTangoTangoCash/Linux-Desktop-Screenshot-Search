@@ -1,0 +1,29 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 71</h1>
+<p><strong><a href="20260817_163909_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_163915_capture.html">Next →</a></strong></p>
+<hr />
+<p>I am trying out the lisp function and getting</p>
+<p>progn: Symbol’s function definition is void: dolq</p>
+<p>(defun my/screenshot-sorting-rules-move-matching-rules-to-bottom (folder)
+  &quot;in a rules file for sorting screenshots, enter a regex to move all matching rule lines to the bottom.&quot;
+  (interactive &quot;sRegex to match lines to be moved to the bottom of this file: &quot;)
+  (save-excursion
+    (goto-char (point-min))
+    (let ((pattern (concat &quot;|\s-<em>&quot; (regexp-quote folder) &quot;\s-</em>$&quot;))
+          (matching-lines '()))
+      ;; Collect and delete matching lines
+      (while (re-search-forward pattern nil t)
+        (let ((line (string-trim (thing-at-point 'line t))))
+          (push line matching-lines)
+          (delete-region (line-beginning-position) (line-beginning-position 2))))
+      ;; Append to bottom if matches were found
+      (when matching-lines
+        (goto-char (point-max))
+        (unless (bolp) (insert &quot;\n&quot;))
+        (insert (format &quot;\n# --- %s ---\n&quot; folder))
+        (dolq (line (nreverse matching-lines))
+          (insert line &quot;\n&quot;))
+        (message &quot;Moved %d rules for '%s' to bottom.&quot; (length matching-lines) folder)))))</p>
+<hr />
+<p><strong><a href="20260817_163909_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260817_163915_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260817_163912_capture.md&quot;)</p>

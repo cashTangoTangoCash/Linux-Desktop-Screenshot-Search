@@ -1,0 +1,62 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 73</h1>
+<p><strong><a href="20260823_231527_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000730_capture.html">Next →</a></strong></p>
+<hr />
+<p>That confusion is completely justified. The reason <code>{}</code> feels both familiar and confusing is that <strong>it is not standard Bash syntax</strong>—it is a convention borrowed by utility authors.</p>
+<p>When tools need a placeholder symbol to represent &quot;the file being acted on,&quot; their creators almost always choose <code>{}</code>. However, how those braces get evaluated depends entirely on which binary is running.</p>
+<hr />
+<h3>Comparison: Who processes <code>{}</code>?</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Who interprets <code>{}</code>?</th>
+<th>What <code>{}</code> represents</th>
+<th>When it executes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>find</code></strong></td>
+<td>The <code>find</code> binary</td>
+<td>Each file path matched by <code>find</code></td>
+<td>Runs during directory traversal</td>
+</tr>
+<tr>
+<td><strong><code>fzf</code></strong></td>
+<td>The <code>fzf</code> binary</td>
+<td>The item currently highlighted under your cursor</td>
+<td>Runs dynamically as you arrow up/down</td>
+</tr>
+<tr>
+<td><strong><code>xargs</code></strong> (with <code>-I</code>)</td>
+<td>The <code>xargs</code> binary</td>
+<td>The item passed via standard input line</td>
+<td>Runs sequentially for every incoming line</td>
+</tr>
+</tbody>
+</table>
+<p>In all three cases, **Bash itself never sees or processes <code>{}**</code>. Bash simply passes the literal characters <code>{}</code> inside single quotes straight to the program as an argument string.</p>
+<hr />
+<h3>Why Single Quotes Matter in Bash</h3>
+<p>When you write:</p>
+<pre><code class="language-bash">fzf --preview 'cat {}'
+
+</code></pre>
+<ol>
+<li><strong>Bash's Role:</strong> Bash sees single quotes <code>'...'</code> and says: <em>&quot;Do not touch anything inside here. Do not expand variables, do not run subshells.&quot;</em> Bash hands the exact string <code>cat {}</code> to <code>fzf</code>.</li>
+<li><strong><code>fzf</code>'s Role:</strong> <code>fzf</code> receives the string <code>cat {}</code>. When you move your arrow key, <code>fzf</code> replaces <code>{}</code> with the highlighted file path string (e.g., <code>2026-08-14.jpg.full.txt</code>), executes <code>cat 2026-08-14.jpg.full.txt</code> in a temporary subshell, and draws the output on screen.</li>
+</ol>
+<p>If you omit the single quotes or use double quotes incorrectly, Bash might try to evaluate the expression before <code>fzf</code> or <code>find</code> ever receives it.</p>
+<hr />
+<h3>Visualizing the Rule</h3>
+<p>Whenever you see <code>{}</code> in a command line, ask: <strong>&quot;What command is this flag attached to?&quot;</strong></p>
+<ul>
+<li>If it's after <code>find ... -exec</code>, <code>find</code> replaces <code>{}</code>.</li>
+<li>If it's inside <code>fzf --preview '...'</code>, <code>fzf</code> replaces <code>{}</code>.</li>
+<li>If it's after <code>xargs -I {}</code>, <code>xargs</code> replaces <code>{}</code>.</li>
+</ul>
+<p>It’s an external tool convention, not a core property of the Bash language itself.</p>
+<hr />
+<p><strong><a href="20260823_231527_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260824_000730_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260823_231532_capture.md&quot;)</p>

@@ -1,0 +1,53 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 72</h1>
+<p><strong><a href="20260823_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260823_231527_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is a step-by-step breakdown of how <code>rg -i &quot;search term&quot; -l | fzf --preview 'cat {}'</code> works and how data flows through the pipe.</p>
+<hr />
+<h3>Data Flow Diagram</h3>
+<pre><code>[ ripgrep ]  === (stdout: file paths) ===&gt;  [ fzf interactive UI ]
+ Searches files                           Displays list on left,
+ for match                                renders file text on right
+
+</code></pre>
+<hr />
+<h3>Step-by-Step Breakdown</h3>
+<h4>1. <code>rg -i &quot;search term&quot; -l</code></h4>
+<ul>
+<li><strong><code>rg</code> (ripgrep):</strong> A fast line-oriented search tool that scans all files in your current directory recursively.</li>
+<li><strong><code>-i</code>:</strong> Enables case-insensitive matching (<code>MacIntosh</code>, <code>macintosh</code>, or <code>MACINTOSH</code> all match).</li>
+<li><strong><code>&quot;search term&quot;</code>:</strong> The phrase or pattern you want to locate inside your <code>.txt</code> files.</li>
+<li><strong><code>-l</code> (or <code>--files-with-matches</code>):</strong> Prints <strong>only the file names</strong> containing the match, rather than printing the matching lines of text.</li>
+</ul>
+<blockquote>
+<p><strong>Output of part 1:</strong> A clean list of relative file paths separated by newlines, passed directly into <code>fzf</code> via stdin:</p>
+<pre><code class="language-text">2026-08-14-11:27-16_2560x1440.jpg.full.txt
+2026-08-14-11:28-00_2560x1440.jpg.full.txt
+
+</code></pre>
+</blockquote>
+<hr />
+<h4>2. <code>fzf --preview 'cat {}'</code></h4>
+<ul>
+<li><strong><code>fzf</code>:</strong> An interactive terminal fuzzy finder. It consumes the list of text file paths piped from <code>rg</code> and presents a searchable, scrollable menu in your shell.</li>
+<li><strong><code>--preview '...'</code>:</strong> Tells <code>fzf</code> to spawn a subshell and execute a command for whichever line is currently highlighted in the menu.</li>
+<li><strong><code>cat {}</code>:</strong></li>
+<li><strong><code>{}</code></strong> is an <code>fzf</code> placeholder variable representing the <strong>currently highlighted item</strong> in the <code>fzf</code> list (e.g., <code>2026-08-14-11:27-16_2560x1440.jpg.full.txt</code>).</li>
+<li><strong><code>cat</code></strong> reads that file and prints its raw OCR contents into <code>fzf</code>'s preview panel on the right side of your terminal window.</li>
+</ul>
+<hr />
+<h3>How It Feels to Use</h3>
+<ol>
+<li><code>rg</code> runs silently and feeds all <code>.full.txt</code> files containing your query into <code>fzf</code>.</li>
+<li><code>fzf</code> takes over your TTY screen:</li>
+</ol>
+<ul>
+<li><strong>Left side:</strong> Scrollable list of matched <code>.txt</code> files (you can fuzzy filter further by typing).</li>
+<li><strong>Right side:</strong> A preview window dynamically displaying the contents of whichever <code>.txt</code> file your cursor is sitting on.</li>
+</ul>
+<ol start="3">
+<li>Once you hit <strong>Enter</strong>, <code>fzf</code> closes and outputs <strong>only the selected text file path</strong> to <code>stdout</code>, which the rest of your one-liner (<code>sed</code> + <code>xargs eog</code>) uses to open the corresponding <code>.jpg</code>.</li>
+</ol>
+<hr />
+<p><strong><a href="20260823_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260823_231527_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260823_231525_capture.md&quot;)</p>

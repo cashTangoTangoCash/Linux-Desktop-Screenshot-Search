@@ -15,7 +15,9 @@ CROP_H = 33
 CROP_X = 230
 CROP_Y = 50
 
-PC_SCREENSHOT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+# PC_SCREENSHOT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$", re.IGNORECASE)
+#PC_SCREENSHOT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}.*\.jpg$", re.IGNORECASE)
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
 
 def run_url_ocr(image_path: Path) -> str:
     """Cropped URL bar OCR using ImageMagick + Tesseract."""
