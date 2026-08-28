@@ -1,9 +1,12 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 76</h1>
-<p><strong><a href="20260827_225206_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231510_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 77</h1>
+<p><strong><a href="20260827_231510_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231520_capture.html">Next →</a></strong></p>
 <hr />
-<p>Here is the modified Python script, renamed <code>search_and_inspect_screenshots.py</code>.</p>
-<p>Instead of walking through files in <code>WORK_DIR</code>, it uses <code>argparse</code> to accept <code>-s</code> (<code>--search-term</code>) and <code>-f</code> (<code>--folder</code>). It runs <code>ripgrep</code> (<code>rg</code>) to gather matching <code>.full.txt</code> files, maps them back to their image and <code>.url.txt</code> sidecar paths, and passes them into the existing custom pager and <code>feh</code> visualizer workflow.</p>
+<p>Here is the updated script. The item counter feedback has been added in two distinct places:</p>
+<ol>
+<li><strong>Pre-launch summary:</strong> Prints the total count of matching screenshots immediately after running <code>ripgrep</code> (before opening <code>feh</code> or clear-screen).</li>
+<li><strong>Terminal Title Header:</strong> Updated from <code>Match (1/5)</code> to <code>Match 1 of 5 (20% viewed)</code> so you always know your exact position while navigating.</li>
+</ol>
 <pre><code class="language-python">#!/usr/bin/env python3
 import argparse
 import os
@@ -169,11 +172,16 @@ def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
             return &quot;quit&quot;
 
 def review_searchResults(search_term: str, search_folder: Path):
+    print(f&quot;Searching for '{search_term}' in '{search_folder}'...&quot;)
     items = find_matching_items(search_term, search_folder)
 
-    if not items:
+    total_matches = len(items)
+    if total_matches == 0:
         print(f&quot;No matching screenshots found for term: '{search_term}' in '{search_folder}'&quot;)
         return
+
+    print(f&quot;Found {total_matches} matching screenshot(s). Launching viewer...&quot;)
+    time.sleep(1.2)
 
     term_win_id = get_terminal_window_id()
     feh_proc = None
@@ -203,13 +211,20 @@ def review_searchResults(search_term: str, search_folder: Path):
 
             url_text = read_sidecar(url_txt_path)
             full_text = read_sidecar(full_txt_path)
-            title_str = f&quot;Match ({idx + 1}/{len(items)}) - {img_path.name}&quot;
+            
+            current_num = idx + 1
+            total_remaining = len(items)
+            title_str = f&quot;Match {current_num} of {total_remaining} (Total found: {total_matches}) - {img_path.name}&quot;
 
             action = custom_pager(title_str, url_text, full_text)
             if action == &quot;quit&quot;:
                 break
             elif action == &quot;next&quot;:
-                idx += 1
+                if idx &lt; len(items) - 1:
+                    idx += 1
+                else:
+                    print(&quot;\nReached the end of match results!&quot;)
+                    time.sleep(0.8)
             elif action == &quot;prev&quot;:
                 if idx &gt; 0:
                     idx -= 1
@@ -244,36 +259,28 @@ def review_searchResults(search_term: str, search_folder: Path):
                         shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
                     
                     items.pop(idx)
+                    # Adjust idx if moving the last element
+                    if idx &gt;= len(items):
+                        idx = max(0, len(items) - 1)
             elif action == &quot;delete&quot;:
                 url_txt_path.unlink(missing_ok=True)
                 full_txt_path.unlink(missing_ok=True)
                 items.pop(idx)
+                if idx &gt;= len(items):
+                    idx = max(0, len(items) - 1)
 
     finally:
         if feh_proc and feh_proc.poll() is None:
             feh_proc.terminate()
 
         os.system(&quot;clear&quot;)
-        print(&quot;Search review complete.&quot;)
+        print(f&quot;Search review complete. Reviewed {total_matches} initial result(s).&quot;)
 
 if __name__ == &quot;__main__&quot;:
     args = parse_args()
     review_searchResults(args.search_term, args.folder)
 
 </code></pre>
-<h3>Key Integration Highlights</h3>
-<ul>
-<li><strong><code>find_matching_items()</code>:</strong> Replaces directory listing with <code>rg -i &lt;term&gt; --glob '*.full.txt' &lt;folder&gt; -l</code>.</li>
-<li><strong>Extension Stripping:</strong> Uses Regex <code>re.sub(r&quot;\.full\.txt$&quot;, &quot;&quot;, path)</code> to reliably convert matching text files back to their parent <code>.jpg</code> and <code>.url.txt</code> files regardless of directory location.</li>
-<li><strong>CLI Arguments:</strong> Uses <code>argparse</code> so you run it directly from the terminal:</li>
-</ul>
-<pre><code class="language-bash">python3 search_and_inspect_screenshots.py -s &quot;audio classics&quot;
-
-</code></pre>
-<p>Or override the target directory:</p>
-<pre><code class="language-bash">python3 search_and_inspect_screenshots.py -s &quot;audio classics&quot; -f /path/to/other/folder
-
-</code></pre>
 <hr />
-<p><strong><a href="20260827_225206_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231510_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_225256_capture.md&quot;)</p>
+<p><strong><a href="20260827_231510_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231520_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_231518_capture.md&quot;)</p>

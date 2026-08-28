@@ -1,0 +1,228 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 78</h1>
+<p><strong><a href="20260827_231518_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231524_capture.html">Next →</a></strong></p>
+<hr />
+<p>before I try this updated version, I am looking at the previous version and I do see code which prints a title in the custom pager.  But when I run that script, I am not seeing the title printed out.  so should we first try to debug the previous script?</p>
+<p>previous version:</p>
+<p>#!/usr/bin/env python3
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path</p>
+<p>DEFAULT_SEARCH_FOLDER = Path.home() / &quot;Documents/2026/screenshots&quot;</p>
+<p>def parse_args():
+    parser = argparse.ArgumentParser(
+        description=&quot;Search OCR sidecar text files with ripgrep and review matched screenshots with feh.&quot;
+    )
+    parser.add_argument(
+        &quot;-s&quot;, &quot;--search-term&quot;,
+        required=True,
+        help=&quot;Search pattern or string for ripgrep.&quot;
+    )
+    parser.add_argument(
+        &quot;-f&quot;, &quot;--folder&quot;,
+        type=Path,
+        default=DEFAULT_SEARCH_FOLDER,
+        help=f&quot;Root directory to search recursively (default: {DEFAULT_SEARCH_FOLDER}).&quot;
+    )
+    return parser.parse_args()</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def find_matching_items(search_term: str, search_folder: Path) -&gt; list[tuple[Path, Path, Path]]:
+    &quot;&quot;&quot;Runs ripgrep to find matching .full.txt files and derives corresponding image and url.txt paths.&quot;&quot;&quot;
+    if not search_folder.is_dir():
+        print(f&quot;Error: Search directory '{search_folder}' does not exist.&quot;, file=sys.stderr)
+        sys.exit(1)</p>
+<p>    try:
+        cmd = [&quot;rg&quot;, &quot;-i&quot;, search_term, &quot;--glob&quot;, &quot;*.full.txt&quot;, str(search_folder), &quot;-l&quot;]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+        if res.returncode != 0 and res.stdout.strip() == &quot;&quot;:
+            return []
+    except FileNotFoundError:
+        print(&quot;Error: 'rg' (ripgrep) is not installed or not in PATH.&quot;, file=sys.stderr)
+        sys.exit(1)</p>
+<p>    matched_paths = res.stdout.strip().splitlines()
+    items = []</p>
+<p>    for path_str in sorted(matched_paths):
+        full_txt_path = Path(path_str).resolve()
+        
+        # Derive the image path by removing the .full.txt extension
+        img_path = Path(re.sub(r&quot;.full.txt$&quot;, &quot;&quot;, str(full_txt_path)))
+        
+        # Derive the .url.txt path
+        url_txt_path = Path(f&quot;{img_path}.url.txt&quot;)</p>
+<p>        if img_path.is_file():
+            items.append((img_path, url_txt_path, full_txt_path))</p>
+<p>    return items</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        page_lines = all_content[line_pointer : line_pointer + chunk_size]</p>
+<p>        for line in page_lines:
+            print(line[:term_cols])</p>
+<p>        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()</p>
+<p>        # --- Screenful (Page) Controls ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)</p>
+<p>        # --- Line-by-Line Controls ---
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)</p>
+<p>        # --- Flashcard Workflow Actions ---
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;</p>
+<p>def review_searchResults(search_term: str, search_folder: Path):
+    items = find_matching_items(search_term, search_folder)</p>
+<p>    if not items:
+        print(f&quot;No matching screenshots found for term: '{search_term}' in '{search_folder}'&quot;)
+        return</p>
+<p>    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0</p>
+<p>    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]</p>
+<p>            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.1)</p>
+<p>            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.1)
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Match ({idx + 1}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, url_text, full_text)
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first match!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;emacs&quot;:
+                if full_txt_path.is_file():
+                    try:
+                        subprocess.run(
+                            [&quot;emacsclient&quot;, &quot;-n&quot;, str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print(&quot;\nemacsclient binary not found in PATH!&quot;)
+                        time.sleep(1)
+                else:
+                    print(f&quot;\nSidecar file does not exist: {full_txt_path.name}&quot;)
+                    time.sleep(1)
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder_input = input(&quot;Enter subfolder name/path to move into: &quot;).strip()
+                if target_folder_input:
+                    dest = img_path.parent / target_folder_input
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                items.pop(idx)</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Search review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    args = parse_args()
+    review_searchResults(args.search_term, args.folder)</p>
+<hr />
+<p><strong><a href="20260827_231518_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_231524_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_231520_capture.md&quot;)</p>
