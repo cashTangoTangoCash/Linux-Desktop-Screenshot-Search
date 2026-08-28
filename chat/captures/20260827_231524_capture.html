@@ -1,6 +1,6 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
 <h1>RESPONSE 78</h1>
-<p><strong><a href="20260827_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260827_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_235234_capture.html">Next →</a></strong></p>
 <hr />
 <p>Yes, debugging the title rendering in this version is quick and straightforward. The culprit is how <code>chunk_size</code> is calculated relative to the total header lines printed in <code>custom_pager</code>.</p>
 <h3>The Cause of the Missing Title</h3>
@@ -64,5 +64,5 @@ print(&quot;=&quot; * 60)
 </code></pre>
 <p>Changing <code>term_rows - 6</code> to <code>term_rows - 8</code> prevents the terminal from pushing the top title bar off-screen.</p>
 <hr />
-<p><strong><a href="20260827_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260827_231520_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260827_235234_capture.html">Next →</a></strong></p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_231524_capture.md&quot;)</p>
