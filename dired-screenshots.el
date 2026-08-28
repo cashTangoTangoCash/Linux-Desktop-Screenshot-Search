@@ -1,3 +1,4 @@
+;; -*- lexical-binding: t; -*-
 (defun my/dired-organize-screenshots-by-month (&optional dir)
   "Move dated screenshots (YYYY-MM-DD-*) in DIR into YYYYMM subdirectories."
   ;; (interactive "DDirectory: ")
