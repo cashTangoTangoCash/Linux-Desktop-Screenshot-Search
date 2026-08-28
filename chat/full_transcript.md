@@ -10585,3 +10585,510 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_235252_capture.md")
 
 ---
+
+# PROMPT 80
+the highlighted search terms in the pager output is a great upgrade.  somehow we seem to be back to missing header info in each pager output at the beginning of each screenshot.  if I better comprehended the script logic for the pager, I might be more helpful in identifying what is going wrong.  without using a debugger and carefully looking at exactly what is happening, I feel a bit lost.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001000_capture.md")
+
+---
+
+# RESPONSE 80
+The mystery of the disappearing header comes down to one exact line of code: **calculating `chunk_size` against screen height**.
+
+### Why the Header Disappears
+
+When `os.system("clear")` runs, it clears your terminal screen and places the cursor at the top left (Row 1, Column 1). Then the pager prints out lines in sequence:
+
+1. **Header Block:** (4 lines total)
+* Line 1: `=== Match (1/5) - image.jpg ===`
+* Line 2: `Query:  'search_term'`
+* Line 3: `Folder: /path/to/folder`
+* Line 4: `============================================================`
+
+
+2. **Body Content Block:** (`chunk_size` lines printed via the loop and blank pad loop).
+3. **Footer & Prompt Block:** (4 lines total)
+* Line 1: `============================================================`
+* Line 2: `PAGER [1-10/25 L (40%)]`
+* Line 3: `[f/Enter] Screen Down ...`
+* Line 4: `Choice -> ` (where the terminal waits for `input()`).
+
+
+
+#### The Math Trap
+
+If your terminal window is 24 rows tall (`term_rows = 24`), the total lines printed during one refresh cycle equals:
+
+$$\text{Total Printed Lines} = 4 \text{ (Header)} + \text{chunk\_size} + 4 \text{ (Footer)}$$
+
+In the script above, `chunk_size` was calculated as `term_rows - 8` (which is $24 - 8 = 16$).
+
+$4 + 16 + 4 = 24 \text{ lines}$
+
+That looks like it fits *exactly* 24 rows, right? **Here is why it scrolls:**
+
+When Python executes `choice = input("Choice -> ")`, typing a command and pressing **Enter** sends a newline (`\n`) to the terminal. That single Enter press pushes the entire terminal buffer **up by 1 line** before `clear` is called on the next loop iteration. Furthermore, if your terminal shell or prompt wrapping introduces any implicit margin, even a 24-line output on a 24-line screen will force the top line (`=== Match ... ===`) to slide up off the top edge of the terminal window.
+
+---
+
+### The Permanent Fix
+
+Instead of hardcoding a tight subtraction like `-8`, we need to explicitly measure the header height, leave a 2-line safety buffer so `input()` never triggers a viewport scroll, and bound `chunk_size`.
+
+Here is the corrected `custom_pager` block with detailed inline comments explaining the layout layout calculation:
+
+```python
+def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -> str:
+    """Unified Pager UI with context headers and search term highlighting."""
+    url_lines = [f"URL OCR: {url_text}", "-" * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        
+        # ---------------------------------------------------------------------
+        # HEIGHT BUDGET:
+        # Header  = 4 lines (title, query, folder, separator)
+        # Footer  = 4 lines (separator, status bar, options, input prompt)
+        # Buffer  = 2 lines (prevents Enter key / terminal margins from scrolling)
+        # ---------------------------------------------------------------------
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+        
+        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
+        chunk_size = max(3, term_rows - reserved_rows)
+        
+        os.system("clear")
+        
+        # --- Print Header (4 lines) ---
+        print(f"=== {title} ===")
+        print(f"Query:  '{search_term}'")
+        print(f"Folder: {search_folder}")
+        print("=" * 60)
+
+        # --- Print Page Body (chunk_size lines) ---
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            highlighted = highlight_term(line, search_term)
+            print(highlighted)
+
+        # Pad with blank lines if content is shorter than available chunk space
+        for _ in range(chunk_size - len(page_lines)):
+            print("")
+
+        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print("=" * 60)
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]")
+        print("[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up")
+        print("[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit")
+        
+        choice = input("Choice -> ").strip().lower()
+
+        # --- Pager Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return "next"
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer += 1
+            else:
+                return "next"
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        elif choice in ('p', 'prev', 'back'):
+            return "prev"
+        elif choice in ('n', 'next'):
+            return "next"
+        elif choice in ('e', 'emacs', 'edit'):
+            return "emacs"
+        elif choice in ('m', 'move'):
+            return "move"
+        elif choice in ('d', 'del', 'delete'):
+            return "delete"
+        elif choice in ('q', 'quit'):
+            return "quit"
+
+```
+
+Replacing `chunk_size = max(5, term_rows - 8)` with `reserved_rows = 10` (`term_rows - 10`) creates enough headroom that the terminal window will not scroll top lines off-screen when input is accepted.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001008_capture.md")
+
+---
+
+# PROMPT 81
+I can recover the sometimes-missing header by upping some items:
+
+ HEADER_HEIGHT = 4        FOOTER_HEIGHT = 6        SAFETY_BUFFER = 10
+
+but I suspect one missing trick here is line wrapping.  I am in i3 window manager and my terminal is tiled when feh appears, probably leading to wrapping long-enough lines.  this stuff is not that big a deal - it is just irksome when you want to see a header and for some reason it's sometimes there and sometimes not and sometimes a tail of it is there.  is there a fix for line wrapping, assuming it's real and I didn't imagine it?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001012_capture.md")
+
+---
+
+# RESPONSE 81
+You haven't imagined it at all—**line wrapping is 100% the culprit.**
+
+When your `i3` layout tiles your terminal window alongside `feh`, your terminal column count shrinks (often from 120+ columns down to 60–80 columns). If a line of OCR text is 120 characters long, Python's single `print(line)` call tells the terminal to output 1 line. However, the terminal emulator wraps it onto **2 physical lines** on your screen.
+
+As a result, your loop might print 15 *logical* lines of text, but the terminal renders them across 22 *physical* lines. This instantly blows past your terminal height budget and pushes your header off the top of the screen.
+
+---
+
+### How to Fix Line Wrapping
+
+You have two choices depending on how you prefer to read long lines in your pager:
+
+#### Option A: Hard-Truncate Lines (No wrapping)
+
+If you want to keep lines strictly to 1 physical line per loop iteration, clip the strings to `term_cols` *before* adding ANSI color codes:
+
+```python
+for line in page_lines:
+    # 1. Truncate raw string to window width so it CANNOT wrap
+    truncated = line[:term_cols]
+    # 2. Highlight search term AFTER truncating
+    highlighted = highlight_term(truncated, search_term)
+    print(highlighted)
+
+```
+
+#### Option B: Calculate Physical Wrap Lines (Allow wrapping, preserve height)
+
+If you want to read full wrapped lines without clipping, you need to calculate how many physical lines each string will occupy and subtract those extra lines from `chunk_size` dynamically:
+
+```python
+# Measure how many actual lines the screen budget can hold
+max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))
+
+page_lines = []
+physical_rows_used = 0
+
+# Fill page based on actual physical visual rows
+while line_pointer + len(page_lines) < len(all_content):
+    next_line = all_content[line_pointer + len(page_lines)]
+    # Calculate visual height (minimum 1 row for empty lines)
+    visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+    
+    if physical_rows_used + visual_height > max_physical_rows and page_lines:
+        break
+        
+    page_lines.append(next_line)
+    physical_rows_used += visual_height
+
+for line in page_lines:
+    print(highlight_term(line, search_term))
+
+# Pad blank lines using remaining physical space
+for _ in range(max_physical_rows - physical_rows_used):
+    print("")
+
+```
+
+---
+
+### Complete Corrected Script (Option A - Truncation)
+
+Option A is generally cleaner for fast visual scanning in tiled terminals. Here is the complete script incorporating truncation prior to ANSI highlighting, plus a stable `SAFETY_BUFFER`:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DEFAULT_SEARCH_FOLDER = Path.home() / "Documents/2026/screenshots"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Search OCR sidecar text files with ripgrep and review matched screenshots with feh."
+    )
+    parser.add_argument(
+        "-s", "--search-term",
+        required=True,
+        help="Search pattern or string for ripgrep."
+    )
+    parser.add_argument(
+        "-f", "--folder",
+        type=Path,
+        default=DEFAULT_SEARCH_FOLDER,
+        help=f"Root directory to search recursively (default: {DEFAULT_SEARCH_FOLDER})."
+    )
+    return parser.parse_args()
+
+def get_terminal_window_id() -> str | None:
+    """Retrieves the X11 Window ID for the terminal emulator running this script."""
+    win_id = os.environ.get("WINDOWID")
+    if win_id:
+        return win_id
+    try:
+        out = subprocess.check_output(["xdotool", "getactivewindow"], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None
+
+def restore_terminal_focus(term_win_id: str | None):
+    """Restores X11 focus and activates the terminal window running the pager."""
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            ["xdotool", "windowactivate", "--sync", term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass
+
+def read_sidecar(path: Path) -> str:
+    """Reads sidecar text file safely."""
+    if not path.is_file():
+        return "[FILE NOT FOUND]"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore").strip()
+        return text if text else "[EMPTY / NO TEXT DETECTED]"
+    except Exception as e:
+        return f"<Failed to read: {e}>"
+
+def find_matching_items(search_term: str, search_folder: Path) -> list[tuple[Path, Path, Path]]:
+    """Runs ripgrep to find matching .full.txt files and derives corresponding image and url.txt paths."""
+    if not search_folder.is_dir():
+        print(f"Error: Search directory '{search_folder}' does not exist.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        cmd = ["rg", "-i", search_term, "--glob", "*.full.txt", str(search_folder), "-l"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+        if res.returncode != 0 and res.stdout.strip() == "":
+            return []
+    except FileNotFoundError:
+        print("Error: 'rg' (ripgrep) is not installed or not in PATH.", file=sys.stderr)
+        sys.exit(1)
+
+    matched_paths = res.stdout.strip().splitlines()
+    items = []
+
+    for path_str in sorted(matched_paths):
+        full_txt_path = Path(path_str).resolve()
+        
+        # Derive the image path by removing the .full.txt extension
+        img_path = Path(re.sub(r"\.full\.txt$", "", str(full_txt_path)))
+        
+        # Derive the .url.txt path
+        url_txt_path = Path(f"{img_path}.url.txt")
+
+        if img_path.is_file():
+            items.append((img_path, url_txt_path, full_txt_path))
+
+    return items
+
+def highlight_term(text: str, search_term: str) -> str:
+    """Wraps occurrences of search_term in ANSI bold red escape codes."""
+    if not search_term:
+        return text
+    pattern = re.compile(re.escape(search_term), re.IGNORECASE)
+    return pattern.sub(lambda m: f"\033[1;31m{m.group(0)}\033[0m", text)
+
+def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -> str:
+    """Unified Pager UI with context headers, string truncation, and search term highlighting."""
+    url_lines = [f"URL OCR: {url_text}", "-" * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+        
+        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
+        chunk_size = max(3, term_rows - reserved_rows)
+        
+        os.system("clear")
+        
+        # --- Print Header (4 lines) ---
+        print(f"=== {title} ===")
+        print(f"Query:  '{search_term}'")
+        print(f"Folder: {search_folder}")
+        print("=" * 60)
+
+        # --- Print Page Body (chunk_size lines) ---
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            # 1. Clip raw string to current terminal width to prevent i3 line wrapping
+            truncated_line = line[:term_cols]
+            # 2. Apply ANSI color codes AFTER truncation so codes aren't broken
+            print(highlight_term(truncated_line, search_term))
+
+        # Pad remaining space if page_lines < chunk_size
+        for _ in range(chunk_size - len(page_lines)):
+            print("")
+
+        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print("=" * 60)
+        print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]")
+        print("[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up")
+        print("[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit")
+        
+        choice = input("Choice -> ").strip().lower()
+
+        # --- Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return "next"
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size < total_lines:
+                line_pointer += 1
+            else:
+                return "next"
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        elif choice in ('p', 'prev', 'back'):
+            return "prev"
+        elif choice in ('n', 'next'):
+            return "next"
+        elif choice in ('e', 'emacs', 'edit'):
+            return "emacs"
+        elif choice in ('m', 'move'):
+            return "move"
+        elif choice in ('d', 'del', 'delete'):
+            return "delete"
+        elif choice in ('q', 'quit'):
+            return "quit"
+
+def review_searchResults(search_term: str, search_folder: Path):
+    items = find_matching_items(search_term, search_folder)
+
+    if not items:
+        print(f"No matching screenshots found for term: '{search_term}' in '{search_folder}'")
+        return
+
+    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0
+
+    try:
+        while 0 <= idx < len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]
+
+            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            time.sleep(.1)
+
+            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            time.sleep(.1)
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f"Match ({idx + 1}/{len(items)}) - {img_path.name}"
+
+            action = custom_pager(title_str, search_term, search_folder, url_text, full_text)
+            if action == "quit":
+                break
+            elif action == "next":
+                idx += 1
+            elif action == "prev":
+                if idx > 0:
+                    idx -= 1
+                else:
+                    print("\nAlready at the first match!")
+                    time.sleep(0.8)
+            elif action == "emacs":
+                if full_txt_path.is_file():
+                    try:
+                        subprocess.run(
+                            ["emacsclient", "-n", str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print("\nemacsclient binary not found in PATH!")
+                        time.sleep(1)
+                else:
+                    print(f"\nSidecar file does not exist: {full_txt_path.name}")
+                    time.sleep(1)
+            elif action == "move":
+                print("\n")
+                target_folder_input = input("Enter subfolder name/path to move into: ").strip()
+                if target_folder_input:
+                    dest = img_path.parent / target_folder_input
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)
+            elif action == "delete":
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                items.pop(idx)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system("clear")
+        print("Search review complete.")
+
+if __name__ == "__main__":
+    args = parse_args()
+    review_searchResults(args.search_term, args.folder)
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001026_capture.md")
+
+---

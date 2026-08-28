@@ -1,0 +1,128 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 80</h1>
+<p><strong><a href="20260828_001000_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_001012_capture.html">Next →</a></strong></p>
+<hr />
+<p>The mystery of the disappearing header comes down to one exact line of code: <strong>calculating <code>chunk_size</code> against screen height</strong>.</p>
+<h3>Why the Header Disappears</h3>
+<p>When <code>os.system(&quot;clear&quot;)</code> runs, it clears your terminal screen and places the cursor at the top left (Row 1, Column 1). Then the pager prints out lines in sequence:</p>
+<ol>
+<li><strong>Header Block:</strong> (4 lines total)</li>
+</ol>
+<ul>
+<li>Line 1: <code>=== Match (1/5) - image.jpg ===</code></li>
+<li>Line 2: <code>Query:  'search_term'</code></li>
+<li>Line 3: <code>Folder: /path/to/folder</code></li>
+<li>Line 4: <code>============================================================</code></li>
+</ul>
+<ol start="2">
+<li><strong>Body Content Block:</strong> (<code>chunk_size</code> lines printed via the loop and blank pad loop).</li>
+<li><strong>Footer &amp; Prompt Block:</strong> (4 lines total)</li>
+</ol>
+<ul>
+<li>Line 1: <code>============================================================</code></li>
+<li>Line 2: <code>PAGER [1-10/25 L (40%)]</code></li>
+<li>Line 3: <code>[f/Enter] Screen Down ...</code></li>
+<li>Line 4: <code>Choice -&gt; </code> (where the terminal waits for <code>input()</code>).</li>
+</ul>
+<h4>The Math Trap</h4>
+<p>If your terminal window is 24 rows tall (<code>term_rows = 24</code>), the total lines printed during one refresh cycle equals:</p>
+<p>$$\text{Total Printed Lines} = 4 \text{ (Header)} + \text{chunk_size} + 4 \text{ (Footer)}$$</p>
+<p>In the script above, <code>chunk_size</code> was calculated as <code>term_rows - 8</code> (which is $24 - 8 = 16$).</p>
+<p>$4 + 16 + 4 = 24 \text{ lines}$</p>
+<p>That looks like it fits <em>exactly</em> 24 rows, right? <strong>Here is why it scrolls:</strong></p>
+<p>When Python executes <code>choice = input(&quot;Choice -&gt; &quot;)</code>, typing a command and pressing <strong>Enter</strong> sends a newline (<code>\n</code>) to the terminal. That single Enter press pushes the entire terminal buffer <strong>up by 1 line</strong> before <code>clear</code> is called on the next loop iteration. Furthermore, if your terminal shell or prompt wrapping introduces any implicit margin, even a 24-line output on a 24-line screen will force the top line (<code>=== Match ... ===</code>) to slide up off the top edge of the terminal window.</p>
+<hr />
+<h3>The Permanent Fix</h3>
+<p>Instead of hardcoding a tight subtraction like <code>-8</code>, we need to explicitly measure the header height, leave a 2-line safety buffer so <code>input()</code> never triggers a viewport scroll, and bound <code>chunk_size</code>.</p>
+<p>Here is the corrected <code>custom_pager</code> block with detailed inline comments explaining the layout layout calculation:</p>
+<pre><code class="language-python">def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI with context headers and search term highlighting.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        
+        # ---------------------------------------------------------------------
+        # HEIGHT BUDGET:
+        # Header  = 4 lines (title, query, folder, separator)
+        # Footer  = 4 lines (separator, status bar, options, input prompt)
+        # Buffer  = 2 lines (prevents Enter key / terminal margins from scrolling)
+        # ---------------------------------------------------------------------
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+        
+        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
+        chunk_size = max(3, term_rows - reserved_rows)
+        
+        os.system(&quot;clear&quot;)
+        
+        # --- Print Header (4 lines) ---
+        print(f&quot;=== {title} ===&quot;)
+        print(f&quot;Query:  '{search_term}'&quot;)
+        print(f&quot;Folder: {search_folder}&quot;)
+        print(&quot;=&quot; * 60)
+
+        # --- Print Page Body (chunk_size lines) ---
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            highlighted = highlight_term(line, search_term)
+            print(highlighted)
+
+        # Pad with blank lines if content is shorter than available chunk space
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # --- Pager Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<p>Replacing <code>chunk_size = max(5, term_rows - 8)</code> with <code>reserved_rows = 10</code> (<code>term_rows - 10</code>) creates enough headroom that the terminal window will not scroll top lines off-screen when input is accepted.</p>
+<hr />
+<p><strong><a href="20260828_001000_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_001012_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001008_capture.md&quot;)</p>

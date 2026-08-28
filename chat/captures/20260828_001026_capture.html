@@ -1,15 +1,54 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 79</h1>
-<p><strong><a href="20260827_235234_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_001000_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 81</h1>
+<p><strong><a href="20260828_001012_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
 <hr />
-<p>Adding the search parameters to your title header is straightforward, and highlighting matching text in the terminal is surprisingly easy using standard ANSI color escape codes and regular expressions.</p>
-<h3>Key Changes</h3>
-<ol>
-<li><strong>Title Header Update:</strong> <code>custom_pager</code> now receives <code>search_term</code> and <code>search_folder</code> so it can display them right at the top of every screen refresh.</li>
-<li><strong>ANSI Text Highlighting:</strong> Before sending lines to the pager loop, a simple regex match case-insensitively wraps every occurrence of <code>search_term</code> in standard ANSI escape codes (<code>\033[1;31m</code> for bold red, reset by <code>\033[0m</code>).</li>
-<li><strong>Line Truncation Adjustment:</strong> Because ANSI color codes insert invisible characters into strings, Python's standard string slicing (<code>line[:term_cols]</code>) would chop off the color reset code or miscalculate column widths. To fix this cleanly, <code>sys.stdout.write</code> and standard terminal wrapping are used alongside clean ANSI highlighting.</li>
-</ol>
-<p>Here is the updated script:</p>
+<p>You haven't imagined it at all—<strong>line wrapping is 100% the culprit.</strong></p>
+<p>When your <code>i3</code> layout tiles your terminal window alongside <code>feh</code>, your terminal column count shrinks (often from 120+ columns down to 60–80 columns). If a line of OCR text is 120 characters long, Python's single <code>print(line)</code> call tells the terminal to output 1 line. However, the terminal emulator wraps it onto <strong>2 physical lines</strong> on your screen.</p>
+<p>As a result, your loop might print 15 <em>logical</em> lines of text, but the terminal renders them across 22 <em>physical</em> lines. This instantly blows past your terminal height budget and pushes your header off the top of the screen.</p>
+<hr />
+<h3>How to Fix Line Wrapping</h3>
+<p>You have two choices depending on how you prefer to read long lines in your pager:</p>
+<h4>Option A: Hard-Truncate Lines (No wrapping)</h4>
+<p>If you want to keep lines strictly to 1 physical line per loop iteration, clip the strings to <code>term_cols</code> <em>before</em> adding ANSI color codes:</p>
+<pre><code class="language-python">for line in page_lines:
+    # 1. Truncate raw string to window width so it CANNOT wrap
+    truncated = line[:term_cols]
+    # 2. Highlight search term AFTER truncating
+    highlighted = highlight_term(truncated, search_term)
+    print(highlighted)
+
+</code></pre>
+<h4>Option B: Calculate Physical Wrap Lines (Allow wrapping, preserve height)</h4>
+<p>If you want to read full wrapped lines without clipping, you need to calculate how many physical lines each string will occupy and subtract those extra lines from <code>chunk_size</code> dynamically:</p>
+<pre><code class="language-python"># Measure how many actual lines the screen budget can hold
+max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))
+
+page_lines = []
+physical_rows_used = 0
+
+# Fill page based on actual physical visual rows
+while line_pointer + len(page_lines) &lt; len(all_content):
+    next_line = all_content[line_pointer + len(page_lines)]
+    # Calculate visual height (minimum 1 row for empty lines)
+    visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+    
+    if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+        break
+        
+    page_lines.append(next_line)
+    physical_rows_used += visual_height
+
+for line in page_lines:
+    print(highlight_term(line, search_term))
+
+# Pad blank lines using remaining physical space
+for _ in range(max_physical_rows - physical_rows_used):
+    print(&quot;&quot;)
+
+</code></pre>
+<hr />
+<h3>Complete Corrected Script (Option A - Truncation)</h3>
+<p>Option A is generally cleaner for fast visual scanning in tiled terminals. Here is the complete script incorporating truncation prior to ANSI highlighting, plus a stable <code>SAFETY_BUFFER</code>:</p>
 <pre><code class="language-python">#!/usr/bin/env python3
 import argparse
 import os
@@ -110,12 +149,11 @@ def highlight_term(text: str, search_term: str) -&gt; str:
     &quot;&quot;&quot;Wraps occurrences of search_term in ANSI bold red escape codes.&quot;&quot;&quot;
     if not search_term:
         return text
-    # Escape regex specials in search term, perform case-insensitive substitution
     pattern = re.compile(re.escape(search_term), re.IGNORECASE)
     return pattern.sub(lambda m: f&quot;\033[1;31m{m.group(0)}\033[0m&quot;, text)
 
 def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
-    &quot;&quot;&quot;Unified Pager UI with context headers and search term highlighting.&quot;&quot;&quot;
+    &quot;&quot;&quot;Unified Pager UI with context headers, string truncation, and search term highlighting.&quot;&quot;&quot;
     url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
     full_lines = full_text.splitlines()
     all_content = url_lines + full_lines
@@ -123,24 +161,36 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
     line_pointer = 0
     while True:
         term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
-        # Account for 4 header lines + 4 footer/prompt lines = 8 reserved rows
-        chunk_size = max(5, term_rows - 8)
+        
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+        
+        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
+        chunk_size = max(3, term_rows - reserved_rows)
         
         os.system(&quot;clear&quot;)
+        
+        # --- Print Header (4 lines) ---
         print(f&quot;=== {title} ===&quot;)
         print(f&quot;Query:  '{search_term}'&quot;)
         print(f&quot;Folder: {search_folder}&quot;)
         print(&quot;=&quot; * 60)
 
+        # --- Print Page Body (chunk_size lines) ---
         page_lines = all_content[line_pointer : line_pointer + chunk_size]
 
         for line in page_lines:
-            highlighted = highlight_term(line, search_term)
-            print(highlighted)
+            # 1. Clip raw string to current terminal width to prevent i3 line wrapping
+            truncated_line = line[:term_cols]
+            # 2. Apply ANSI color codes AFTER truncation so codes aren't broken
+            print(highlight_term(truncated_line, search_term))
 
+        # Pad remaining space if page_lines &lt; chunk_size
         for _ in range(chunk_size - len(page_lines)):
             print(&quot;&quot;)
 
+        # --- Print Footer (4 lines) ---
         total_lines = len(all_content)
         end_idx = min(line_pointer + chunk_size, total_lines)
         pct = int((end_idx / total_lines) * 100) if total_lines else 100
@@ -152,7 +202,7 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
         
         choice = input(&quot;Choice -&gt; &quot;).strip().lower()
 
-        # --- Screenful (Page) Controls ---
+        # --- Navigation Logic ---
         if choice in ('f', '', 'pgdn'):
             if line_pointer + chunk_size &lt; total_lines:
                 line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
@@ -162,7 +212,6 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
         elif choice in ('b', 'pgup'):
             line_pointer = max(0, line_pointer - chunk_size)
 
-        # --- Line-by-Line Controls ---
         elif choice in ('j', 'down'):
             if line_pointer + chunk_size &lt; total_lines:
                 line_pointer += 1
@@ -172,7 +221,6 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
         elif choice in ('k', 'up'):
             line_pointer = max(0, line_pointer - 1)
 
-        # --- Flashcard Workflow Actions ---
         elif choice in ('p', 'prev', 'back'):
             return &quot;prev&quot;
         elif choice in ('n', 'next'):
@@ -280,5 +328,5 @@ if __name__ == &quot;__main__&quot;:
 
 </code></pre>
 <hr />
-<p><strong><a href="20260827_235234_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_001000_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260827_235252_capture.md&quot;)</p>
+<p><strong><a href="20260828_001012_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001026_capture.md&quot;)</p>
