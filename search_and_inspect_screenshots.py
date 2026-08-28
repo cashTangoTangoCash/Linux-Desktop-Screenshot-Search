@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+import pudb
 
 DEFAULT_SEARCH_FOLDER = Path.home() / "Documents/2026/screenshots"
 
@@ -103,7 +104,10 @@ def highlight_term(text: str, search_term: str) -> str:
     return pattern.sub(lambda m: f"\033[1;31m{m.group(0)}\033[0m", text)
 
 def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -> str:
-    """Unified Pager UI with context headers and search term highlighting."""
+    """Unified Pager UI with context headers, search term highlighting, and line-wrapping prediction."""
+
+    pudb.set_trace()
+
     url_lines = [f"URL OCR: {url_text}", "-" * 60]
     full_lines = full_text.splitlines()
     all_content = url_lines + full_lines
@@ -111,63 +115,72 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
     line_pointer = 0
     while True:
         term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
-        
-        # ---------------------------------------------------------------------
-        # HEIGHT BUDGET:
-        # Header  = 4 lines (title, query, folder, separator)
-        # Footer  = 4 lines (separator, status bar, options, input prompt)
-        # Buffer  = 2 lines (prevents Enter key / terminal margins from scrolling)
-        # ---------------------------------------------------------------------
+
+        # Adjust for tiled terminal width under i3 (ensure integer >= 1)
+        term_cols = max(1, term_cols // 2)
+
         HEADER_HEIGHT = 4
-        FOOTER_HEIGHT = 6
-        SAFETY_BUFFER = 10
-        
-        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
-        chunk_size = max(3, term_rows - reserved_rows)
-        
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 0
+
+        max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))
+
         os.system("clear")
-        
+
         # --- Print Header (4 lines) ---
         print(f"=== {title} ===")
         print(f"Query:  '{search_term}'")
         print(f"Folder: {search_folder}")
         print("=" * 60)
 
-        # --- Print Page Body (chunk_size lines) ---
-        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+        # --- Calculate Page Content based on Visual Wrapping ---
+        page_lines = []
+        physical_rows_used = 0
 
+        while line_pointer + len(page_lines) < len(all_content):
+            next_line = all_content[line_pointer + len(page_lines)]
+            # Visual height calculation (minimum 1 row for empty lines)
+            visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+
+            if physical_rows_used + visual_height > max_physical_rows and page_lines:
+                break
+
+            page_lines.append(next_line)
+            physical_rows_used += visual_height
+
+        # --- Print Page Content ---
         for line in page_lines:
-            highlighted = highlight_term(line, search_term)
-            print(highlighted)
+            print(highlight_term(line, search_term))
 
-        # Pad with blank lines if content is shorter than available chunk space
-        for _ in range(chunk_size - len(page_lines)):
+        # Pad remaining screen space with empty lines
+        for _ in range(max_physical_rows - physical_rows_used):
             print("")
 
         # --- Print Footer (4 lines) ---
         total_lines = len(all_content)
-        end_idx = min(line_pointer + chunk_size, total_lines)
+        lines_displayed = len(page_lines)
+        end_idx = min(line_pointer + lines_displayed, total_lines)
         pct = int((end_idx / total_lines) * 100) if total_lines else 100
 
         print("=" * 60)
         print(f"PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]")
         print("[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up")
         print("[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit")
-        
+
         choice = input("Choice -> ").strip().lower()
 
-        # --- Pager Navigation Logic ---
+        # --- Navigation Logic ---
         if choice in ('f', '', 'pgdn'):
-            if line_pointer + chunk_size < total_lines:
-                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            if line_pointer + lines_displayed < total_lines:
+                line_pointer += lines_displayed
             else:
                 return "next"
 
         elif choice in ('b', 'pgup'):
-            line_pointer = max(0, line_pointer - chunk_size)
+            line_pointer = max(0, line_pointer - lines_displayed)
 
         elif choice in ('j', 'down'):
-            if line_pointer + chunk_size < total_lines:
+            if line_pointer + 1 < total_lines:
                 line_pointer += 1
             else:
                 return "next"

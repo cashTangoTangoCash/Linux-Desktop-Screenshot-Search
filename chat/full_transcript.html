@@ -9523,3 +9523,1393 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_001026_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 82</h1>
+<p>instead of struggling over more complex pager code that accounts for line wrapping, can we instead use i3 window manager to positively place feh on a pre-chosen workspace.  I don't have a lot of familiarity with the workings of i3 but the config file I think has the right code...somewhere:</p>
+<p>exec --no-startup-id ~/set_once.sh</p>
+<h1>This file is a modified version based on default i3-config-wizard config</h1>
+<h1>source is available here:</h1>
+<h1><a href="https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config">https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config</a></h1>
+<h1>Maintainer: joekamprad [joekamprad //a_t// endeavouros.com]</h1>
+<h1><a href="https://endeavouros.com">https://endeavouros.com</a></h1>
+<h1></h1>
+<h1>iconic font icon search: <a href="https://fontawesome.com/v4.7/cheatsheet/">https://fontawesome.com/v4.7/cheatsheet/</a></h1>
+<h1></h1>
+<h1>--&gt; to update this run the following command (will backup existing setup file)</h1>
+<h1>wget --backups=1 <a href="https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config">https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config</a> -P ~/.config/i3/</h1>
+<h1></h1>
+<h1>Endeavouros-i3 config file</h1>
+<h1>Source for complete framework of our i3 config and theming here: <a href="https://github.com/endeavouros-team/endeavouros-i3wm-setup">https://github.com/endeavouros-team/endeavouros-i3wm-setup</a></h1>
+<h1>EndeavourOS wiki holds some Information also: <a href="https://discovery.endeavouros.com/window-tiling-managers/i3-wm/">https://discovery.endeavouros.com/window-tiling-managers/i3-wm/</a></h1>
+<h1>Please see <a href="http://i3wm.org/docs/userguide.html">http://i3wm.org/docs/userguide.html</a> for the official i3 reference!</h1>
+<p>#######################</p>
+<h1>config starts here:</h1>
+<p>#######################</p>
+<h1>Font for window titles. Will also be used by the bar unless a different font</h1>
+<h1>is used in the bar {} block below.</h1>
+<h1>This font is widely installed, provides lots of unicode glyphs, right-to-left</h1>
+<h1>text rendering and scalability on retina/hidpi displays (thanks to pango).</h1>
+<p>#font pango: Noto Sans Regular 10
+font pango: Noto Sans Regular 14</p>
+<h1>set the mod key to the winkey:</h1>
+<p>set $mod Mod4</p>
+<p>#####################</p>
+<h1>workspace layout:</h1>
+<p>#####################</p>
+<h1>default i3 tiling mode:</h1>
+<p>workspace_layout default</p>
+<h1>i3 stacking layout:</h1>
+<h1>Each window will be fullscreen and tabbed top to bottom.</h1>
+<p>#workspace_layout stacking</p>
+<h1>i3 tabbed new_window:</h1>
+<h1>Each new window will open fullscreen as a tab (left to right)</h1>
+<p>#workspace_layout tabbed</p>
+<p>##############################</p>
+<h1>extra options for windows:</h1>
+<p>##############################</p>
+<p>#border indicator on windows:
+new_window pixel 3</p>
+<h1>Set 3px thick borders for clear visual boundaries</h1>
+<p>default_border pixel 3
+default_floating_border pixel 3</p>
+<h1>High-contrast focus colors: class border backgr text indicator child_border</h1>
+<h1>client.focused          #ff5500 #ff5500 #ffffff #2e9ef4   #ff5500</h1>
+<h1>client.focused_inactive #333333 #333333 #888888 #484e50   #5f676a</h1>
+<h1>client.unfocused        #222222 #222222 #888888 #292d2e   #222222</h1>
+<h1>thin borders</h1>
+<h1>hide_edge_borders both</h1>
+<h1>Set inner/outer gaps</h1>
+<p>gaps inner 6
+gaps outer 3</p>
+<h1>show window title bars (not officially supported with i3gaps)</h1>
+<p>#default_border normal</p>
+<h1>window title alignment</h1>
+<p>#title_align center</p>
+<h1>Use Mouse+$mod to drag floating windows to their wanted position</h1>
+<p>floating_modifier $mod</p>
+<h1>switch/iterate between workspaces</h1>
+<p>bindsym $mod+Tab workspace next
+bindsym $mod+Shift+Tab workspace prev</p>
+<h1>switch to workspace</h1>
+<p>bindcode $mod+10    workspace  $ws1
+bindcode $mod+11    workspace  $ws2
+bindcode $mod+12    workspace  $ws3
+bindcode $mod+13    workspace  $ws4
+bindcode $mod+14    workspace  $ws5
+bindcode $mod+15    workspace  $ws6
+bindcode $mod+16    workspace  $ws7
+bindcode $mod+17    workspace  $ws8
+bindcode $mod+18    workspace  $ws9
+bindcode $mod+19    workspace  $ws10</p>
+<h1>switch to workspace with numpad keys</h1>
+<p>bindcode $mod+87 workspace $ws1
+bindcode $mod+88 workspace $ws2
+bindcode $mod+89 workspace $ws3
+bindcode $mod+83 workspace $ws4
+bindcode $mod+84 workspace $ws5
+bindcode $mod+85 workspace $ws6
+bindcode $mod+79 workspace $ws7
+bindcode $mod+80 workspace $ws8
+bindcode $mod+81 workspace $ws9
+bindcode $mod+90 workspace $ws10</p>
+<h1>switch to workspace with numlock numpad keys</h1>
+<p>bindcode $mod+Mod2+87 workspace $ws1
+bindcode $mod+Mod2+88 workspace $ws2
+bindcode $mod+Mod2+89 workspace $ws3
+bindcode $mod+Mod2+83 workspace $ws4
+bindcode $mod+Mod2+84 workspace $ws5
+bindcode $mod+Mod2+85 workspace $ws6
+bindcode $mod+Mod2+79 workspace $ws7
+bindcode $mod+Mod2+80 workspace $ws8
+bindcode $mod+Mod2+81 workspace $ws9
+bindcode $mod+Mod2+90 workspace $ws10</p>
+<h1>move focused container to workspace</h1>
+<p>bindcode $mod+Shift+10    move container to workspace  $ws1
+bindcode $mod+Shift+11    move container to workspace  $ws2
+bindcode $mod+Shift+12    move container to workspace  $ws3
+bindcode $mod+Shift+13    move container to workspace  $ws4
+bindcode $mod+Shift+14    move container to workspace  $ws5
+bindcode $mod+Shift+15    move container to workspace  $ws6
+bindcode $mod+Shift+16    move container to workspace  $ws7
+bindcode $mod+Shift+17    move container to workspace  $ws8
+bindcode $mod+Shift+18    move container to workspace  $ws9
+bindcode $mod+Shift+19    move container to workspace  $ws10</p>
+<h1>move focused container to workspace with numpad keys</h1>
+<p>bindcode $mod+Shift+Mod2+87     move container to workspace  $ws1
+bindcode $mod+Shift+Mod2+88     move container to workspace  $ws2
+bindcode $mod+Shift+Mod2+89     move container to workspace  $ws3
+bindcode $mod+Shift+Mod2+83     move container to workspace  $ws4
+bindcode $mod+Shift+Mod2+84     move container to workspace  $ws5
+bindcode $mod+Shift+Mod2+85     move container to workspace  $ws6
+bindcode $mod+Shift+Mod2+79     move container to workspace  $ws7
+bindcode $mod+Shift+Mod2+80     move container to workspace  $ws8
+bindcode $mod+Shift+Mod2+81     move container to workspace  $ws9
+bindcode $mod+Shift+Mod2+90     move container to workspace  $ws10</p>
+<h1>move focused container to workspace with numpad keys</h1>
+<p>bindcode $mod+Shift+87   move container to workspace  $ws1
+bindcode $mod+Shift+88   move container to workspace  $ws2
+bindcode $mod+Shift+89   move container to workspace  $ws3
+bindcode $mod+Shift+83   move container to workspace  $ws4
+bindcode $mod+Shift+84   move container to workspace  $ws5
+bindcode $mod+Shift+85   move container to workspace  $ws6
+bindcode $mod+Shift+79   move container to workspace  $ws7
+bindcode $mod+Shift+80   move container to workspace  $ws8
+bindcode $mod+Shift+81   move container to workspace  $ws9
+bindcode $mod+Shift+90   move container to workspace  $ws10</p>
+<h1>resize window (you can also use the mouse for that):</h1>
+<p>#mode &quot;resize&quot; {</p>
+<h1>These bindings trigger as soon as you enter the resize mode</h1>
+<h1>Pressing left will shrink the window's width.</h1>
+<h1>Pressing right will grow the window's width.</h1>
+<h1>Pressing up will shrink the window's height.</h1>
+<h1>Pressing down will grow the window's height.</h1>
+<p>#        bindsym h resize shrink width 10 px or 10 ppt
+#        bindsym j resize grow height 10 px or 10 ppt
+#        bindsym k resize shrink height 10 px or 10 ppt
+#        bindsym l resize grow width 10 px or 10 ppt</p>
+<h1>same bindings, but for the arrow keys</h1>
+<p>#        bindsym Left resize shrink width 10 px or 10 ppt
+#        bindsym Down resize grow height 10 px or 10 ppt
+#        bindsym Up resize shrink height 10 px or 10 ppt
+#        bindsym Right resize grow width 10 px or 10 ppt</p>
+<h1>back to normal: Enter or Escape</h1>
+<p>#        bindsym Return mode &quot;default&quot;
+#        bindsym Escape mode &quot;default&quot;
+#}</p>
+<p>#bindsym $mod+r mode &quot;resize&quot;</p>
+<p>######################################</p>
+<h1>keybindings for different actions:</h1>
+<p>######################################</p>
+<h1>start a terminal</h1>
+<p>bindsym $mod+Return exec --no-startup-id xfce4-terminal</p>
+<h1>kill focused window</h1>
+<p>bindsym $mod+q kill</p>
+<h1>exit-menu</h1>
+<p>bindsym $mod+Shift+e exec --no-startup-id ~/.config/i3/scripts/powermenu</p>
+<h1>Lock the system</h1>
+<h1>lock with a picture:</h1>
+<p>#bindsym $mod+l exec --no-startup-id i3lock -i  ~/.config/i3/i3-lock-screen.png -p default|win -t</p>
+<h1>lock by blurring the screen:</h1>
+<p>bindsym $mod+l exec --no-startup-id ~/.config/i3/scripts/blur-lock</p>
+<h1>lock in case after sleep</h1>
+<h1>exec --no-startup-id xss-lock -l ~/.config/i3/scripts/blur-lock</h1>
+<h1>reload the configuration file</h1>
+<p>bindsym $mod+Shift+c reload</p>
+<h1>restart i3 inplace (preserves your layout/session, can be used to update i3)</h1>
+<p>bindsym $mod+Shift+r restart</p>
+<h1>keybinding in fancy rofi (automated):</h1>
+<p>bindsym F1 exec --no-startup-id ~/.config/i3/scripts/keyhint-2</p>
+<h1>alternative</h1>
+<h1>keybinding list in editor:</h1>
+<h1>bindsym $mod+F1 exec --no-startup-id xed ~/.config/i3/keybindings</h1>
+<h1>Backlight control</h1>
+<p>#bindsym XF86MonBrightnessUp exec --no-startup-id xbacklight +10 &amp;&amp; notify-send &quot;Brightness - $(xbacklight -get | cut -d '.' -f 1)%&quot;
+#bindsym XF86MonBrightnessDown exec --no-startup-id xbacklight -10 &amp;&amp; notify-send &quot;Brightness - $(xbacklight -get | cut -d '.' -f 1)%&quot;</p>
+<h1>Backlight setting using dunst osc</h1>
+<p>bindsym XF86MonBrightnessUp exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh brightness_up
+bindsym XF86MonBrightnessDown exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh brightness_down</p>
+<h1>alternative screen &amp; keyboard brightness setting with brightnessctl using dunst osc</h1>
+<h1>install brightnessctl (sudo pacman -S brightnessctl)</h1>
+<h1>keyboard backlight setting using brightnessctl</h1>
+<p>#bindsym Mod1+space       exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh keyboard_brightness_up
+#bindsym Mod1+Shift+space exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh keyboard_brightness_down</p>
+<h1></h1>
+<h1>screen brightness setting using brightnessctl</h1>
+<p>#bindsym XF86MonBrightnessUp   exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh screen_brightness_up
+#bindsym XF86MonBrightnessDown exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh screen_brightness_down</p>
+<h1>change focus</h1>
+<p>bindsym $mod+j focus left
+bindsym $mod+k focus down
+bindsym $mod+b focus up
+bindsym $mod+o focus right</p>
+<h1>alternatively, you can use the cursor keys:</h1>
+<p>bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right</p>
+<h1>move focused window</h1>
+<p>bindsym $mod+Shift+j move left
+bindsym $mod+Shift+k move down
+bindsym $mod+Shift+b move up
+bindsym $mod+Shift+o move right</p>
+<h1>alternatively, you can use the cursor keys:</h1>
+<p>bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right</p>
+<h1>split in horizontal orientation</h1>
+<p>bindsym $mod+h split h</p>
+<h1>split in vertical orientation</h1>
+<p>bindsym $mod+v split v</p>
+<h1>enter fullscreen mode for the focused container</h1>
+<p>bindsym $mod+f fullscreen toggle</p>
+<h1>change container layout (stacked, tabbed, toggle split)</h1>
+<p>bindsym $mod+s layout stacking
+bindsym $mod+g layout tabbed
+bindsym $mod+e layout toggle split</p>
+<h1>toggle tiling / floating</h1>
+<p>bindsym $mod+Shift+space floating toggle</p>
+<h1>change focus between tiling / floating windows</h1>
+<p>bindsym $mod+space focus mode_toggle</p>
+<h1>focus the parent container</h1>
+<p>bindsym $mod+a focus parent</p>
+<h1>open new empty workspace</h1>
+<p>bindsym $mod+Shift+n exec --no-startup-id ~/.config/i3/scripts/empty_workspace</p>
+<h2>Multimedia Keys</h2>
+<h1>volume</h1>
+<h1>use meta keys without showing osc</h1>
+<p>#bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -D pulse sset Master 5%+ &amp;&amp; pkill -RTMIN+1 i3blocks
+#bindsym XF86AudioLowerVolume exec --no-startup-id amixer -D pulse sset Master 5%- &amp;&amp; pkill -RTMIN+1 i3blocks</p>
+<h1>use meta keys showing osc using dunst</h1>
+<p>bindsym XF86AudioRaiseVolume exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_up
+bindsym XF86AudioLowerVolume exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_down</p>
+<h1>gradular volume control</h1>
+<p>bindsym $mod+XF86AudioRaiseVolume exec --no-startup-id amixer -D pulse sset Master 1%+ &amp;&amp; pkill -RTMIN+1 i3blocks
+bindsym $mod+XF86AudioLowerVolume exec --no-startup-id amixer -D pulse sset Master 1%- &amp;&amp; pkill -RTMIN+1 i3blocks</p>
+<h1>mute</h1>
+<p>#bindsym XF86AudioMute exec --no-startup-id amixer sset Master toggle &amp;&amp; killall -USR1 i3blocks</p>
+<h1>use meta keys showing osc using dunst</h1>
+<p>bindsym XF86AudioMute exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_mute</p>
+<h1>mic mute toggle</h1>
+<p>bindsym XF86AudioMicMute exec amixer sset Capture toggle</p>
+<h1>audio control</h1>
+<p>bindsym XF86AudioPlay exec --no-startup-id playerctl play-pause</p>
+<h1>Above line will also work for pausing</h1>
+<p>bindsym XF86AudioNext exec --no-startup-id playerctl next
+bindsym XF86AudioPrev exec --no-startup-id playerctl previous</p>
+<h1>toggle between audio devices for output</h1>
+<p>bindsym $mod+p exec --no-startup-id ~/.config/i3/scripts/audio-device-switch</p>
+<h2>App shortcuts</h2>
+<p>bindsym $mod+w exec --no-startup-id /usr/bin/firefox
+bindsym $mod+n exec --no-startup-id /usr/bin/thunar</p>
+<h1>Screenshot</h1>
+<h1>complete screen</h1>
+<h1>bindsym Print exec --no-startup-id scrot ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<h1>the currently focused window</h1>
+<h1>bindsym $mod+Print exec --no-startup-id scrot -u ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<h1>select a window or rectangle with the mouse</h1>
+<h1>bindsym $mod+Shift+Print exec --no-startup-id scrot -s ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<p>bindsym $mod+F2 exec --no-startup-id scrot --focused '%Y-%m-%d-%R-%S_$wx$h.jpg' -e 'mv $f /home/dad84/Documents/2026/screenshots/'
+bindsym $mod+Shift+F2 exec --no-startup-id scrot --select '%Y-%m-%d-%R-%S_$wx$h.jpg' -e 'mv $f /home/dad84/Documents/2026/screenshots/'</p>
+<h1>Power Profiles menu switcher (rofi)</h1>
+<p>bindsym $mod+Shift+p exec --no-startup-id ~/.config/i3/scripts/power-profiles</p>
+<p>##########################################</p>
+<h1>configuration for workspace behaviour:</h1>
+<p>##########################################</p>
+<h1>Define names for default workspaces for which we configure key bindings later on.</h1>
+<h1>We use variables to avoid repeating the names in multiple places.</h1>
+<h1>set $ws1 &quot;1:&quot;</h1>
+<h1>set $ws2 &quot;2:&quot;</h1>
+<h1>set $ws3 &quot;3:&quot;</h1>
+<h1>set $ws4 &quot;4:&quot;</h1>
+<h1>set $ws5 &quot;5:&quot;</h1>
+<p>set $ws1 &quot;1&quot;
+set $ws2 &quot;2&quot;
+set $ws3 &quot;3&quot;
+set $ws4 &quot;4&quot;
+set $ws5 &quot;5&quot;
+set $ws6 &quot;6&quot;
+set $ws7 &quot;7&quot;
+set $ws8 &quot;8&quot;
+set $ws9 &quot;9&quot;
+set $ws10 &quot;10&quot;</p>
+<h1>use workspaces on different displays:</h1>
+<h1>where you have to replace VGA-0/HDMI-0 with the names for your displays</h1>
+<h1>you can get from xrandr command</h1>
+<p>#workspace $ws1 output VGA-0
+#workspace $ws2 output VGA-0
+#workspace $ws3 output HDMI-0
+#workspace $ws4 output HDMI-0
+#workspace $ws5 output HDMI-0</p>
+<h1>bind program to workspace and focus to them on startup:</h1>
+<h1>assign [class=&quot;Xfce4-terminal&quot;] $ws1</h1>
+<h1>assign [class=&quot;(?i)firefox&quot;] $ws2</h1>
+<h1>assign [class=&quot;Thunar&quot;] $ws3</h1>
+<h1>assign [class=&quot;thunderbird&quot;] $ws4</h1>
+<h1>assign [class=&quot;TelegramDesktop&quot;] $ws5</h1>
+<h1>automatic set focus new window if it opens on another workspace than the current:</h1>
+<h1>for_window [class=Xfce4-terminal] focus</h1>
+<h1>for_window [class=(?i)firefox] focus</h1>
+<h1>for_window [class=Thunar] focus</h1>
+<h1>for_window [class=Thunderbird] focus</h1>
+<h1>for_window [class=TelegramDesktop] focus</h1>
+<p>##################</p>
+<h1>floating rules</h1>
+<p>##################</p>
+<h1>set floating (nontiling) for apps needing it</h1>
+<p>for_window [class=&quot;Yad&quot; instance=&quot;yad&quot;] floating enable
+for_window [class=&quot;Galculator&quot; instance=&quot;galculator&quot;] floating enable
+for_window [class=&quot;Blueberry.py&quot; instance=&quot;blueberry.py&quot;] floating enable</p>
+<h1>set floating (nontiling) for special apps</h1>
+<p>for_window [class=&quot;Xsane&quot; instance=&quot;xsane&quot;] floating enable
+for_window [class=&quot;Pavucontrol&quot; instance=&quot;pavucontrol&quot;] floating enable
+for_window [class=&quot;qt5ct&quot; instance=&quot;qt5ct&quot;] floating enable
+for_window [class=&quot;Blueberry.py&quot; instance=&quot;blueberry.py&quot;] floating enable
+for_window [class=&quot;Bluetooth-sendto&quot; instance=&quot;bluetooth-sendto&quot;] floating enable
+for_window [class=&quot;Pamac-manager&quot;] floating enable
+for_window [window_role=&quot;About&quot;] floating enable</p>
+<h1>set border of floating window</h1>
+<p>for_window [class=&quot;urxvt&quot;] border pixel 1</p>
+<h1>set size of floating window</h1>
+<p>#for_window [window_role=&quot;(?i)GtkFileChooserDialog&quot;] resize set 640 480 #to set size of file choose dialog
+#for_window [class=&quot;.*&quot;] resize set 640 480 #to change size of all floating windows</p>
+<h1>set position of floating window</h1>
+<p>#for_window [class=&quot;.*&quot;] move position center</p>
+<p>#############################################</p>
+<h1>autostart applications/services on login:</h1>
+<p>#############################################</p>
+<h1>make sure it loads gtk configs</h1>
+<p>exec_always $HOME/.config/i3/scripts/import-gsettings</p>
+<h2>compositor</h2>
+<h1>aka transparency</h1>
+<h1>uncomment one of them to be used</h1>
+<h1>options could need changes, related to used GPU and drivers.</h1>
+<h1>to find the right setting consult the archwiki or ask at the forum.</h1>
+<h1>picom: <a href="https://wiki.archlinux.org/title/Picom">https://wiki.archlinux.org/title/Picom</a></h1>
+<h1>manpage: <a href="https://man.archlinux.org/man/picom.1.en">https://man.archlinux.org/man/picom.1.en</a></h1>
+<h1>The default configuration is available in /etc/xdg/picom.conf</h1>
+<h1>For modifications, it can be copied to ~/.config/picom/picom.conf or ~/.config/picom.conf</h1>
+<h1>install picom package (sudo pacman -Syu picom)</h1>
+<h1>start using default config</h1>
+<p>#exec_always --no-startup-id picom -b</p>
+<h1>for custom config:</h1>
+<p>#exec_always --no-startup-id picom --config  ~/.config/picom.conf</p>
+<h2>applications/services</h2>
+<p>#get auth work with polkit-gnome
+exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1</p>
+<h1>dex execute .desktop files + apps using /etc/xdg/autostart.</h1>
+<h1>when second to i3 a DE is installed or mixed usage of i3 + xfce4 or GNOME</h1>
+<h1>in this cases better disable dex and use manual starting apps using xdg/autostart</h1>
+<h1>if enabled you should comment welcome app.</h1>
+<h1><a href="https://github.com/jceb/dex">https://github.com/jceb/dex</a></h1>
+<p>#exec --no-startup-id dex -a -s /etc/xdg/autostart/:~/.config/autostart/
+exec --no-startup-id dex --autostart --environment i3</p>
+<h1>start welcome app</h1>
+<p>#exec --no-startup-id sh /usr/share/endeavouros/scripts/welcome --startdelay=3</p>
+<h1>num lock activated</h1>
+<p>#exec --no-startup-id numlockx on</p>
+<h1>configure multiple keyboard layouts and hotkey to switch (Alt+CAPSLOCK in this example)</h1>
+<p>#exec --no-startup-id setxkbmap -layout 'us,sk' -variant altgr-intl,qwerty -option 'grp:alt_caps_toggle'</p>
+<h1>start conky:</h1>
+<p>#exec_always --no-startup-id conky</p>
+<h1>start a script to setup displays</h1>
+<h1>uncomment the next line, use arandr to setup displays and save the file as monitor:</h1>
+<p>exec --no-startup-id ~/.screenlayout/monitor.sh</p>
+<h1>set wallpaper</h1>
+<h1>exec --no-startup-id sleep 2 &amp;&amp; nitrogen --restore</h1>
+<p>exec --no-startup-id sleep 1 &amp;&amp; feh --bg-fill /usr/share/endeavouros/backgrounds/endeavouros-wallpaper.png</p>
+<h1>set powersavings for display:</h1>
+<p>exec --no-startup-id xset s 480 dpms 600 600 600</p>
+<h1>disable power saving (for example if using xscreensaver)</h1>
+<p>#exec --no-startup-id xset -dpms</p>
+<h1>use xautolock to use autosuspend rules for mobile devices</h1>
+<h1><a href="https://wiki.archlinux.org/title/Session_lock#xautolock">https://wiki.archlinux.org/title/Session_lock#xautolock</a></h1>
+<p>#exec --no-startup-id xautolock -time 60 -locker &quot;systemctl suspend&quot;</p>
+<h1>xscreensaver</h1>
+<h1><a href="https://www.jwz.org/xscreensaver">https://www.jwz.org/xscreensaver</a></h1>
+<p>#exec --no-startup-id xscreensaver --no-splash</p>
+<h1>Desktop notifications</h1>
+<h1>dunst config used ~/.config/dunst/dunstrc</h1>
+<h1>set alternative config if needed:</h1>
+<p>#exec --no-startup-id /usr/bin/dunst --config ~/.config/dunst/dunstrc</p>
+<h1>may need to run dbus-launch explicitly:</h1>
+<p>#exec --no-startup-id dbus-launch /usr/bin/dunst
+exec --no-startup-id /usr/bin/dunst</p>
+<h1>alternative if you installed aside with XFCE4:</h1>
+<h1>exec --no-startup-id /usr/lib/xfce4/notifyd/xfce4-notifyd &amp;</h1>
+<h1>autotiling script</h1>
+<h1><a href="https://github.com/nwg-piotr/autotiling">https://github.com/nwg-piotr/autotiling</a></h1>
+<h1><code>pacman -Syu autotiling</code></h1>
+<p>#exec_always --no-startup-id autotiling</p>
+<h1>Autostart apps as you like</h1>
+<p>#exec --no-startup-id sleep 2 &amp;&amp; xfce4-terminal
+#exec --no-startup-id sleep 7 &amp;&amp; firefox <a href="https://github.com/endeavouros-team/endeavouros-i3wm-setup/blob/main/force-knowledge.md">https://github.com/endeavouros-team/endeavouros-i3wm-setup/blob/main/force-knowledge.md</a>
+#exec --no-startup-id sleep 3 &amp;&amp; thunar</p>
+<h2>system tray</h2>
+<h1>if you do not use dex: exec --no-startup-id dex --autostart --environment i3</h1>
+<h1>you need to have tray apps started manually one by one:</h1>
+<h1>start blueberry app for managing bluetooth devices from tray:</h1>
+<p>#exec --no-startup-id blueberry-tray</p>
+<h1>networkmanager-applet</h1>
+<p>exec --no-startup-id nm-applet</p>
+<h1>clipman-applet</h1>
+<p>#exec --no-startup-id xfce4-clipman</p>
+<p>######################################</p>
+<h1>color settings for bar and windows</h1>
+<p>######################################</p>
+<h1>Define colors variables:</h1>
+<p>set $darkbluetrans  #08052be6
+set $darkblue       #08052b
+set $lightblue      #5294e2
+set $urgentred      #e53935
+set $white          #ffffff
+set $black          #000000
+set $purple         #e345ff
+set $darkgrey       #383c4a
+set $grey           #b0b5bd
+set $mediumgrey     #8b8b8b
+set $yellowbrown    #e1b700
+set $brightorange   #ff5500
+set $brightcyan     #00dfff</p>
+<h1># define colors for windows:</h1>
+<h1>#class                      border      bground     text        indicator   child_border</h1>
+<h1>client.focused              $lightblue  $darkblue   $white      $mediumgrey $mediumgrey</h1>
+<h1>client.unfocused            $darkblue   $darkblue   $grey       $darkgrey   $darkgrey</h1>
+<h1>client.focused_inactive     $darkblue   $darkblue   $grey       $black      $black</h1>
+<h1>client.urgent               $urgentred  $urgentred  $white      $yellowbrown    $yellowbrown</h1>
+<h1>define colors for windows:</h1>
+<h1>class                 border       bground      text        indicator    child_border</h1>
+<p>client.focused          $brightcyan  $brightcyan  $white      $brightcyan  $brightcyan
+client.unfocused        $darkblue    $darkblue    $grey       $darkgrey    $darkgrey
+client.focused_inactive $darkblue    $darkblue    $grey       $black       $black
+client.urgent           $urgentred   $urgentred   $white      $yellowbrown $yellowbrown</p>
+<p>############################################</p>
+<h1>bar settings (input comes from i3blocks)</h1>
+<p>############################################</p>
+<h1>Start i3bar to display a workspace bar</h1>
+<h1>(plus the system information i3status finds out, if available)</h1>
+<p>bar {
+        font pango: Noto Sans Regular 14
+        status_command i3blocks -c ~/.config/i3/i3blocks.conf
+            position bottom
+#           i3bar_command i3bar --transparency</p>
+<h1>it could be that you have no primary display set: set one (xrandr --output <output> --primary)</h1>
+<h1>reference: <a href="https://i3wm.org/docs/userguide.html#_tray_output">https://i3wm.org/docs/userguide.html#_tray_output</a></h1>
+<p>            #tray_output primary
+            tray_padding 0</p>
+<h1>When strip_workspace_numbers is set to yes,</h1>
+<h1>any workspace that has a name of the form</h1>
+<h1>“[n][:][NAME]” will display only the name.</h1>
+<p>strip_workspace_numbers yes
+##strip_workspace_name no</p>
+<p>            colors {
+            separator          $purple
+            background         $darkgrey
+            statusline         $white
+#                           border              bg          txt         indicator
+        # focused_workspace   $mediumgrey         $grey       $darkgrey   $purple
+        # active_workspace    $lightblue          $mediumgrey $darkgrey   $purple
+        # inactive_workspace  $darkgrey           $darkgrey   $grey       $purple
+        focused_workspace  #ff5500 #ff5500 #ffffff
+        active_workspace   #333333 #5f676a #ffffff
+        inactive_workspace #222222 #222222 #888888    
+        urgent_workspace    $urgentred          $urgentred  $white      $purple
+    }
+}</p>
+<h1>you can add different bars for multidisplay setups on each display:</h1>
+<h1>set output HDMI-0 to the display you want the bar, --transparency can be set.</h1>
+<h1>Transparency needs rgba color codes to be used where the last two letters are the transparency factor see here:</h1>
+<h1><a href="https://gist.github.com/lopspower/03fb1cc0ac9f32ef38f4">https://gist.github.com/lopspower/03fb1cc0ac9f32ef38f4</a></h1>
+<h1>#08052be6 --&gt; e6=90%</h1>
+<h1>bar {</h1>
+<p>#   font pango: Noto Sans Regular 10
+#   status_command i3blocks -c ~/.config/i3/i3blocks-2.conf
+#   i3bar_command i3bar --transparency
+#   output HDMI-0
+#   position bottom</p>
+<h1></h1>
+<h1>When strip_workspace_numbers is set to yes,</h1>
+<h1>any workspace that has a name of the form</h1>
+<h1>“[n][:][NAME]” will display only the name.</h1>
+<p>#strip_workspace_numbers yes
+##strip_workspace_name no</p>
+<h1></h1>
+<p>#   colors {
+#       separator          $purple
+#       background         $darkbluetrans
+#           statusline         $white
+#                           border          bg              txt         indicator
+#       focused_workspace   $lighterblue    $lighterblue    $darkblue   $purple
+#       active_workspace    $lightdblue     $lightdblue     $darkblue   $purple
+#       inactive_workspace  $darkblue       $darkblue       $lightdblue $purple
+#       urgent_workspace    $urgentred      $urgentred      $white      $purple
+#   }
+#}</p>
+<p>#####################################</p>
+<h1>Application menu handled by rofi:</h1>
+<p>#####################################</p>
+<h2>rofi bindings fancy application menu</h2>
+<p>bindsym $mod+d exec --no-startup-id rofi -modi drun -show drun <br />
+        -config ~/.config/rofi/rofidmenu.rasi</p>
+<h2>rofi bindings for window menu</h2>
+<p>bindsym $mod+t exec --no-startup-id rofi -show window <br />
+        -config ~/.config/rofi/rofidmenu.rasi</p>
+<h2>rofi bindings to manage clipboard (install rofi-greenclip from the AUR)</h2>
+<p>#exec --no-startup-id greenclip daemon&gt;/dev/null
+#bindsym $mod+c exec --no-startup-id rofi -modi &quot;clipboard:greenclip print&quot; -show clipboard <br />
+#       -config ~/.config/rofi/rofidmenu.rasi</p>
+<h1>attempt to deal with tiny font size</h1>
+<p>exec --no-startup-id xrdb -merge ~/.Xresources</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134440_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 82</h1>
+<p>Yes, absolutely. Offloading the window layout directly to <code>i3</code> is vastly simpler and cleaner than wrestling with dynamic line-wrapping buffer math in Python.</p>
+<p>By default, when <code>feh</code> opens on the current workspace, <code>i3</code> tiles it next to your terminal, instantly halving your terminal width and forcing lines to wrap.</p>
+<p>You can fix this by doing two things in tandem:</p>
+<ol>
+<li><strong>Tell <code>i3</code> to send <code>feh</code> window instances directly to another workspace</strong> (e.g., Workspace 9 or 10).</li>
+<li><strong>Tell <code>feh</code> NOT to steal window focus</strong> when it opens, so your terminal on Workspace 1 stays focused and ready for keystrokes.</li>
+</ol>
+<hr />
+<h3>Step 1: Add a Window Rule to your <code>~/.config/i3/config</code></h3>
+<p>In your <code>i3</code> configuration file, scroll down to the <strong><code>configuration for workspace behaviour:</code></strong> or <strong><code>floating rules</code></strong> section and add this line:</p>
+<pre><code class="language-i3config"># Send feh image viewer windows to workspace 9 without switching focus
+assign [class=&quot;feh&quot;] $ws9
+
+</code></pre>
+<p><em>Note: If you specifically want to target the flashcard review window and not other background <code>feh</code> operations (like wallpaper updates, though those aren't managed as window classes anyway), you can match on the title you set in the script:</em></p>
+<pre><code class="language-i3config">assign [title=&quot;feh_flashcard_review&quot;] $ws9
+
+</code></pre>
+<p>After adding this, save the file and press <strong><code>Mod4 + Shift + r</code></strong> to restart <code>i3</code> in place.</p>
+<hr />
+<h3>Step 2: Tweak the Python Script Call</h3>
+<p>When <code>feh</code> launches on Workspace 9, by default <code>i3</code> or <code>feh</code> might try to switch your active view or grab window focus. Update your <code>subprocess.Popen</code> call in your Python script to pass the <code>--xinerama-index</code> or focus-prevention flags if needed, though standard <code>assign</code> usually leaves your terminal focused if <code>xdotool</code> isn't fighting it.</p>
+<p>In <code>review_searchResults()</code>:</p>
+<pre><code class="language-python"># Launch feh — i3 will automatically catch this window class/title and route it to Workspace 9
+feh_proc = subprocess.Popen(
+    [
+        &quot;feh&quot;, 
+        &quot;--title&quot;, &quot;feh_flashcard_review&quot;, 
+        &quot;-F&quot;, 
+        &quot;--auto-zoom&quot;, 
+        str(img_path.resolve())
+    ],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL
+)
+
+</code></pre>
+<p>Because <code>feh</code> opens on Workspace 9 while your terminal stays full-width on Workspace 1:</p>
+<ul>
+<li>Your terminal never changes width or resizes.</li>
+<li>Line wrapping vanishes because you retain your full 120+ column width.</li>
+<li>Header clipping disappears completely without adding complex height calculations.</li>
+<li>If you have a dual-monitor setup, you can pin Workspace 9 to your secondary monitor using <code>workspace $ws9 output HDMI-0</code> (or whichever output name <code>xrandr</code> gives you), letting you see the screenshot on one screen while paging text on the other.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134445_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 83</h1>
+<p>the added window rules were not having an effect.  this is not a big deal.  it's hard to do something non-obvious in i3 without knowing much about i3.  the search script is 'close enough' for now I think without going overboard to chase perfection.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134446_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 83</h1>
+<p>That is a completely fair call. Tiling window managers like <code>i3</code> match window properties (<code>WM_CLASS</code> vs <code>WM_NAME</code>) at the exact moment an X11 window is mapped—and when scripts launch, close, and re-launch fast processes, timing race conditions often cause window rules to miss.</p>
+<p>If you ever want to revisit it without wrestling with <code>i3</code> workspace routing rules or complex wrapping math, there are two extremely minimal &quot;low-hanging fruit&quot; adjustments you can drop into the current setup:</p>
+<h3>1. The Simple Terminal Truncation (1 line of code)</h3>
+<p>If long lines occasionally wrapping and pushing your header off the top is the main annoyance, you can strictly truncate lines to the terminal width directly in your printing loop. This forces 1 logical line to strictly occupy 1 physical line, no matter how narrow <code>i3</code> tiles your terminal window:</p>
+<pre><code class="language-python">for line in page_lines:
+    # Truncate string to term_cols BEFORE applying ANSI colors
+    print(highlight_term(line[:term_cols], search_term))
+
+</code></pre>
+<h3>2. Float <code>feh</code> Instead of Tiling It</h3>
+<p>If you don't want <code>feh</code> squeezing your terminal width at all, you can tell <code>feh</code> to launch as a floating dialog/window directly via command-line flags or a simple 1-line <code>i3</code> floating rule:</p>
+<p><strong>In <code>i3</code> config:</strong></p>
+<pre><code class="language-i3config">for_window [title=&quot;feh_flashcard_review&quot;] floating enable
+
+</code></pre>
+<p><em>or directly in your Python <code>subprocess</code> call by passing <code>--geom</code> or <code>--borderless</code> so <code>i3</code> treats it as a floating pop-up overlay.</em></p>
+<p>Otherwise, if the script is functional and getting the job done for your review workflow, keeping it simple and sticking with &quot;close enough&quot; is usually the best engineering decision!</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134450_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 84</h1>
+<p>I thought about different options and realized that I want to try out one of the recent gemini solutions: let's try the notion of having the script predict / model the wrapping.  The code below is throwing this error:</p>
+<p>Search review complete.
+Traceback (most recent call last):
+  File &quot;/home/dad84/.local/bin/search_and_inspect_screenshots.py&quot;, line 298, in <module>
+    review_searchResults(args.search_term, args.folder)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/home/dad84/.local/bin/search_and_inspect_screenshots.py&quot;, line 245, in review_searchResults
+    action = custom_pager(title_str, search_term, search_folder, url_text, full_text)
+  File &quot;/home/dad84/.local/bin/search_and_inspect_screenshots.py&quot;, line 161, in custom_pager
+    for _ in range(max_physical_rows - physical_rows_used):
+             ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: 'float' object cannot be interpreted as an integer</p>
+<p>#!/usr/bin/env python3
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path</p>
+<p>DEFAULT_SEARCH_FOLDER = Path.home() / &quot;Documents/2026/screenshots&quot;</p>
+<p>def parse_args():
+    parser = argparse.ArgumentParser(
+        description=&quot;Search OCR sidecar text files with ripgrep and review matched screenshots with feh.&quot;
+    )
+    parser.add_argument(
+        &quot;-s&quot;, &quot;--search-term&quot;,
+        required=True,
+        help=&quot;Search pattern or string for ripgrep.&quot;
+    )
+    parser.add_argument(
+        &quot;-f&quot;, &quot;--folder&quot;,
+        type=Path,
+        default=DEFAULT_SEARCH_FOLDER,
+        help=f&quot;Root directory to search recursively (default: {DEFAULT_SEARCH_FOLDER}).&quot;
+    )
+    return parser.parse_args()</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def find_matching_items(search_term: str, search_folder: Path) -&gt; list[tuple[Path, Path, Path]]:
+    &quot;&quot;&quot;Runs ripgrep to find matching .full.txt files and derives corresponding image and url.txt paths.&quot;&quot;&quot;
+    if not search_folder.is_dir():
+        print(f&quot;Error: Search directory '{search_folder}' does not exist.&quot;, file=sys.stderr)
+        sys.exit(1)</p>
+<p>    try:
+        cmd = [&quot;rg&quot;, &quot;-i&quot;, search_term, &quot;--glob&quot;, &quot;*.full.txt&quot;, str(search_folder), &quot;-l&quot;]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+        if res.returncode != 0 and res.stdout.strip() == &quot;&quot;:
+            return []
+    except FileNotFoundError:
+        print(&quot;Error: 'rg' (ripgrep) is not installed or not in PATH.&quot;, file=sys.stderr)
+        sys.exit(1)</p>
+<p>    matched_paths = res.stdout.strip().splitlines()
+    items = []</p>
+<p>    for path_str in sorted(matched_paths):
+        full_txt_path = Path(path_str).resolve()
+        
+        # Derive the image path by removing the .full.txt extension
+        img_path = Path(re.sub(r&quot;.full.txt$&quot;, &quot;&quot;, str(full_txt_path)))
+        
+        # Derive the .url.txt path
+        url_txt_path = Path(f&quot;{img_path}.url.txt&quot;)</p>
+<p>        if img_path.is_file():
+            items.append((img_path, url_txt_path, full_txt_path))</p>
+<p>    return items</p>
+<p>def highlight_term(text: str, search_term: str) -&gt; str:
+    &quot;&quot;&quot;Wraps occurrences of search_term in ANSI bold red escape codes.&quot;&quot;&quot;
+    if not search_term:
+        return text
+    # Escape regex specials in search term, perform case-insensitive substitution
+    pattern = re.compile(re.escape(search_term), re.IGNORECASE)
+    return pattern.sub(lambda m: f&quot;\033[1;31m{m.group(0)}\033[0m&quot;, text)</p>
+<p>def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI with context headers and search term highlighting.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))  # we assume this is before feh appears</p>
+<p>        # in i3 window manager we have tiling, which cuts term_cols in half when feh appears
+        term_cols=term_cols/2
+        
+        # ---------------------------------------------------------------------
+        # HEIGHT BUDGET:
+        # Header  = 4 lines (title, query, folder, separator)
+        # Footer  = 4 lines (separator, status bar, options, input prompt)
+        # Buffer  = 2 lines (prevents Enter key / terminal margins from scrolling)
+        # ---------------------------------------------------------------------
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+        
+        reserved_rows = HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER
+        chunk_size = max(3, term_rows - reserved_rows)
+        
+        os.system(&quot;clear&quot;)
+        
+        # --- Print Header (4 lines) ---
+        print(f&quot;=== {title} ===&quot;)
+        print(f&quot;Query:  '{search_term}'&quot;)
+        print(f&quot;Folder: {search_folder}&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        # Measure how many actual lines the screen budget can hold
+        max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))</p>
+<p>        page_lines = []
+        physical_rows_used = 0</p>
+<p>        # Fill page based on actual physical visual rows
+        while line_pointer + len(page_lines) &lt; len(all_content):
+            next_line = all_content[line_pointer + len(page_lines)]
+            # Calculate visual height (minimum 1 row for empty lines)
+            visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+    
+            if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+                break
+    
+            page_lines.append(next_line)
+            physical_rows_used += visual_height</p>
+<p>        for line in page_lines:
+            print(highlight_term(line, search_term))</p>
+<p>        # Pad blank lines using remaining physical space
+        for _ in range(max_physical_rows - physical_rows_used):
+            print(&quot;&quot;)</p>
+<p>        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()</p>
+<p>        # --- Pager Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)</p>
+<p>        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)</p>
+<p>        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;</p>
+<p>def review_searchResults(search_term: str, search_folder: Path):
+    items = find_matching_items(search_term, search_folder)</p>
+<p>    if not items:
+        print(f&quot;No matching screenshots found for term: '{search_term}' in '{search_folder}'&quot;)
+        return</p>
+<p>    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0</p>
+<p>    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]</p>
+<p>            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.1)</p>
+<p>            # 2. Spawn new feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.1)
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Match ({idx + 1}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, search_term, search_folder, url_text, full_text)
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first match!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;emacs&quot;:
+                if full_txt_path.is_file():
+                    try:
+                        subprocess.run(
+                            [&quot;emacsclient&quot;, &quot;-n&quot;, str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print(&quot;\nemacsclient binary not found in PATH!&quot;)
+                        time.sleep(1)
+                else:
+                    print(f&quot;\nSidecar file does not exist: {full_txt_path.name}&quot;)
+                    time.sleep(1)
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder_input = input(&quot;Enter subfolder name/path to move into: &quot;).strip()
+                if target_folder_input:
+                    dest = img_path.parent / target_folder_input
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                items.pop(idx)</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Search review complete.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    args = parse_args()
+    review_searchResults(args.search_term, args.folder)</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134451_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 84</h1>
+<p>The error happens because division with <code>/</code> in Python 3 produces a <code>float</code> (<code>term_cols = term_cols / 2</code>), which later breaks integer math operations like <code>range()</code> and integer division (<code>//</code>).</p>
+<p>To fix this, change line 118 to use integer floor division <code>//</code>, or cast it explicitly to <code>int</code>:</p>
+<pre><code class="language-python">term_cols = term_cols // 2
+
+</code></pre>
+<p>In addition to that fix, there are three small bugs in the line-wrapping calculation logic that need addressing:</p>
+<ol>
+<li><strong>Integer division by zero:</strong> If <code>term_cols</code> drops to <code>0</code>, <code>len(next_line) // term_cols</code> raises <code>ZeroDivisionError</code>. Ensure <code>term_cols</code> is at least <code>1</code>.</li>
+<li><strong>Page scrolling mismatch:</strong> The navigation logic (<code>line_pointer += chunk_size</code>) moves by logical lines instead of physical rows used. If page 1 consumes 15 physical rows out of 8 logical lines, scrolling by <code>chunk_size</code> will skip text or misalign.</li>
+<li><strong>Double subtraction in safety math:</strong> <code>max_physical_rows</code> and <code>chunk_size</code> are computing the same value twice.</li>
+</ol>
+<h3>Updated Pager Function</h3>
+<p>Replace your <code>custom_pager</code> function with this updated version:</p>
+<pre><code class="language-python">def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI with context headers, search term highlighting, and line-wrapping prediction.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+
+        # Adjust for tiled terminal width under i3 (ensure integer &gt;= 1)
+        term_cols = max(1, term_cols // 2)
+
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+
+        max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))
+
+        os.system(&quot;clear&quot;)
+
+        # --- Print Header (4 lines) ---
+        print(f&quot;=== {title} ===&quot;)
+        print(f&quot;Query:  '{search_term}'&quot;)
+        print(f&quot;Folder: {search_folder}&quot;)
+        print(&quot;=&quot; * 60)
+
+        # --- Calculate Page Content based on Visual Wrapping ---
+        page_lines = []
+        physical_rows_used = 0
+
+        while line_pointer + len(page_lines) &lt; len(all_content):
+            next_line = all_content[line_pointer + len(page_lines)]
+            # Visual height calculation (minimum 1 row for empty lines)
+            visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+
+            if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+                break
+
+            page_lines.append(next_line)
+            physical_rows_used += visual_height
+
+        # --- Print Page Content ---
+        for line in page_lines:
+            print(highlight_term(line, search_term))
+
+        # Pad remaining screen space with empty lines
+        for _ in range(max_physical_rows - physical_rows_used):
+            print(&quot;&quot;)
+
+        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        lines_displayed = len(page_lines)
+        end_idx = min(line_pointer + lines_displayed, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # --- Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + lines_displayed &lt; total_lines:
+                line_pointer += lines_displayed
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - lines_displayed)
+
+        elif choice in ('j', 'down'):
+            if line_pointer + 1 &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134457_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 85</h1>
+<p>I am not a big fan of deciphering someone else's code without them 'showing their work' - my brain seems to 'revolt.'  this is a weakness for me in coding.  I am not easily seeing the thinking behind:</p>
+<p> while line_pointer + len(page_lines) &lt; len(all_content):
+            next_line = all_content[line_pointer + len(page_lines)]
+            # Visual height calculation (minimum 1 row for empty lines)
+            visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)</p>
+<p>            if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+                break</p>
+<p>            page_lines.append(next_line)
+            physical_rows_used += visual_height</p>
+<p>        # --- Print Page Content ---
+        for line in page_lines:
+            print(highlight_term(line, search_term))</p>
+<p>        # Pad remaining screen space with empty lines
+        for _ in range(max_physical_rows - physical_rows_used):
+            print(&quot;&quot;)</p>
+<p>I began to puzzle over just the line:</p>
+<p> visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)</p>
+<p>and I realize I don't see the big picture, so I can't really start there.  rather than me trying to deduce the meaning of this code, can you explain it?  there is a confusion between non-wrapped lines and wrapped lines in my mind, and whether a counter/pointer pertains to one of them or the other.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134458_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 85</h1>
+<p>That reaction makes total sense—this block is doing two different jobs simultaneously: tracking <strong>logical array indices</strong> (your text) while predicting <strong>physical screen rows</strong> (what the terminal actually renders). When those two concepts get mixed up in variables, code quickly becomes opaque.</p>
+<p>Here is the step-by-step mental model and derivation of what this code is doing.</p>
+<hr />
+<h3>The Fundamental Core: Logical vs. Physical</h3>
+<p>To understand the loop, you have to separate text into two distinct units:</p>
+<ul>
+<li><strong>Logical Line:</strong> A single string in your <code>all_content</code> list ending in a newline (e.g., <code>&quot;This is a long sentence...&quot;</code>). Indexing into <code>all_content</code> uses <strong>logical line numbers</strong>.</li>
+<li><strong>Physical Row:</strong> A single horizontal row on your monitor. If a <strong>logical line</strong> has 120 characters, but your terminal is only 40 columns wide, that 1 logical line will take up 3 <strong>physical rows</strong> on screen.</li>
+</ul>
+<p>The entire goal of this loop is to answer one question: <strong>&quot;How many logical lines can I add to <code>page_lines</code> before I fill up my budget of <code>max_physical_rows</code>?&quot;</strong></p>
+<hr />
+<h3>1. The Visual Height Formula</h3>
+<p>Let's start with the line that tripped you up:</p>
+<pre><code class="language-python">visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+
+</code></pre>
+<h4>Why <code>// term_cols</code>?</h4>
+<p>If <code>term_cols = 40</code> (terminal width):</p>
+<ul>
+<li>A line of length 0 (blank line) needs <strong>1 row</strong>.</li>
+<li>A line of length 30 needs <strong>1 row</strong>.</li>
+<li>A line of length 40 needs <strong>1 row</strong>.</li>
+<li>A line of length 41 needs <strong>2 rows</strong>.</li>
+<li>A line of length 80 needs <strong>2 rows</strong>.</li>
+</ul>
+<p>Integer division (<code>len // term_cols</code>) almost works, but <code>30 // 40 = 0</code> (wrong, it needs 1 row), and <code>40 // 40 = 1</code>, but <code>41 // 40 = 1</code> (wrong, it needs 2 rows).</p>
+<h4>The Ceiling Division Math Trick</h4>
+<p>In integer arithmetic, to calculate $\lceil \frac{A}{B} \rceil$ (ceiling division: rounding <em>up</em> to the next whole integer), the standard algorithm is:</p>
+<p>$$\text{rows} = \frac{\text{length} + \text{cols} - 1}{\text{cols}}$$</p>
+<p>Let's plug numbers into <code>(len + 40 - 1) // 40</code>:</p>
+<ul>
+<li><strong>Length = 1 (short line):</strong> $(1 + 39) // 40 = 40 // 40 = \mathbf{1\text{ row}}$</li>
+<li><strong>Length = 40 (exact fit):</strong> $(40 + 39) // 40 = 79 // 40 = \mathbf{1\text{ row}}$</li>
+<li><strong>Length = 41 (wraps by 1 char):</strong> $(41 + 39) // 40 = 80 // 40 = \mathbf{2\text{ rows}}$</li>
+</ul>
+<h4>Why <code>max(1, ...)</code>?</h4>
+<p>If <code>next_line</code> is an empty string <code>&quot;&quot;</code> (<code>len = 0</code>), the formula gives $(0 + 39) // 40 = 0$. But printing <code>&quot;&quot;</code> in a terminal still consumes <strong>1 physical row</strong> (a blank line). <code>max(1, 0)</code> forces empty lines to count as 1 row instead of 0.</p>
+<hr />
+<h3>2. The Accumulator Loop Step-by-Step</h3>
+<p>Now let's trace the loop:</p>
+<pre><code class="language-python">while line_pointer + len(page_lines) &lt; len(all_content):
+
+</code></pre>
+<ul>
+<li><code>line_pointer</code>: The <strong>logical index</strong> in <code>all_content</code> where this current page starts (e.g., line 0).</li>
+<li><code>len(page_lines)</code>: How many <strong>logical lines</strong> we have accumulated for <em>this page so far</em>.</li>
+<li><code>line_pointer + len(page_lines)</code>: The <strong>logical index</strong> of the <em>next potential line</em> we are inspecting.</li>
+</ul>
+<h4>Inside the loop:</h4>
+<ol>
+<li><strong>Grab the next logical line:</strong></li>
+</ol>
+<pre><code class="language-python">next_line = all_content[line_pointer + len(page_lines)]
+
+</code></pre>
+<ol start="2">
+<li><strong>Calculate its physical height:</strong></li>
+</ol>
+<pre><code class="language-python">visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+
+</code></pre>
+<ol start="3">
+<li><strong>Check if it fits on the screen:</strong></li>
+</ol>
+<pre><code class="language-python">if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+    break
+
+</code></pre>
+<p><em>If adding this line's physical height would push us past our screen limit (<code>max_physical_rows</code>), stop collecting lines immediately.</em>
+4. <strong>Accept the line:</strong></p>
+<pre><code class="language-python">page_lines.append(next_line)
+physical_rows_used += visual_height
+
+</code></pre>
+<p><em>We append 1 <strong>logical line</strong> to <code>page_lines</code>, but we add <code>visual_height</code> (e.g., 2 or 3) to our running tally of <strong>physical rows used</strong>.</em></p>
+<hr />
+<h3>3. Rendering and Padding</h3>
+<p>Once the loop breaks, <code>page_lines</code> contains only the logical lines that will fit on screen without pushing the footer off the bottom.</p>
+<pre><code class="language-python"># Print the logical lines. The terminal terminal emulator handles 
+# the physical line-wrapping on screen automatically as it prints.
+for line in page_lines:
+    print(highlight_term(line, search_term))
+
+# Pad remaining physical screen space with empty lines
+for _ in range(max_physical_rows - physical_rows_used):
+    print(&quot;&quot;)
+
+</code></pre>
+<p>Because <code>physical_rows_used</code> accurately tracked wrapped lines (e.g., 5 logical lines taking up 12 physical rows), subtracting <code>max_physical_rows - physical_rows_used</code> tells you <em>exactly</em> how many blank physical rows remain to push the footer down to the exact bottom of the terminal window.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134506_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 86</h1>
+<p>I am playing with pudb to try to see what is going on.  pudb is frustrating me because although I have a 1440p monitor, each sub-window in pudb seems too small.  I don't want to make the font smaller because that will mess up the testing of this code (font size is a big part of what the code is doing, so changing it during program execution is going to be confusing).  I really want to just see the variables and get rid of the breakpoints and the stack.  probably there is another debugger that doesn't split the screen in a bunch of small windows - a simple command line debugger - that might work better?  or maybe I am misusing pudb?  I am pretty rusty on it.  I know about hitting ? to get a cheatsheet / help screen.  it does have an internal shell as one of the many windows you see.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134508_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 86</h1>
+<p>You aren't misusing <code>pudb</code>—that cramped feeling on high-resolution displays is one of its most common papercuts.</p>
+<p>Because <code>pudb</code> is a full-screen <code>urwid</code> terminal app, its window layouts are constrained by your terminal emulator's column and row count. When you launch a debugger in a terminal tiled to half your screen, <code>pudb</code> splits that already-reduced area into four sub-panes (Variables, Stack, Breakpoints, and Code), leaving very little room to inspect long string variables or wrapped text.</p>
+<p>You have two clean ways forward: customize <code>pudb</code> to maximize your variable space, or switch to a lightweight line-oriented debugger.</p>
+<hr />
+<h3>Option 1: Customize <code>pudb</code> (Hide Panes &amp; Toggle Views)</h3>
+<p><code>pudb</code> actually lets you hide and resize its sidebars entirely using keyboard shortcuts, giving 100% of the screen height to your code or variables.</p>
+<ul>
+<li>
+<p><strong>Hide Sidebars entirely:</strong> Press <strong><code>Ctrl + p</code></strong> (or <strong><code>Shift + m</code></strong> depending on keybindings) to toggle the sidebar on/off.</p>
+</li>
+<li>
+<p><strong>Grow/Shrink Variable Pane:</strong> Click and drag the border between the sidebar and code, or use <strong><code>+</code></strong> and <strong><code>-</code></strong> while focused on the variable pane to resize it.</p>
+</li>
+<li>
+<p><strong>Focus Variable Pane:</strong> Press <strong><code>V</code></strong> to move your focus straight into the variable tree. Once inside:</p>
+</li>
+<li>
+<p>Press <strong><code>t</code></strong> on a variable to change its display mode (Tree vs. Plain Text vs. Evaluated).</p>
+</li>
+<li>
+<p>Press <strong><code>e</code></strong> to open an expanded, full-screen view of a specific variable's raw string contents.</p>
+</li>
+<li>
+<p><strong>Open Built-in Shell:</strong> Press <strong><code>Ctrl + x</code></strong> (or <strong><code>Shift + s</code></strong>) to jump straight into an inline IPython/PDB shell prompt where you can inspect full-width variables directly.</p>
+</li>
+</ul>
+<hr />
+<h3>Option 2: Use Line-Oriented Command Line Debuggers</h3>
+<p>If you don't want a multi-window TUI layout at all and just want a simple, linear terminal prompt where the execution line prints and you have the full 120+ character width to print variables, try these:</p>
+<h4>1. <code>pdb++</code> (Recommended CLI Debugger)</h4>
+<p><code>pdb++</code> is a drop-in, zero-config replacement for standard Python <code>pdb</code>. It adds syntax highlighting, tab completion, and clean variable inspection without splitting your terminal into windows.</p>
+<ul>
+<li><strong>Installation:</strong> <code>pip install pdbpp</code></li>
+<li><strong>Usage:</strong> Drop <code>breakpoint()</code> into your Python code where you want to pause.</li>
+<li><strong>Key Commands:</strong></li>
+<li><strong><code>n</code></strong> (next line), <strong><code>s</code></strong> (step into), <strong><code>c</code></strong> (continue execution).</li>
+<li><strong><code>p variable_name</code></strong> or <strong><code>pp variable_name</code></strong>: Pretty-prints the variable across your full terminal width.</li>
+<li><strong><code>sticky</code></strong>: Toggles a clean mode where it keeps your code context visible at the top of the terminal while leaving the rest of the screen for standard shell interaction.</li>
+</ul>
+<h4>2. Standard <code>ipdb</code> (IPython Pdb)</h4>
+<p>If you already use IPython, <code>ipdb</code> gives you an interactive IPython prompt at your breakpoint with full autocompletion, syntax coloring, and standard print output without any sub-panes.</p>
+<ul>
+<li><strong>Installation:</strong> <code>pip install ipdb</code></li>
+<li><strong>Usage in Python 3.7+:</strong> Set the environment variable <code>PYTHONBREAKPOINT=ipdb.set_trace</code> in your shell, then use standard <code>breakpoint()</code> in your code.</li>
+</ul>
+<hr />
+<h3>Quick Comparison</h3>
+<table>
+<thead>
+<tr>
+<th>Debugger</th>
+<th>UI Type</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>pudb</code></strong></td>
+<td>TUI (Sub-panes)</td>
+<td>Visual step-through, mouse support (Press <code>Ctrl+p</code> to hide sidebars)</td>
+</tr>
+<tr>
+<td><strong><code>pdb++</code></strong></td>
+<td>Line-by-line CLI</td>
+<td>Maximum terminal width, zero screen splitting, smart formatting</td>
+</tr>
+<tr>
+<td><strong><code>ipdb</code></strong></td>
+<td>IPython CLI</td>
+<td>Interactive exploration with tab-completion and standard line output</td>
+</tr>
+</tbody>
+</table>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134513_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 87</h1>
+<p>I made progress by using ? cheatsheet to figure out the keystroke to grow the Variables pane vertically and therefore shrink the vertical height of Stack and Breakpoints panels.  now I can see the full list of variables all at once, assuming they are all folded/minimized.  It doesn't help that pudb seems sometimes unresponsive to the keystrokes listed in the cheatsheet - I am guessing the cheatsheet might be partially out of date relative to the code.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134514_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 87</h1>
+<p>That key combination is actually a notorious quirk in <code>pudb</code>! The cheat sheet isn't out of date, but <code>pudb</code> relies on <code>urwid</code> (its terminal UI framework), which handles keyboard focus differently depending on <strong>which pane is currently active</strong>.</p>
+<p>If a key binding feels unresponsive or completely ignored, it’s almost always because input focus is sitting in the main code editor window or the command line area rather than in the sidebar itself.</p>
+<hr />
+<h3>Key Navigation Rules for <code>pudb</code> Focus</h3>
+<p>To ensure <code>pudb</code> responds to pane-resizing and variable-folding shortcuts instantly:</p>
+<ol>
+<li><strong>Explicitly focus the Variables pane first:</strong></li>
+</ol>
+<ul>
+<li>Press <strong><code>v</code></strong> (lowercase) to move cursor focus directly into the <strong>Variables</strong> pane. You’ll see the highlight cursor move over to the right sidebar.</li>
+</ul>
+<ol start="2">
+<li><strong>Resize the pane height:</strong></li>
+</ol>
+<ul>
+<li>Once inside the Variables pane, <strong><code>+</code></strong> and <strong><code>-</code></strong> will reliably grow or shrink the height without ignoring input.</li>
+</ul>
+<ol start="3">
+<li><strong>Expand / Collapse Variable Trees:</strong></li>
+</ol>
+<ul>
+<li><strong><code>Enter</code></strong> toggles expand/collapse for individual dicts or lists under the cursor.</li>
+<li><strong><code>\</code></strong> (backslash) collapses <em>all</em> expanded variable trees back to single-line summaries at once.</li>
+</ul>
+<ol start="4">
+<li><strong>Return to Code:</strong></li>
+</ol>
+<ul>
+<li>Press <strong><code>c</code></strong> (or <strong><code>n</code></strong> / <strong><code>s</code></strong>) to step/continue execution, or press <strong><code>e</code></strong> to jump keyboard focus back to the main Code window.</li>
+</ul>
+<hr />
+<h3>A Quick Trick for String / Wrap Inspection</h3>
+<p>Since you are debugging line-wrapping calculations (<code>term_cols</code> vs <code>len(line)</code>), seeing raw long strings in a narrow variable list can still be tight.</p>
+<p>While focused on any string variable in the Variables list:</p>
+<ul>
+<li>Press <strong><code>e</code></strong> (or <strong><code>t</code></strong> to cycle visual types). In newer versions of <code>pudb</code>, pressing <strong><code>e</code></strong> on a selected variable opens a <strong>full-width pop-up modal</strong> displaying the complete, un-truncated string or object, giving you the entire monitor width to verify exact character counts without squeezing the sidebar.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134519_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 88</h1>
+<p>pudb is actually great for looking at this wrapping issue, and it's not necessary to learn much pudb.  I can see a the i3 window manager tiling behavior combined with an odd behavior of the particular terminal emulator.  when the terminal emulator is tiled from full monitor to half monitor, long lines are wrapped and the text that was at the top of the emulator moves up off the physical screen, while the bottom-most lines of text retain their original vertical position on the screen (AFAIK).  I think this is going to end up being more of a review exercise in pudb than a victory over all these moving parts.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134521_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 88</h1>
+<p>That is a classic terminal rendering artifact! What you're seeing in the terminal emulator when <code>i3</code> tiles it is the difference between the <strong>active screen buffer</strong> and the <strong>scrollback history buffer</strong>.</p>
+<p>When a terminal emulator drops from 120 columns to 60 columns:</p>
+<ol>
+<li><strong>Top lines push up into history:</strong> The terminal emulator automatically re-wraps existing lines in place. Because every long line suddenly takes up 2 or 3 physical rows instead of 1, the total physical vertical space required by the existing text doubles. Since the bottom of the visible prompt stays anchored to the bottom of the window, all the extra height generated by re-wrapping gets pushed upward into the scrollback buffer off the top of the monitor.</li>
+<li><strong>The terminal viewport doesn't scroll back down:</strong> When Python calls <code>os.system(&quot;clear&quot;)</code> or requests line dimensions via <code>shutil.get_terminal_size()</code>, it only acts on the <em>current</em> visible grid dimensions. But any text printed <em>before</em> the tile resize happened has already expanded and pushed your view's scroll anchor out of sync.</li>
+</ol>
+<h3>The Pudb Takeaway</h3>
+<p>Using <code>pudb</code> to step through this line by line makes that boundary crystal clear:</p>
+<ul>
+<li>Inspecting <code>term_cols</code> and <code>term_rows</code> inside <code>pudb</code> during the exact loop execution shows you the <strong>exact ground truth</strong> of what Python <em>thinks</em> the window dimensions are at that millisecond.</li>
+<li>Stepping over <code>os.system(&quot;clear&quot;)</code> lets you watch whether the terminal emulator actually resets its viewport or just prints standard ANSI clear codes (which often leave scrollback history intact).</li>
+</ul>
+<p>Even if you don't end up chasing a pixel-perfect layout fix across <code>i3</code>, <code>feh</code>, Python, and your terminal emulator, stepping through it in <code>pudb</code> turns a confusing cascade of layout bugs into observable, predictable behavior!</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134525_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 89</h1>
+<p>oh, this will be interesting.  I used the mouse to copy a pudb screen.  Try your hand at making sense of what you see.  I am curious what you see.</p>
+<p>PuDB 2025.1.5 - ?:help  n:next  s:step into  b:breakpoint  !:python command line
+                                                                                                        Variables:
+          # --- Calculate Page Content based on Visual Wrapping ---                                     all_content: list (57)
+          page_lines = []                                                                               FOOTER_HEIGHT: 4
+          physical_rows_used = 0                                                                        full_lines: list (55)
+                                                                                                        full_text: str
+          while line_pointer + len(page_lines) &lt; len(all_content):                                      HEADER_HEIGHT: 4
+              next_line = all_content[line_pointer + len(page_lines)]                                   line: 'Home » Practice / s » Bicycle Accident Lawyer
+              # Visual height calculation (minimum 1 row for empty lines)                                 s In Buffalo, NY'
+              visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)                     line_pointer: 0
+                                                                                                        max_physical_rows: 26
+              if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:                 next_line: ''
+                  break                                                                                 page_lines: list (20)
+                                                                                                        physical_rows_used: 26
+              page_lines.append(next_line)                                                              SAFETY_BUFFER: 0
+              physical_rows_used += visual_height                                                       search_folder: PosixPath
+                                                                                                        search_term: 'lawyer'
+          # --- Print Page Content ---                                                                  term_cols: 78
+          for line in page_lines:                                                                       term_rows: 34
+              print(highlight_term(line, search_term))                                                  title: 'Match (1/3) - 2026-08-19-16:26-56_2560x1380.
+                                                                                                          jpg'
+          # Pad remaining screen space with empty lines                                                 url_lines: list (2)</p>
+<blockquote>
+<p>         for _ in range(max_physical_rows - physical_rows_used):                                       url_text: '© campbellpersonalinjury.com/practice-are
+              print(&quot;&quot;)                                                                                   as/bicycle-accident-injuries/ b w'
+                                                                                                        visual_height: 1
+          # --- Print Footer (4 lines) ---                                                              
+          total_lines = len(all_content)                                                                Stack:
+          lines_displayed = len(page_lines)                                                             &gt;&gt; custom_pager search_and_inspect_screenshots.py:15
+          end_idx = min(line_pointer + lines_displayed, total_lines)                                       review_searchResults search_and_inspect_screensho
+Command line: [ctrl x]                                                                                     <module> search_and_inspect_screenshots.py:294
+''                                                                                                      Breakpoints:</p>
+<blockquote>
+<blockquote>
+<p>next_line                                                                                               universal_harmonizer.py:126 (0 hits)
+'mt'                                                                                                        universal_harmonizer.py:140 (0 hits)
+                                                                                          &lt; Clear  &gt;</p>
+</blockquote>
+</blockquote>
+</blockquote>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134528_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 89</h1>
+<p>This copy-paste gives a surprisingly clear snapshot of your debugger state! Here is the breakdown of what is happening right at this exact frame of execution:</p>
+<h3>1. Where the Code Is Right Now</h3>
+<p>The breakpoint marker <code>&gt;</code> is sitting on line 152:</p>
+<pre><code class="language-python">&gt; for _ in range(max_physical_rows - physical_rows_used):
+
+</code></pre>
+<p>The accumulator <code>while</code> loop has just finished collecting lines for the current page and broken out.</p>
+<hr />
+<h3>2. The Arithmetic &amp; Math State</h3>
+<p>Look at the Variables panel on the right:</p>
+<ul>
+<li><code>max_physical_rows</code>: <strong>26</strong></li>
+<li><code>physical_rows_used</code>: <strong>26</strong></li>
+<li><code>page_lines</code>: <strong>20</strong> logical lines collected.</li>
+</ul>
+<p>Because <code>max_physical_rows - physical_rows_used</code> equals $26 - 26 = 0$, the <code>for _ in range(0):</code> loop will <strong>not run at all</strong> (0 padding lines printed).</p>
+<p>Why did the <code>while</code> loop stop?</p>
+<ul>
+<li><code>page_lines</code> grabbed 20 <strong>logical lines</strong>, but those 20 lines added up to exactly 26 <strong>physical rows</strong> on screen (meaning at least a few of those 20 lines wrapped into 2 physical rows, given your <code>term_cols: 78</code>).</li>
+<li>The next line (<code>next_line</code>) had a <code>visual_height</code> of <strong>1</strong>.</li>
+<li>Adding it would make <code>26 + 1 = 27</code>, which strictly exceeds <code>max_physical_rows</code> (26). So the <code>if physical_rows_used + visual_height &gt; max_physical_rows:</code> check triggered its <code>break</code>.</li>
+</ul>
+<hr />
+<h3>3. Interesting Contextual Clues in the Data</h3>
+<ul>
+<li><strong>Script Purpose:</strong> You are building a CLI terminal pager (<code>search_and_inspect_screenshots.py</code>) that searches OCR text or file summaries (looking for the <code>search_term: 'lawyer'</code>).</li>
+<li><strong>The File Being Displayed:</strong> The image being inspected is a screenshot saved with a timestamp: <code>2026-08-19-16:26-56_2560x1380.jpg</code> (captured at 2560×1380 resolution).</li>
+<li><strong>The Content:</strong> The text extracted includes breadcrumb navigation:
+<code>'Home » Practice / s » Bicycle Accident Lawyer s In Buffalo, NY'</code>
+and a source web address:
+<code>'© [campbellpersonalinjury.com/practice-areas/bicycle-accident-injuries/](https://campbellpersonalinjury.com/practice-areas/bicycle-accident-injuries/) b w'</code></li>
+<li><strong>Interactive Terminal Shell:</strong> At the bottom left, you evaluated <code>&gt;&gt;&gt; next_line</code>, which returned <code>'mt'</code>—showing how <code>pudb</code>'s internal shell gives you raw REPL access to the active frame's state!</li>
+</ul>
+<hr />
+<h3>4. Why the Layout Code Succeeded Here</h3>
+<p>This snapshot actually proves your wrapping formula is working as intended:</p>
+<ol>
+<li>It accurately predicted that 20 text strings would consume 26 screen rows.</li>
+<li>It stopped filling <code>page_lines</code> before overflowing your allocated page height (26 rows).</li>
+<li>It calculated that exactly zero blank line pads are needed before printing the 4-line footer.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134533_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 90</h1>
+<p>It's frustrating because the logic of the script might be 'correct,'  but when the terminal gets tiled as a result of feh launching, we lose the top lines rather than filling up the terminal as intended desired.  Let's see if I can copy and paste.  When the terminal takes up the entire monitor (no feh), we have:</p>
+<h1>=== Match (1/3) - 2026-08-19-16:26-56_2560x1380.jpg ===
+Query:  'lawyer'
+Folder: .</h1>
+<h2>URL OCR: © campbellpersonalinjury.com/practice-areas/bicycle-accident-injuries/ b w</h2>
+<p>G village of endicott 1 x  #= Bicycle Accident La x = ® Where the Sidewal x Kl FAQs x  + v - X</p>
+<p>mt</p>
+<p>£ &gt; G © campbellpersonalinjury.com/practice-areas/bicycle-accident-injuries/ 8 L ovN @ &amp;8 &amp; 0 m</p>
+<p>® Import bookmarks... &amp; hp_Laserjet 4200 - CU... Dweather Onews 9 Google Maps Dshopping W Wikipedia, the free en... Dlibraries Obikes Jbooks 0 movies Dmoney Coutings Osoftware @ YouTube D politics / society 0 computer-hardware 0 android-phone »</p>
+<p>f in @ BOOK CONSULTATION</p>
+<p>CAMPBELL
+SSOCIATES</p>
+<p>Attorneys v Case Referrals Blog Case Results. Areas Served v</p>
+<p>Bicycle Accident Lawyers In Buffalo, NY</p>
+<p>Home » Practice / s » Bicycle Accident Lawyers In Buffalo, NY</p>
+<p>Now, when I simulate the launch of feh in i3 by launching another terminal on that same monitor with win+Enter, the text becomes:</p>
+<h2>es/ b w</h2>
+<p>G village of endicott 1 x  #= Bicycle Accident La x = ® Where the Sidewal x Kl FAQs x  + v - X</p>
+<p>mt</p>
+<p>£ &gt; G © campbellpersonalinjury.com/practice-areas/bicycle-accident-injuries/ 8 L ovN @ &amp;8 &amp; 0 m</p>
+<p>® Import bookmarks... &amp; hp_Laserjet 4200 - CU... Dweather Onews 9 Google Maps Dshopping W Wikipedia, the free en... Dlibraries Obikes Jbooks 0 movies Dmoney Coutings Osoftware @ YouTube D politics / society 0 computer-hardware 0 android-phone »</p>
+<p>f in @ BOOK CONSULTATION</p>
+<p>CAMPBELL
+SSOCIATES</p>
+<p>Attorneys v Case Referrals Blog Case Results. Areas Served v</p>
+<p>Bicycle Accident Lawyers In Buffalo, NY</p>
+<p>Home » Practice / s » Bicycle Accident Lawyers In Buffalo, NY</p>
+<p>we lose the top-most lines, which is what all this effort was trying to solve.  There is no terminal prompt AFAIK - python has printed lines of output to the terminal emulator.  I am running pudb and am using the o key to 'show console / output screen.'  I am pretty sure the script does the same thing when run normally without pudb.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134535_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 90</h1>
+<p>That side-by-side comparison makes the core issue crystal clear.</p>
+<p>The reason your header (<code>=== Match (1/3)...</code>) gets pushed off the top of the screen when <code>i3</code> tiles your terminal is due to <strong>when</strong> <code>shutil.get_terminal_size()</code> runs relative to <strong>when</strong> <code>feh</code> spawns.</p>
+<h3>The Race Condition Flow</h3>
+<ol>
+<li>Python runs <code>shutil.get_terminal_size()</code> while your terminal is <strong>full width</strong> (~160–200 columns wide).</li>
+<li>The math loop calculates <code>visual_height</code> for each line using that full width. A 120-character line gets calculated as taking <strong>1 physical row</strong>.</li>
+<li>Python prints the lines to the terminal grid based on that full-width budget.</li>
+<li><strong>Then <code>feh</code> launches.</strong> <code>i3</code> immediately splits your terminal width in half (down to ~80 columns).</li>
+<li>The terminal emulator automatically re-wraps the text that was <em>already printed</em>. That 120-character line that took 1 row suddenly expands to <strong>2 or 3 rows</strong>.</li>
+<li>Because the total vertical height of the text doubles <em>after</em> it has already been printed, the top 5–10 lines get pushed upward out of the active screen buffer and off the top of the monitor.</li>
+</ol>
+<hr />
+<h3>The Fix</h3>
+<p>The terminal width calculation must happen <strong>after</strong> <code>feh</code> has mapped its window and <code>i3</code> has finished resizing your terminal.</p>
+<p>In <code>review_searchResults</code>, move the <code>feh</code> spawn call so it happens <strong>before</strong> calling <code>custom_pager()</code>, and add a tiny <code>time.sleep(0.05)</code> or query after spawn.</p>
+<p>Here is how the control flow should look:</p>
+<pre><code class="language-python"># 1. Spawn feh FIRST (this causes i3 to tile and shrink the terminal window)
+feh_proc = subprocess.Popen(...)
+
+# 2. Allow i3 time to complete the window resize event (50ms)
+time.sleep(0.05)
+restore_terminal_focus(term_win_id)
+
+# 3. NOW read the terminal size and render the page.
+# Inside custom_pager(), shutil.get_terminal_size() will now return 
+# the REAL, post-tiling width (e.g. 78 cols instead of 160 cols).
+action = custom_pager(title_str, search_term, search_folder, url_text, full_text)
+
+</code></pre>
+<h3>Why You Can Also Remove <code>term_cols = term_cols // 2</code></h3>
+<p>If <code>feh</code> opens <em>before</em> <code>custom_pager()</code> runs:</p>
+<ul>
+<li><code>shutil.get_terminal_size()</code> naturally sees the actual halved width (<code>term_cols = 78</code>).</li>
+<li>You no longer need to manually divide <code>term_cols // 2</code> inside <code>custom_pager()</code>.</li>
+<li>The math accurately predicts line wrapping on the actual 78-column grid <em>before</em> printing a single character, so nothing expands or gets pushed off the top.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134540_capture.md&quot;)</p>
+<hr />

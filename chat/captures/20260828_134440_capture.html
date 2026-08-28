@@ -1,0 +1,522 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 82</h1>
+<p><strong><a href="20260828_001026_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134445_capture.html">Next →</a></strong></p>
+<hr />
+<p>instead of struggling over more complex pager code that accounts for line wrapping, can we instead use i3 window manager to positively place feh on a pre-chosen workspace.  I don't have a lot of familiarity with the workings of i3 but the config file I think has the right code...somewhere:</p>
+<p>exec --no-startup-id ~/set_once.sh</p>
+<h1>This file is a modified version based on default i3-config-wizard config</h1>
+<h1>source is available here:</h1>
+<h1><a href="https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config">https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config</a></h1>
+<h1>Maintainer: joekamprad [joekamprad //a_t// endeavouros.com]</h1>
+<h1><a href="https://endeavouros.com">https://endeavouros.com</a></h1>
+<h1></h1>
+<h1>iconic font icon search: <a href="https://fontawesome.com/v4.7/cheatsheet/">https://fontawesome.com/v4.7/cheatsheet/</a></h1>
+<h1></h1>
+<h1>--&gt; to update this run the following command (will backup existing setup file)</h1>
+<h1>wget --backups=1 <a href="https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config">https://raw.githubusercontent.com/endeavouros-team/endeavouros-i3wm-setup/main/etc/skel/.config/i3/config</a> -P ~/.config/i3/</h1>
+<h1></h1>
+<h1>Endeavouros-i3 config file</h1>
+<h1>Source for complete framework of our i3 config and theming here: <a href="https://github.com/endeavouros-team/endeavouros-i3wm-setup">https://github.com/endeavouros-team/endeavouros-i3wm-setup</a></h1>
+<h1>EndeavourOS wiki holds some Information also: <a href="https://discovery.endeavouros.com/window-tiling-managers/i3-wm/">https://discovery.endeavouros.com/window-tiling-managers/i3-wm/</a></h1>
+<h1>Please see <a href="http://i3wm.org/docs/userguide.html">http://i3wm.org/docs/userguide.html</a> for the official i3 reference!</h1>
+<p>#######################</p>
+<h1>config starts here:</h1>
+<p>#######################</p>
+<h1>Font for window titles. Will also be used by the bar unless a different font</h1>
+<h1>is used in the bar {} block below.</h1>
+<h1>This font is widely installed, provides lots of unicode glyphs, right-to-left</h1>
+<h1>text rendering and scalability on retina/hidpi displays (thanks to pango).</h1>
+<p>#font pango: Noto Sans Regular 10
+font pango: Noto Sans Regular 14</p>
+<h1>set the mod key to the winkey:</h1>
+<p>set $mod Mod4</p>
+<p>#####################</p>
+<h1>workspace layout:</h1>
+<p>#####################</p>
+<h1>default i3 tiling mode:</h1>
+<p>workspace_layout default</p>
+<h1>i3 stacking layout:</h1>
+<h1>Each window will be fullscreen and tabbed top to bottom.</h1>
+<p>#workspace_layout stacking</p>
+<h1>i3 tabbed new_window:</h1>
+<h1>Each new window will open fullscreen as a tab (left to right)</h1>
+<p>#workspace_layout tabbed</p>
+<p>##############################</p>
+<h1>extra options for windows:</h1>
+<p>##############################</p>
+<p>#border indicator on windows:
+new_window pixel 3</p>
+<h1>Set 3px thick borders for clear visual boundaries</h1>
+<p>default_border pixel 3
+default_floating_border pixel 3</p>
+<h1>High-contrast focus colors: class border backgr text indicator child_border</h1>
+<h1>client.focused          #ff5500 #ff5500 #ffffff #2e9ef4   #ff5500</h1>
+<h1>client.focused_inactive #333333 #333333 #888888 #484e50   #5f676a</h1>
+<h1>client.unfocused        #222222 #222222 #888888 #292d2e   #222222</h1>
+<h1>thin borders</h1>
+<h1>hide_edge_borders both</h1>
+<h1>Set inner/outer gaps</h1>
+<p>gaps inner 6
+gaps outer 3</p>
+<h1>show window title bars (not officially supported with i3gaps)</h1>
+<p>#default_border normal</p>
+<h1>window title alignment</h1>
+<p>#title_align center</p>
+<h1>Use Mouse+$mod to drag floating windows to their wanted position</h1>
+<p>floating_modifier $mod</p>
+<h1>switch/iterate between workspaces</h1>
+<p>bindsym $mod+Tab workspace next
+bindsym $mod+Shift+Tab workspace prev</p>
+<h1>switch to workspace</h1>
+<p>bindcode $mod+10    workspace  $ws1
+bindcode $mod+11    workspace  $ws2
+bindcode $mod+12    workspace  $ws3
+bindcode $mod+13    workspace  $ws4
+bindcode $mod+14    workspace  $ws5
+bindcode $mod+15    workspace  $ws6
+bindcode $mod+16    workspace  $ws7
+bindcode $mod+17    workspace  $ws8
+bindcode $mod+18    workspace  $ws9
+bindcode $mod+19    workspace  $ws10</p>
+<h1>switch to workspace with numpad keys</h1>
+<p>bindcode $mod+87 workspace $ws1
+bindcode $mod+88 workspace $ws2
+bindcode $mod+89 workspace $ws3
+bindcode $mod+83 workspace $ws4
+bindcode $mod+84 workspace $ws5
+bindcode $mod+85 workspace $ws6
+bindcode $mod+79 workspace $ws7
+bindcode $mod+80 workspace $ws8
+bindcode $mod+81 workspace $ws9
+bindcode $mod+90 workspace $ws10</p>
+<h1>switch to workspace with numlock numpad keys</h1>
+<p>bindcode $mod+Mod2+87 workspace $ws1
+bindcode $mod+Mod2+88 workspace $ws2
+bindcode $mod+Mod2+89 workspace $ws3
+bindcode $mod+Mod2+83 workspace $ws4
+bindcode $mod+Mod2+84 workspace $ws5
+bindcode $mod+Mod2+85 workspace $ws6
+bindcode $mod+Mod2+79 workspace $ws7
+bindcode $mod+Mod2+80 workspace $ws8
+bindcode $mod+Mod2+81 workspace $ws9
+bindcode $mod+Mod2+90 workspace $ws10</p>
+<h1>move focused container to workspace</h1>
+<p>bindcode $mod+Shift+10    move container to workspace  $ws1
+bindcode $mod+Shift+11    move container to workspace  $ws2
+bindcode $mod+Shift+12    move container to workspace  $ws3
+bindcode $mod+Shift+13    move container to workspace  $ws4
+bindcode $mod+Shift+14    move container to workspace  $ws5
+bindcode $mod+Shift+15    move container to workspace  $ws6
+bindcode $mod+Shift+16    move container to workspace  $ws7
+bindcode $mod+Shift+17    move container to workspace  $ws8
+bindcode $mod+Shift+18    move container to workspace  $ws9
+bindcode $mod+Shift+19    move container to workspace  $ws10</p>
+<h1>move focused container to workspace with numpad keys</h1>
+<p>bindcode $mod+Shift+Mod2+87     move container to workspace  $ws1
+bindcode $mod+Shift+Mod2+88     move container to workspace  $ws2
+bindcode $mod+Shift+Mod2+89     move container to workspace  $ws3
+bindcode $mod+Shift+Mod2+83     move container to workspace  $ws4
+bindcode $mod+Shift+Mod2+84     move container to workspace  $ws5
+bindcode $mod+Shift+Mod2+85     move container to workspace  $ws6
+bindcode $mod+Shift+Mod2+79     move container to workspace  $ws7
+bindcode $mod+Shift+Mod2+80     move container to workspace  $ws8
+bindcode $mod+Shift+Mod2+81     move container to workspace  $ws9
+bindcode $mod+Shift+Mod2+90     move container to workspace  $ws10</p>
+<h1>move focused container to workspace with numpad keys</h1>
+<p>bindcode $mod+Shift+87   move container to workspace  $ws1
+bindcode $mod+Shift+88   move container to workspace  $ws2
+bindcode $mod+Shift+89   move container to workspace  $ws3
+bindcode $mod+Shift+83   move container to workspace  $ws4
+bindcode $mod+Shift+84   move container to workspace  $ws5
+bindcode $mod+Shift+85   move container to workspace  $ws6
+bindcode $mod+Shift+79   move container to workspace  $ws7
+bindcode $mod+Shift+80   move container to workspace  $ws8
+bindcode $mod+Shift+81   move container to workspace  $ws9
+bindcode $mod+Shift+90   move container to workspace  $ws10</p>
+<h1>resize window (you can also use the mouse for that):</h1>
+<p>#mode &quot;resize&quot; {</p>
+<h1>These bindings trigger as soon as you enter the resize mode</h1>
+<h1>Pressing left will shrink the window's width.</h1>
+<h1>Pressing right will grow the window's width.</h1>
+<h1>Pressing up will shrink the window's height.</h1>
+<h1>Pressing down will grow the window's height.</h1>
+<p>#        bindsym h resize shrink width 10 px or 10 ppt
+#        bindsym j resize grow height 10 px or 10 ppt
+#        bindsym k resize shrink height 10 px or 10 ppt
+#        bindsym l resize grow width 10 px or 10 ppt</p>
+<h1>same bindings, but for the arrow keys</h1>
+<p>#        bindsym Left resize shrink width 10 px or 10 ppt
+#        bindsym Down resize grow height 10 px or 10 ppt
+#        bindsym Up resize shrink height 10 px or 10 ppt
+#        bindsym Right resize grow width 10 px or 10 ppt</p>
+<h1>back to normal: Enter or Escape</h1>
+<p>#        bindsym Return mode &quot;default&quot;
+#        bindsym Escape mode &quot;default&quot;
+#}</p>
+<p>#bindsym $mod+r mode &quot;resize&quot;</p>
+<p>######################################</p>
+<h1>keybindings for different actions:</h1>
+<p>######################################</p>
+<h1>start a terminal</h1>
+<p>bindsym $mod+Return exec --no-startup-id xfce4-terminal</p>
+<h1>kill focused window</h1>
+<p>bindsym $mod+q kill</p>
+<h1>exit-menu</h1>
+<p>bindsym $mod+Shift+e exec --no-startup-id ~/.config/i3/scripts/powermenu</p>
+<h1>Lock the system</h1>
+<h1>lock with a picture:</h1>
+<p>#bindsym $mod+l exec --no-startup-id i3lock -i  ~/.config/i3/i3-lock-screen.png -p default|win -t</p>
+<h1>lock by blurring the screen:</h1>
+<p>bindsym $mod+l exec --no-startup-id ~/.config/i3/scripts/blur-lock</p>
+<h1>lock in case after sleep</h1>
+<h1>exec --no-startup-id xss-lock -l ~/.config/i3/scripts/blur-lock</h1>
+<h1>reload the configuration file</h1>
+<p>bindsym $mod+Shift+c reload</p>
+<h1>restart i3 inplace (preserves your layout/session, can be used to update i3)</h1>
+<p>bindsym $mod+Shift+r restart</p>
+<h1>keybinding in fancy rofi (automated):</h1>
+<p>bindsym F1 exec --no-startup-id ~/.config/i3/scripts/keyhint-2</p>
+<h1>alternative</h1>
+<h1>keybinding list in editor:</h1>
+<h1>bindsym $mod+F1 exec --no-startup-id xed ~/.config/i3/keybindings</h1>
+<h1>Backlight control</h1>
+<p>#bindsym XF86MonBrightnessUp exec --no-startup-id xbacklight +10 &amp;&amp; notify-send &quot;Brightness - $(xbacklight -get | cut -d '.' -f 1)%&quot;
+#bindsym XF86MonBrightnessDown exec --no-startup-id xbacklight -10 &amp;&amp; notify-send &quot;Brightness - $(xbacklight -get | cut -d '.' -f 1)%&quot;</p>
+<h1>Backlight setting using dunst osc</h1>
+<p>bindsym XF86MonBrightnessUp exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh brightness_up
+bindsym XF86MonBrightnessDown exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh brightness_down</p>
+<h1>alternative screen &amp; keyboard brightness setting with brightnessctl using dunst osc</h1>
+<h1>install brightnessctl (sudo pacman -S brightnessctl)</h1>
+<h1>keyboard backlight setting using brightnessctl</h1>
+<p>#bindsym Mod1+space       exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh keyboard_brightness_up
+#bindsym Mod1+Shift+space exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh keyboard_brightness_down</p>
+<h1></h1>
+<h1>screen brightness setting using brightnessctl</h1>
+<p>#bindsym XF86MonBrightnessUp   exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh screen_brightness_up
+#bindsym XF86MonBrightnessDown exec --no-startup-id ~/.config/i3/scripts/volume_brightness2.sh screen_brightness_down</p>
+<h1>change focus</h1>
+<p>bindsym $mod+j focus left
+bindsym $mod+k focus down
+bindsym $mod+b focus up
+bindsym $mod+o focus right</p>
+<h1>alternatively, you can use the cursor keys:</h1>
+<p>bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right</p>
+<h1>move focused window</h1>
+<p>bindsym $mod+Shift+j move left
+bindsym $mod+Shift+k move down
+bindsym $mod+Shift+b move up
+bindsym $mod+Shift+o move right</p>
+<h1>alternatively, you can use the cursor keys:</h1>
+<p>bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right</p>
+<h1>split in horizontal orientation</h1>
+<p>bindsym $mod+h split h</p>
+<h1>split in vertical orientation</h1>
+<p>bindsym $mod+v split v</p>
+<h1>enter fullscreen mode for the focused container</h1>
+<p>bindsym $mod+f fullscreen toggle</p>
+<h1>change container layout (stacked, tabbed, toggle split)</h1>
+<p>bindsym $mod+s layout stacking
+bindsym $mod+g layout tabbed
+bindsym $mod+e layout toggle split</p>
+<h1>toggle tiling / floating</h1>
+<p>bindsym $mod+Shift+space floating toggle</p>
+<h1>change focus between tiling / floating windows</h1>
+<p>bindsym $mod+space focus mode_toggle</p>
+<h1>focus the parent container</h1>
+<p>bindsym $mod+a focus parent</p>
+<h1>open new empty workspace</h1>
+<p>bindsym $mod+Shift+n exec --no-startup-id ~/.config/i3/scripts/empty_workspace</p>
+<h2>Multimedia Keys</h2>
+<h1>volume</h1>
+<h1>use meta keys without showing osc</h1>
+<p>#bindsym XF86AudioRaiseVolume exec --no-startup-id amixer -D pulse sset Master 5%+ &amp;&amp; pkill -RTMIN+1 i3blocks
+#bindsym XF86AudioLowerVolume exec --no-startup-id amixer -D pulse sset Master 5%- &amp;&amp; pkill -RTMIN+1 i3blocks</p>
+<h1>use meta keys showing osc using dunst</h1>
+<p>bindsym XF86AudioRaiseVolume exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_up
+bindsym XF86AudioLowerVolume exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_down</p>
+<h1>gradular volume control</h1>
+<p>bindsym $mod+XF86AudioRaiseVolume exec --no-startup-id amixer -D pulse sset Master 1%+ &amp;&amp; pkill -RTMIN+1 i3blocks
+bindsym $mod+XF86AudioLowerVolume exec --no-startup-id amixer -D pulse sset Master 1%- &amp;&amp; pkill -RTMIN+1 i3blocks</p>
+<h1>mute</h1>
+<p>#bindsym XF86AudioMute exec --no-startup-id amixer sset Master toggle &amp;&amp; killall -USR1 i3blocks</p>
+<h1>use meta keys showing osc using dunst</h1>
+<p>bindsym XF86AudioMute exec --no-startup-id ~/.config/i3/scripts/volume_brightness.sh volume_mute</p>
+<h1>mic mute toggle</h1>
+<p>bindsym XF86AudioMicMute exec amixer sset Capture toggle</p>
+<h1>audio control</h1>
+<p>bindsym XF86AudioPlay exec --no-startup-id playerctl play-pause</p>
+<h1>Above line will also work for pausing</h1>
+<p>bindsym XF86AudioNext exec --no-startup-id playerctl next
+bindsym XF86AudioPrev exec --no-startup-id playerctl previous</p>
+<h1>toggle between audio devices for output</h1>
+<p>bindsym $mod+p exec --no-startup-id ~/.config/i3/scripts/audio-device-switch</p>
+<h2>App shortcuts</h2>
+<p>bindsym $mod+w exec --no-startup-id /usr/bin/firefox
+bindsym $mod+n exec --no-startup-id /usr/bin/thunar</p>
+<h1>Screenshot</h1>
+<h1>complete screen</h1>
+<h1>bindsym Print exec --no-startup-id scrot ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<h1>the currently focused window</h1>
+<h1>bindsym $mod+Print exec --no-startup-id scrot -u ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<h1>select a window or rectangle with the mouse</h1>
+<h1>bindsym $mod+Shift+Print exec --no-startup-id scrot -s ~/%Y-%m-%d-%T-screenshot.png &amp;&amp; notify-send &quot;Screenshot saved to ~/$(date +&quot;%Y-%m-%d-%T&quot;)-screenshot.png&quot;</h1>
+<p>bindsym $mod+F2 exec --no-startup-id scrot --focused '%Y-%m-%d-%R-%S_$wx$h.jpg' -e 'mv $f /home/dad84/Documents/2026/screenshots/'
+bindsym $mod+Shift+F2 exec --no-startup-id scrot --select '%Y-%m-%d-%R-%S_$wx$h.jpg' -e 'mv $f /home/dad84/Documents/2026/screenshots/'</p>
+<h1>Power Profiles menu switcher (rofi)</h1>
+<p>bindsym $mod+Shift+p exec --no-startup-id ~/.config/i3/scripts/power-profiles</p>
+<p>##########################################</p>
+<h1>configuration for workspace behaviour:</h1>
+<p>##########################################</p>
+<h1>Define names for default workspaces for which we configure key bindings later on.</h1>
+<h1>We use variables to avoid repeating the names in multiple places.</h1>
+<h1>set $ws1 &quot;1:&quot;</h1>
+<h1>set $ws2 &quot;2:&quot;</h1>
+<h1>set $ws3 &quot;3:&quot;</h1>
+<h1>set $ws4 &quot;4:&quot;</h1>
+<h1>set $ws5 &quot;5:&quot;</h1>
+<p>set $ws1 &quot;1&quot;
+set $ws2 &quot;2&quot;
+set $ws3 &quot;3&quot;
+set $ws4 &quot;4&quot;
+set $ws5 &quot;5&quot;
+set $ws6 &quot;6&quot;
+set $ws7 &quot;7&quot;
+set $ws8 &quot;8&quot;
+set $ws9 &quot;9&quot;
+set $ws10 &quot;10&quot;</p>
+<h1>use workspaces on different displays:</h1>
+<h1>where you have to replace VGA-0/HDMI-0 with the names for your displays</h1>
+<h1>you can get from xrandr command</h1>
+<p>#workspace $ws1 output VGA-0
+#workspace $ws2 output VGA-0
+#workspace $ws3 output HDMI-0
+#workspace $ws4 output HDMI-0
+#workspace $ws5 output HDMI-0</p>
+<h1>bind program to workspace and focus to them on startup:</h1>
+<h1>assign [class=&quot;Xfce4-terminal&quot;] $ws1</h1>
+<h1>assign [class=&quot;(?i)firefox&quot;] $ws2</h1>
+<h1>assign [class=&quot;Thunar&quot;] $ws3</h1>
+<h1>assign [class=&quot;thunderbird&quot;] $ws4</h1>
+<h1>assign [class=&quot;TelegramDesktop&quot;] $ws5</h1>
+<h1>automatic set focus new window if it opens on another workspace than the current:</h1>
+<h1>for_window [class=Xfce4-terminal] focus</h1>
+<h1>for_window [class=(?i)firefox] focus</h1>
+<h1>for_window [class=Thunar] focus</h1>
+<h1>for_window [class=Thunderbird] focus</h1>
+<h1>for_window [class=TelegramDesktop] focus</h1>
+<p>##################</p>
+<h1>floating rules</h1>
+<p>##################</p>
+<h1>set floating (nontiling) for apps needing it</h1>
+<p>for_window [class=&quot;Yad&quot; instance=&quot;yad&quot;] floating enable
+for_window [class=&quot;Galculator&quot; instance=&quot;galculator&quot;] floating enable
+for_window [class=&quot;Blueberry.py&quot; instance=&quot;blueberry.py&quot;] floating enable</p>
+<h1>set floating (nontiling) for special apps</h1>
+<p>for_window [class=&quot;Xsane&quot; instance=&quot;xsane&quot;] floating enable
+for_window [class=&quot;Pavucontrol&quot; instance=&quot;pavucontrol&quot;] floating enable
+for_window [class=&quot;qt5ct&quot; instance=&quot;qt5ct&quot;] floating enable
+for_window [class=&quot;Blueberry.py&quot; instance=&quot;blueberry.py&quot;] floating enable
+for_window [class=&quot;Bluetooth-sendto&quot; instance=&quot;bluetooth-sendto&quot;] floating enable
+for_window [class=&quot;Pamac-manager&quot;] floating enable
+for_window [window_role=&quot;About&quot;] floating enable</p>
+<h1>set border of floating window</h1>
+<p>for_window [class=&quot;urxvt&quot;] border pixel 1</p>
+<h1>set size of floating window</h1>
+<p>#for_window [window_role=&quot;(?i)GtkFileChooserDialog&quot;] resize set 640 480 #to set size of file choose dialog
+#for_window [class=&quot;.*&quot;] resize set 640 480 #to change size of all floating windows</p>
+<h1>set position of floating window</h1>
+<p>#for_window [class=&quot;.*&quot;] move position center</p>
+<p>#############################################</p>
+<h1>autostart applications/services on login:</h1>
+<p>#############################################</p>
+<h1>make sure it loads gtk configs</h1>
+<p>exec_always $HOME/.config/i3/scripts/import-gsettings</p>
+<h2>compositor</h2>
+<h1>aka transparency</h1>
+<h1>uncomment one of them to be used</h1>
+<h1>options could need changes, related to used GPU and drivers.</h1>
+<h1>to find the right setting consult the archwiki or ask at the forum.</h1>
+<h1>picom: <a href="https://wiki.archlinux.org/title/Picom">https://wiki.archlinux.org/title/Picom</a></h1>
+<h1>manpage: <a href="https://man.archlinux.org/man/picom.1.en">https://man.archlinux.org/man/picom.1.en</a></h1>
+<h1>The default configuration is available in /etc/xdg/picom.conf</h1>
+<h1>For modifications, it can be copied to ~/.config/picom/picom.conf or ~/.config/picom.conf</h1>
+<h1>install picom package (sudo pacman -Syu picom)</h1>
+<h1>start using default config</h1>
+<p>#exec_always --no-startup-id picom -b</p>
+<h1>for custom config:</h1>
+<p>#exec_always --no-startup-id picom --config  ~/.config/picom.conf</p>
+<h2>applications/services</h2>
+<p>#get auth work with polkit-gnome
+exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1</p>
+<h1>dex execute .desktop files + apps using /etc/xdg/autostart.</h1>
+<h1>when second to i3 a DE is installed or mixed usage of i3 + xfce4 or GNOME</h1>
+<h1>in this cases better disable dex and use manual starting apps using xdg/autostart</h1>
+<h1>if enabled you should comment welcome app.</h1>
+<h1><a href="https://github.com/jceb/dex">https://github.com/jceb/dex</a></h1>
+<p>#exec --no-startup-id dex -a -s /etc/xdg/autostart/:~/.config/autostart/
+exec --no-startup-id dex --autostart --environment i3</p>
+<h1>start welcome app</h1>
+<p>#exec --no-startup-id sh /usr/share/endeavouros/scripts/welcome --startdelay=3</p>
+<h1>num lock activated</h1>
+<p>#exec --no-startup-id numlockx on</p>
+<h1>configure multiple keyboard layouts and hotkey to switch (Alt+CAPSLOCK in this example)</h1>
+<p>#exec --no-startup-id setxkbmap -layout 'us,sk' -variant altgr-intl,qwerty -option 'grp:alt_caps_toggle'</p>
+<h1>start conky:</h1>
+<p>#exec_always --no-startup-id conky</p>
+<h1>start a script to setup displays</h1>
+<h1>uncomment the next line, use arandr to setup displays and save the file as monitor:</h1>
+<p>exec --no-startup-id ~/.screenlayout/monitor.sh</p>
+<h1>set wallpaper</h1>
+<h1>exec --no-startup-id sleep 2 &amp;&amp; nitrogen --restore</h1>
+<p>exec --no-startup-id sleep 1 &amp;&amp; feh --bg-fill /usr/share/endeavouros/backgrounds/endeavouros-wallpaper.png</p>
+<h1>set powersavings for display:</h1>
+<p>exec --no-startup-id xset s 480 dpms 600 600 600</p>
+<h1>disable power saving (for example if using xscreensaver)</h1>
+<p>#exec --no-startup-id xset -dpms</p>
+<h1>use xautolock to use autosuspend rules for mobile devices</h1>
+<h1><a href="https://wiki.archlinux.org/title/Session_lock#xautolock">https://wiki.archlinux.org/title/Session_lock#xautolock</a></h1>
+<p>#exec --no-startup-id xautolock -time 60 -locker &quot;systemctl suspend&quot;</p>
+<h1>xscreensaver</h1>
+<h1><a href="https://www.jwz.org/xscreensaver">https://www.jwz.org/xscreensaver</a></h1>
+<p>#exec --no-startup-id xscreensaver --no-splash</p>
+<h1>Desktop notifications</h1>
+<h1>dunst config used ~/.config/dunst/dunstrc</h1>
+<h1>set alternative config if needed:</h1>
+<p>#exec --no-startup-id /usr/bin/dunst --config ~/.config/dunst/dunstrc</p>
+<h1>may need to run dbus-launch explicitly:</h1>
+<p>#exec --no-startup-id dbus-launch /usr/bin/dunst
+exec --no-startup-id /usr/bin/dunst</p>
+<h1>alternative if you installed aside with XFCE4:</h1>
+<h1>exec --no-startup-id /usr/lib/xfce4/notifyd/xfce4-notifyd &amp;</h1>
+<h1>autotiling script</h1>
+<h1><a href="https://github.com/nwg-piotr/autotiling">https://github.com/nwg-piotr/autotiling</a></h1>
+<h1><code>pacman -Syu autotiling</code></h1>
+<p>#exec_always --no-startup-id autotiling</p>
+<h1>Autostart apps as you like</h1>
+<p>#exec --no-startup-id sleep 2 &amp;&amp; xfce4-terminal
+#exec --no-startup-id sleep 7 &amp;&amp; firefox <a href="https://github.com/endeavouros-team/endeavouros-i3wm-setup/blob/main/force-knowledge.md">https://github.com/endeavouros-team/endeavouros-i3wm-setup/blob/main/force-knowledge.md</a>
+#exec --no-startup-id sleep 3 &amp;&amp; thunar</p>
+<h2>system tray</h2>
+<h1>if you do not use dex: exec --no-startup-id dex --autostart --environment i3</h1>
+<h1>you need to have tray apps started manually one by one:</h1>
+<h1>start blueberry app for managing bluetooth devices from tray:</h1>
+<p>#exec --no-startup-id blueberry-tray</p>
+<h1>networkmanager-applet</h1>
+<p>exec --no-startup-id nm-applet</p>
+<h1>clipman-applet</h1>
+<p>#exec --no-startup-id xfce4-clipman</p>
+<p>######################################</p>
+<h1>color settings for bar and windows</h1>
+<p>######################################</p>
+<h1>Define colors variables:</h1>
+<p>set $darkbluetrans  #08052be6
+set $darkblue       #08052b
+set $lightblue      #5294e2
+set $urgentred      #e53935
+set $white          #ffffff
+set $black          #000000
+set $purple         #e345ff
+set $darkgrey       #383c4a
+set $grey           #b0b5bd
+set $mediumgrey     #8b8b8b
+set $yellowbrown    #e1b700
+set $brightorange   #ff5500
+set $brightcyan     #00dfff</p>
+<h1># define colors for windows:</h1>
+<h1>#class                      border      bground     text        indicator   child_border</h1>
+<h1>client.focused              $lightblue  $darkblue   $white      $mediumgrey $mediumgrey</h1>
+<h1>client.unfocused            $darkblue   $darkblue   $grey       $darkgrey   $darkgrey</h1>
+<h1>client.focused_inactive     $darkblue   $darkblue   $grey       $black      $black</h1>
+<h1>client.urgent               $urgentred  $urgentred  $white      $yellowbrown    $yellowbrown</h1>
+<h1>define colors for windows:</h1>
+<h1>class                 border       bground      text        indicator    child_border</h1>
+<p>client.focused          $brightcyan  $brightcyan  $white      $brightcyan  $brightcyan
+client.unfocused        $darkblue    $darkblue    $grey       $darkgrey    $darkgrey
+client.focused_inactive $darkblue    $darkblue    $grey       $black       $black
+client.urgent           $urgentred   $urgentred   $white      $yellowbrown $yellowbrown</p>
+<p>############################################</p>
+<h1>bar settings (input comes from i3blocks)</h1>
+<p>############################################</p>
+<h1>Start i3bar to display a workspace bar</h1>
+<h1>(plus the system information i3status finds out, if available)</h1>
+<p>bar {
+        font pango: Noto Sans Regular 14
+        status_command i3blocks -c ~/.config/i3/i3blocks.conf
+            position bottom
+#           i3bar_command i3bar --transparency</p>
+<h1>it could be that you have no primary display set: set one (xrandr --output <output> --primary)</h1>
+<h1>reference: <a href="https://i3wm.org/docs/userguide.html#_tray_output">https://i3wm.org/docs/userguide.html#_tray_output</a></h1>
+<p>            #tray_output primary
+            tray_padding 0</p>
+<h1>When strip_workspace_numbers is set to yes,</h1>
+<h1>any workspace that has a name of the form</h1>
+<h1>“[n][:][NAME]” will display only the name.</h1>
+<p>strip_workspace_numbers yes
+##strip_workspace_name no</p>
+<p>            colors {
+            separator          $purple
+            background         $darkgrey
+            statusline         $white
+#                           border              bg          txt         indicator
+        # focused_workspace   $mediumgrey         $grey       $darkgrey   $purple
+        # active_workspace    $lightblue          $mediumgrey $darkgrey   $purple
+        # inactive_workspace  $darkgrey           $darkgrey   $grey       $purple
+        focused_workspace  #ff5500 #ff5500 #ffffff
+        active_workspace   #333333 #5f676a #ffffff
+        inactive_workspace #222222 #222222 #888888    
+        urgent_workspace    $urgentred          $urgentred  $white      $purple
+    }
+}</p>
+<h1>you can add different bars for multidisplay setups on each display:</h1>
+<h1>set output HDMI-0 to the display you want the bar, --transparency can be set.</h1>
+<h1>Transparency needs rgba color codes to be used where the last two letters are the transparency factor see here:</h1>
+<h1><a href="https://gist.github.com/lopspower/03fb1cc0ac9f32ef38f4">https://gist.github.com/lopspower/03fb1cc0ac9f32ef38f4</a></h1>
+<h1>#08052be6 --&gt; e6=90%</h1>
+<h1>bar {</h1>
+<p>#   font pango: Noto Sans Regular 10
+#   status_command i3blocks -c ~/.config/i3/i3blocks-2.conf
+#   i3bar_command i3bar --transparency
+#   output HDMI-0
+#   position bottom</p>
+<h1></h1>
+<h1>When strip_workspace_numbers is set to yes,</h1>
+<h1>any workspace that has a name of the form</h1>
+<h1>“[n][:][NAME]” will display only the name.</h1>
+<p>#strip_workspace_numbers yes
+##strip_workspace_name no</p>
+<h1></h1>
+<p>#   colors {
+#       separator          $purple
+#       background         $darkbluetrans
+#           statusline         $white
+#                           border          bg              txt         indicator
+#       focused_workspace   $lighterblue    $lighterblue    $darkblue   $purple
+#       active_workspace    $lightdblue     $lightdblue     $darkblue   $purple
+#       inactive_workspace  $darkblue       $darkblue       $lightdblue $purple
+#       urgent_workspace    $urgentred      $urgentred      $white      $purple
+#   }
+#}</p>
+<p>#####################################</p>
+<h1>Application menu handled by rofi:</h1>
+<p>#####################################</p>
+<h2>rofi bindings fancy application menu</h2>
+<p>bindsym $mod+d exec --no-startup-id rofi -modi drun -show drun <br />
+        -config ~/.config/rofi/rofidmenu.rasi</p>
+<h2>rofi bindings for window menu</h2>
+<p>bindsym $mod+t exec --no-startup-id rofi -show window <br />
+        -config ~/.config/rofi/rofidmenu.rasi</p>
+<h2>rofi bindings to manage clipboard (install rofi-greenclip from the AUR)</h2>
+<p>#exec --no-startup-id greenclip daemon&gt;/dev/null
+#bindsym $mod+c exec --no-startup-id rofi -modi &quot;clipboard:greenclip print&quot; -show clipboard <br />
+#       -config ~/.config/rofi/rofidmenu.rasi</p>
+<h1>attempt to deal with tiny font size</h1>
+<p>exec --no-startup-id xrdb -merge ~/.Xresources</p>
+<hr />
+<p><strong><a href="20260828_001026_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134445_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134440_capture.md&quot;)</p>

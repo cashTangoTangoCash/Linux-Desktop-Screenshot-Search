@@ -1,0 +1,52 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 82</h1>
+<p><strong><a href="20260828_134440_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134446_capture.html">Next →</a></strong></p>
+<hr />
+<p>Yes, absolutely. Offloading the window layout directly to <code>i3</code> is vastly simpler and cleaner than wrestling with dynamic line-wrapping buffer math in Python.</p>
+<p>By default, when <code>feh</code> opens on the current workspace, <code>i3</code> tiles it next to your terminal, instantly halving your terminal width and forcing lines to wrap.</p>
+<p>You can fix this by doing two things in tandem:</p>
+<ol>
+<li><strong>Tell <code>i3</code> to send <code>feh</code> window instances directly to another workspace</strong> (e.g., Workspace 9 or 10).</li>
+<li><strong>Tell <code>feh</code> NOT to steal window focus</strong> when it opens, so your terminal on Workspace 1 stays focused and ready for keystrokes.</li>
+</ol>
+<hr />
+<h3>Step 1: Add a Window Rule to your <code>~/.config/i3/config</code></h3>
+<p>In your <code>i3</code> configuration file, scroll down to the <strong><code>configuration for workspace behaviour:</code></strong> or <strong><code>floating rules</code></strong> section and add this line:</p>
+<pre><code class="language-i3config"># Send feh image viewer windows to workspace 9 without switching focus
+assign [class=&quot;feh&quot;] $ws9
+
+</code></pre>
+<p><em>Note: If you specifically want to target the flashcard review window and not other background <code>feh</code> operations (like wallpaper updates, though those aren't managed as window classes anyway), you can match on the title you set in the script:</em></p>
+<pre><code class="language-i3config">assign [title=&quot;feh_flashcard_review&quot;] $ws9
+
+</code></pre>
+<p>After adding this, save the file and press <strong><code>Mod4 + Shift + r</code></strong> to restart <code>i3</code> in place.</p>
+<hr />
+<h3>Step 2: Tweak the Python Script Call</h3>
+<p>When <code>feh</code> launches on Workspace 9, by default <code>i3</code> or <code>feh</code> might try to switch your active view or grab window focus. Update your <code>subprocess.Popen</code> call in your Python script to pass the <code>--xinerama-index</code> or focus-prevention flags if needed, though standard <code>assign</code> usually leaves your terminal focused if <code>xdotool</code> isn't fighting it.</p>
+<p>In <code>review_searchResults()</code>:</p>
+<pre><code class="language-python"># Launch feh — i3 will automatically catch this window class/title and route it to Workspace 9
+feh_proc = subprocess.Popen(
+    [
+        &quot;feh&quot;, 
+        &quot;--title&quot;, &quot;feh_flashcard_review&quot;, 
+        &quot;-F&quot;, 
+        &quot;--auto-zoom&quot;, 
+        str(img_path.resolve())
+    ],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL
+)
+
+</code></pre>
+<p>Because <code>feh</code> opens on Workspace 9 while your terminal stays full-width on Workspace 1:</p>
+<ul>
+<li>Your terminal never changes width or resizes.</li>
+<li>Line wrapping vanishes because you retain your full 120+ column width.</li>
+<li>Header clipping disappears completely without adding complex height calculations.</li>
+<li>If you have a dual-monitor setup, you can pin Workspace 9 to your secondary monitor using <code>workspace $ws9 output HDMI-0</code> (or whichever output name <code>xrandr</code> gives you), letting you see the screenshot on one screen while paging text on the other.</li>
+</ul>
+<hr />
+<p><strong><a href="20260828_134440_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134446_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134445_capture.md&quot;)</p>

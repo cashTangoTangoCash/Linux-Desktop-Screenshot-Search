@@ -1,0 +1,80 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 86</h1>
+<p><strong><a href="20260828_134508_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134514_capture.html">Next →</a></strong></p>
+<hr />
+<p>You aren't misusing <code>pudb</code>—that cramped feeling on high-resolution displays is one of its most common papercuts.</p>
+<p>Because <code>pudb</code> is a full-screen <code>urwid</code> terminal app, its window layouts are constrained by your terminal emulator's column and row count. When you launch a debugger in a terminal tiled to half your screen, <code>pudb</code> splits that already-reduced area into four sub-panes (Variables, Stack, Breakpoints, and Code), leaving very little room to inspect long string variables or wrapped text.</p>
+<p>You have two clean ways forward: customize <code>pudb</code> to maximize your variable space, or switch to a lightweight line-oriented debugger.</p>
+<hr />
+<h3>Option 1: Customize <code>pudb</code> (Hide Panes &amp; Toggle Views)</h3>
+<p><code>pudb</code> actually lets you hide and resize its sidebars entirely using keyboard shortcuts, giving 100% of the screen height to your code or variables.</p>
+<ul>
+<li>
+<p><strong>Hide Sidebars entirely:</strong> Press <strong><code>Ctrl + p</code></strong> (or <strong><code>Shift + m</code></strong> depending on keybindings) to toggle the sidebar on/off.</p>
+</li>
+<li>
+<p><strong>Grow/Shrink Variable Pane:</strong> Click and drag the border between the sidebar and code, or use <strong><code>+</code></strong> and <strong><code>-</code></strong> while focused on the variable pane to resize it.</p>
+</li>
+<li>
+<p><strong>Focus Variable Pane:</strong> Press <strong><code>V</code></strong> to move your focus straight into the variable tree. Once inside:</p>
+</li>
+<li>
+<p>Press <strong><code>t</code></strong> on a variable to change its display mode (Tree vs. Plain Text vs. Evaluated).</p>
+</li>
+<li>
+<p>Press <strong><code>e</code></strong> to open an expanded, full-screen view of a specific variable's raw string contents.</p>
+</li>
+<li>
+<p><strong>Open Built-in Shell:</strong> Press <strong><code>Ctrl + x</code></strong> (or <strong><code>Shift + s</code></strong>) to jump straight into an inline IPython/PDB shell prompt where you can inspect full-width variables directly.</p>
+</li>
+</ul>
+<hr />
+<h3>Option 2: Use Line-Oriented Command Line Debuggers</h3>
+<p>If you don't want a multi-window TUI layout at all and just want a simple, linear terminal prompt where the execution line prints and you have the full 120+ character width to print variables, try these:</p>
+<h4>1. <code>pdb++</code> (Recommended CLI Debugger)</h4>
+<p><code>pdb++</code> is a drop-in, zero-config replacement for standard Python <code>pdb</code>. It adds syntax highlighting, tab completion, and clean variable inspection without splitting your terminal into windows.</p>
+<ul>
+<li><strong>Installation:</strong> <code>pip install pdbpp</code></li>
+<li><strong>Usage:</strong> Drop <code>breakpoint()</code> into your Python code where you want to pause.</li>
+<li><strong>Key Commands:</strong></li>
+<li><strong><code>n</code></strong> (next line), <strong><code>s</code></strong> (step into), <strong><code>c</code></strong> (continue execution).</li>
+<li><strong><code>p variable_name</code></strong> or <strong><code>pp variable_name</code></strong>: Pretty-prints the variable across your full terminal width.</li>
+<li><strong><code>sticky</code></strong>: Toggles a clean mode where it keeps your code context visible at the top of the terminal while leaving the rest of the screen for standard shell interaction.</li>
+</ul>
+<h4>2. Standard <code>ipdb</code> (IPython Pdb)</h4>
+<p>If you already use IPython, <code>ipdb</code> gives you an interactive IPython prompt at your breakpoint with full autocompletion, syntax coloring, and standard print output without any sub-panes.</p>
+<ul>
+<li><strong>Installation:</strong> <code>pip install ipdb</code></li>
+<li><strong>Usage in Python 3.7+:</strong> Set the environment variable <code>PYTHONBREAKPOINT=ipdb.set_trace</code> in your shell, then use standard <code>breakpoint()</code> in your code.</li>
+</ul>
+<hr />
+<h3>Quick Comparison</h3>
+<table>
+<thead>
+<tr>
+<th>Debugger</th>
+<th>UI Type</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>pudb</code></strong></td>
+<td>TUI (Sub-panes)</td>
+<td>Visual step-through, mouse support (Press <code>Ctrl+p</code> to hide sidebars)</td>
+</tr>
+<tr>
+<td><strong><code>pdb++</code></strong></td>
+<td>Line-by-line CLI</td>
+<td>Maximum terminal width, zero screen splitting, smart formatting</td>
+</tr>
+<tr>
+<td><strong><code>ipdb</code></strong></td>
+<td>IPython CLI</td>
+<td>Interactive exploration with tab-completion and standard line output</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><strong><a href="20260828_134508_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134514_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134513_capture.md&quot;)</p>

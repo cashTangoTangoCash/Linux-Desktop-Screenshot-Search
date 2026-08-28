@@ -1,0 +1,116 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 84</h1>
+<p><strong><a href="20260828_134451_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134458_capture.html">Next →</a></strong></p>
+<hr />
+<p>The error happens because division with <code>/</code> in Python 3 produces a <code>float</code> (<code>term_cols = term_cols / 2</code>), which later breaks integer math operations like <code>range()</code> and integer division (<code>//</code>).</p>
+<p>To fix this, change line 118 to use integer floor division <code>//</code>, or cast it explicitly to <code>int</code>:</p>
+<pre><code class="language-python">term_cols = term_cols // 2
+
+</code></pre>
+<p>In addition to that fix, there are three small bugs in the line-wrapping calculation logic that need addressing:</p>
+<ol>
+<li><strong>Integer division by zero:</strong> If <code>term_cols</code> drops to <code>0</code>, <code>len(next_line) // term_cols</code> raises <code>ZeroDivisionError</code>. Ensure <code>term_cols</code> is at least <code>1</code>.</li>
+<li><strong>Page scrolling mismatch:</strong> The navigation logic (<code>line_pointer += chunk_size</code>) moves by logical lines instead of physical rows used. If page 1 consumes 15 physical rows out of 8 logical lines, scrolling by <code>chunk_size</code> will skip text or misalign.</li>
+<li><strong>Double subtraction in safety math:</strong> <code>max_physical_rows</code> and <code>chunk_size</code> are computing the same value twice.</li>
+</ol>
+<h3>Updated Pager Function</h3>
+<p>Replace your <code>custom_pager</code> function with this updated version:</p>
+<pre><code class="language-python">def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI with context headers, search term highlighting, and line-wrapping prediction.&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+
+        # Adjust for tiled terminal width under i3 (ensure integer &gt;= 1)
+        term_cols = max(1, term_cols // 2)
+
+        HEADER_HEIGHT = 4
+        FOOTER_HEIGHT = 4
+        SAFETY_BUFFER = 2
+
+        max_physical_rows = max(3, term_rows - (HEADER_HEIGHT + FOOTER_HEIGHT + SAFETY_BUFFER))
+
+        os.system(&quot;clear&quot;)
+
+        # --- Print Header (4 lines) ---
+        print(f&quot;=== {title} ===&quot;)
+        print(f&quot;Query:  '{search_term}'&quot;)
+        print(f&quot;Folder: {search_folder}&quot;)
+        print(&quot;=&quot; * 60)
+
+        # --- Calculate Page Content based on Visual Wrapping ---
+        page_lines = []
+        physical_rows_used = 0
+
+        while line_pointer + len(page_lines) &lt; len(all_content):
+            next_line = all_content[line_pointer + len(page_lines)]
+            # Visual height calculation (minimum 1 row for empty lines)
+            visual_height = max(1, (len(next_line) + term_cols - 1) // term_cols)
+
+            if physical_rows_used + visual_height &gt; max_physical_rows and page_lines:
+                break
+
+            page_lines.append(next_line)
+            physical_rows_used += visual_height
+
+        # --- Print Page Content ---
+        for line in page_lines:
+            print(highlight_term(line, search_term))
+
+        # Pad remaining screen space with empty lines
+        for _ in range(max_physical_rows - physical_rows_used):
+            print(&quot;&quot;)
+
+        # --- Print Footer (4 lines) ---
+        total_lines = len(all_content)
+        lines_displayed = len(page_lines)
+        end_idx = min(line_pointer + lines_displayed, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # --- Navigation Logic ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + lines_displayed &lt; total_lines:
+                line_pointer += lines_displayed
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - lines_displayed)
+
+        elif choice in ('j', 'down'):
+            if line_pointer + 1 &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+</code></pre>
+<hr />
+<p><strong><a href="20260828_134451_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134458_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134457_capture.md&quot;)</p>

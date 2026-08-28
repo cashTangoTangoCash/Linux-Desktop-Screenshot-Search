@@ -1,0 +1,44 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 87</h1>
+<p><strong><a href="20260828_134514_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134521_capture.html">Next →</a></strong></p>
+<hr />
+<p>That key combination is actually a notorious quirk in <code>pudb</code>! The cheat sheet isn't out of date, but <code>pudb</code> relies on <code>urwid</code> (its terminal UI framework), which handles keyboard focus differently depending on <strong>which pane is currently active</strong>.</p>
+<p>If a key binding feels unresponsive or completely ignored, it’s almost always because input focus is sitting in the main code editor window or the command line area rather than in the sidebar itself.</p>
+<hr />
+<h3>Key Navigation Rules for <code>pudb</code> Focus</h3>
+<p>To ensure <code>pudb</code> responds to pane-resizing and variable-folding shortcuts instantly:</p>
+<ol>
+<li><strong>Explicitly focus the Variables pane first:</strong></li>
+</ol>
+<ul>
+<li>Press <strong><code>v</code></strong> (lowercase) to move cursor focus directly into the <strong>Variables</strong> pane. You’ll see the highlight cursor move over to the right sidebar.</li>
+</ul>
+<ol start="2">
+<li><strong>Resize the pane height:</strong></li>
+</ol>
+<ul>
+<li>Once inside the Variables pane, <strong><code>+</code></strong> and <strong><code>-</code></strong> will reliably grow or shrink the height without ignoring input.</li>
+</ul>
+<ol start="3">
+<li><strong>Expand / Collapse Variable Trees:</strong></li>
+</ol>
+<ul>
+<li><strong><code>Enter</code></strong> toggles expand/collapse for individual dicts or lists under the cursor.</li>
+<li><strong><code>\</code></strong> (backslash) collapses <em>all</em> expanded variable trees back to single-line summaries at once.</li>
+</ul>
+<ol start="4">
+<li><strong>Return to Code:</strong></li>
+</ol>
+<ul>
+<li>Press <strong><code>c</code></strong> (or <strong><code>n</code></strong> / <strong><code>s</code></strong>) to step/continue execution, or press <strong><code>e</code></strong> to jump keyboard focus back to the main Code window.</li>
+</ul>
+<hr />
+<h3>A Quick Trick for String / Wrap Inspection</h3>
+<p>Since you are debugging line-wrapping calculations (<code>term_cols</code> vs <code>len(line)</code>), seeing raw long strings in a narrow variable list can still be tight.</p>
+<p>While focused on any string variable in the Variables list:</p>
+<ul>
+<li>Press <strong><code>e</code></strong> (or <strong><code>t</code></strong> to cycle visual types). In newer versions of <code>pudb</code>, pressing <strong><code>e</code></strong> on a selected variable opens a <strong>full-width pop-up modal</strong> displaying the complete, un-truncated string or object, giving you the entire monitor width to verify exact character counts without squeezing the sidebar.</li>
+</ul>
+<hr />
+<p><strong><a href="20260828_134514_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134521_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134519_capture.md&quot;)</p>

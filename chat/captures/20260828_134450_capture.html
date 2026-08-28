@@ -1,0 +1,24 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 83</h1>
+<p><strong><a href="20260828_134446_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134451_capture.html">Next →</a></strong></p>
+<hr />
+<p>That is a completely fair call. Tiling window managers like <code>i3</code> match window properties (<code>WM_CLASS</code> vs <code>WM_NAME</code>) at the exact moment an X11 window is mapped—and when scripts launch, close, and re-launch fast processes, timing race conditions often cause window rules to miss.</p>
+<p>If you ever want to revisit it without wrestling with <code>i3</code> workspace routing rules or complex wrapping math, there are two extremely minimal &quot;low-hanging fruit&quot; adjustments you can drop into the current setup:</p>
+<h3>1. The Simple Terminal Truncation (1 line of code)</h3>
+<p>If long lines occasionally wrapping and pushing your header off the top is the main annoyance, you can strictly truncate lines to the terminal width directly in your printing loop. This forces 1 logical line to strictly occupy 1 physical line, no matter how narrow <code>i3</code> tiles your terminal window:</p>
+<pre><code class="language-python">for line in page_lines:
+    # Truncate string to term_cols BEFORE applying ANSI colors
+    print(highlight_term(line[:term_cols], search_term))
+
+</code></pre>
+<h3>2. Float <code>feh</code> Instead of Tiling It</h3>
+<p>If you don't want <code>feh</code> squeezing your terminal width at all, you can tell <code>feh</code> to launch as a floating dialog/window directly via command-line flags or a simple 1-line <code>i3</code> floating rule:</p>
+<p><strong>In <code>i3</code> config:</strong></p>
+<pre><code class="language-i3config">for_window [title=&quot;feh_flashcard_review&quot;] floating enable
+
+</code></pre>
+<p><em>or directly in your Python <code>subprocess</code> call by passing <code>--geom</code> or <code>--borderless</code> so <code>i3</code> treats it as a floating pop-up overlay.</em></p>
+<p>Otherwise, if the script is functional and getting the job done for your review workflow, keeping it simple and sticking with &quot;close enough&quot; is usually the best engineering decision!</p>
+<hr />
+<p><strong><a href="20260828_134446_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260828_134451_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134450_capture.md&quot;)</p>
