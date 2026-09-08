@@ -1,0 +1,92 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 91</h1>
+<p><strong><a href="20260907_235925_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260907_235938_capture.html">Next →</a></strong></p>
+<hr />
+<p>That realization is a huge breakthrough—when <code>feh</code> stays on the second monitor, the terminal never tiles, so <code>shutil.get_terminal_size()</code> measures the full screen width and the script behaves completely differently.</p>
+<p>To debug the layout accurately while keeping <code>feh</code> tiled on the same monitor, switching from a multi-pane TUI like <code>pudb</code> to a <strong>line-oriented debugger</strong> like <strong><code>pdb++</code></strong> is the cleanest solution. Because <code>pdb++</code> doesn't split your screen into sidebars, it won't consume any of your terminal's horizontal or vertical width.</p>
+<hr />
+<h3>Step 1: Install <code>pdb++</code></h3>
+<p>In your terminal (under your regular user or Python environment):</p>
+<pre><code class="language-bash">pip install pdbpp
+
+</code></pre>
+<p><code>pdb++</code> is a zero-configuration drop-in replacement for Python’s built-in <code>pdb</code>.</p>
+<hr />
+<h3>Step 2: Set the Breakpoint in Your Code</h3>
+<p>In <code>search_and_inspect_screenshots.py</code>, import <code>pdb</code> and set a breakpoint right before the terminal prints the content inside <code>custom_pager</code>:</p>
+<pre><code class="language-python">def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    # ... calculation code above ...
+
+    # DROP BREAKPOINT HERE:
+    import pdb; pdb.set_trace()
+
+    # --- Print Header (4 lines) ---
+    print(f&quot;=== {title} ===&quot;)
+
+</code></pre>
+<hr />
+<h3>Step 3: Run the Script with Tiling Enabled</h3>
+<ol>
+<li>Launch your script in your terminal:</li>
+</ol>
+<pre><code class="language-bash">python3 search_and_inspect_screenshots.py -s &quot;lawyer&quot;
+
+</code></pre>
+<ol start="2">
+<li><code>feh</code> will spawn, <code>i3</code> will tile your terminal to half-screen width, and Python will pause execution at the breakpoint inside <code>pdb++</code>.</li>
+<li>Your terminal prompt will change to <code>(Pdb++)</code>.</li>
+</ol>
+<hr />
+<h3>Step 4: Essential <code>pdb++</code> Cheat Sheet for This Layout Problem</h3>
+<p>Since <code>pdb++</code> runs inline, you have the entire width of your half-screen terminal. Here are the only commands you need to inspect why the page is ~6 lines short:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What It Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>p variable</code></strong></td>
+<td><strong>Print variable.</strong> Type <code>p term_rows</code>, <code>p max_physical_rows</code>, or <code>p physical_rows_used</code> to check the exact numbers.</td>
+</tr>
+<tr>
+<td><strong><code>p page_lines</code></strong></td>
+<td>Displays the array of logical lines collected for the current page.</td>
+</tr>
+<tr>
+<td><strong><code>p [len(l) for l in page_lines]</code></strong></td>
+<td>Prints a list of the character lengths for each logical line on the page.</td>
+</tr>
+<tr>
+<td><strong><code>pp all_content</code></strong></td>
+<td>Pretty-prints the full list of content lines.</td>
+</tr>
+<tr>
+<td><strong><code>n</code></strong></td>
+<td><strong>Next.</strong> Executes the current line and steps to the next line of code.</td>
+</tr>
+<tr>
+<td><strong><code>c</code></strong></td>
+<td><strong>Continue.</strong> Runs the script until the next loop iteration or exit.</td>
+</tr>
+<tr>
+<td><strong><code>q</code></strong></td>
+<td><strong>Quit.</strong> Exits the debugger and script immediately.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3>Why the Page Might Be ~6 Lines Short</h3>
+<p>When you inspect the values with <code>p</code> in <code>pdb++</code>, check two specific things:</p>
+<ol>
+<li><strong><code>SAFETY_BUFFER</code> and Header/Footer Tally:</strong>
+Currently, your reserved row math subtracts <code>HEADER_HEIGHT (4) + FOOTER_HEIGHT (4) + SAFETY_BUFFER (2) = 10 rows</code>. If <code>term_rows</code> is 34, <code>max_physical_rows</code> becomes $34 - 10 = 24$.</li>
+<li><strong>Conservative Line Wrapping (<code>visual_height</code>):</strong>
+If a line of text contains 79 characters and <code>term_cols</code> is measured as 78, <code>visual_height</code> calculates that line as taking <strong>2 physical rows</strong>. If 4 or 5 lines on the page wrap by just 1 or 2 characters, those extra calculated rows quickly eat up 5 to 6 physical rows of your budget—causing <code>custom_pager</code> to stop adding lines early to prevent overflowing off the bottom!</li>
+</ol>
+<p>Using <code>pdb++</code> while tiled will let you print <code>term_cols</code>, <code>term_rows</code>, and <code>physical_rows_used</code> side-by-side with what is visually rendered on screen.</p>
+<hr />
+<p><strong><a href="20260907_235925_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260907_235938_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235934_capture.md&quot;)</p>

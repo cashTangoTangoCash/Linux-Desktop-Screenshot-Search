@@ -10913,3 +10913,478 @@ action = custom_pager(title_str, search_term, search_folder, url_text, full_text
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260828_134540_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 91</h1>
+<p>I didnt' make your latest changes - I better test the existing code without a debugger and pay attention to what is happening.  after doing that: ok, I realize I was not thinking clearly.  I wanted to see pudb fill up the entire monitor, so I moved feh to another monitor.  but then I am no longer fully testing the script.  if I can't read pudb when the terminal is tiled to half-screen, I have to learn one of the other command line debuggers.  In the previous version of the script, I am puzzled why the pager is not filling up the vertical extent of the terminal with lines (it might be shy by about 6 lines or so).  I am not going to get close to possibly figuring out what is going on without learning and using a different debugger.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235925_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 91</h1>
+<p>That realization is a huge breakthrough—when <code>feh</code> stays on the second monitor, the terminal never tiles, so <code>shutil.get_terminal_size()</code> measures the full screen width and the script behaves completely differently.</p>
+<p>To debug the layout accurately while keeping <code>feh</code> tiled on the same monitor, switching from a multi-pane TUI like <code>pudb</code> to a <strong>line-oriented debugger</strong> like <strong><code>pdb++</code></strong> is the cleanest solution. Because <code>pdb++</code> doesn't split your screen into sidebars, it won't consume any of your terminal's horizontal or vertical width.</p>
+<hr />
+<h3>Step 1: Install <code>pdb++</code></h3>
+<p>In your terminal (under your regular user or Python environment):</p>
+<pre><code class="language-bash">pip install pdbpp
+
+</code></pre>
+<p><code>pdb++</code> is a zero-configuration drop-in replacement for Python’s built-in <code>pdb</code>.</p>
+<hr />
+<h3>Step 2: Set the Breakpoint in Your Code</h3>
+<p>In <code>search_and_inspect_screenshots.py</code>, import <code>pdb</code> and set a breakpoint right before the terminal prints the content inside <code>custom_pager</code>:</p>
+<pre><code class="language-python">def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -&gt; str:
+    # ... calculation code above ...
+
+    # DROP BREAKPOINT HERE:
+    import pdb; pdb.set_trace()
+
+    # --- Print Header (4 lines) ---
+    print(f&quot;=== {title} ===&quot;)
+
+</code></pre>
+<hr />
+<h3>Step 3: Run the Script with Tiling Enabled</h3>
+<ol>
+<li>Launch your script in your terminal:</li>
+</ol>
+<pre><code class="language-bash">python3 search_and_inspect_screenshots.py -s &quot;lawyer&quot;
+
+</code></pre>
+<ol start="2">
+<li><code>feh</code> will spawn, <code>i3</code> will tile your terminal to half-screen width, and Python will pause execution at the breakpoint inside <code>pdb++</code>.</li>
+<li>Your terminal prompt will change to <code>(Pdb++)</code>.</li>
+</ol>
+<hr />
+<h3>Step 4: Essential <code>pdb++</code> Cheat Sheet for This Layout Problem</h3>
+<p>Since <code>pdb++</code> runs inline, you have the entire width of your half-screen terminal. Here are the only commands you need to inspect why the page is ~6 lines short:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What It Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>p variable</code></strong></td>
+<td><strong>Print variable.</strong> Type <code>p term_rows</code>, <code>p max_physical_rows</code>, or <code>p physical_rows_used</code> to check the exact numbers.</td>
+</tr>
+<tr>
+<td><strong><code>p page_lines</code></strong></td>
+<td>Displays the array of logical lines collected for the current page.</td>
+</tr>
+<tr>
+<td><strong><code>p [len(l) for l in page_lines]</code></strong></td>
+<td>Prints a list of the character lengths for each logical line on the page.</td>
+</tr>
+<tr>
+<td><strong><code>pp all_content</code></strong></td>
+<td>Pretty-prints the full list of content lines.</td>
+</tr>
+<tr>
+<td><strong><code>n</code></strong></td>
+<td><strong>Next.</strong> Executes the current line and steps to the next line of code.</td>
+</tr>
+<tr>
+<td><strong><code>c</code></strong></td>
+<td><strong>Continue.</strong> Runs the script until the next loop iteration or exit.</td>
+</tr>
+<tr>
+<td><strong><code>q</code></strong></td>
+<td><strong>Quit.</strong> Exits the debugger and script immediately.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3>Why the Page Might Be ~6 Lines Short</h3>
+<p>When you inspect the values with <code>p</code> in <code>pdb++</code>, check two specific things:</p>
+<ol>
+<li><strong><code>SAFETY_BUFFER</code> and Header/Footer Tally:</strong>
+Currently, your reserved row math subtracts <code>HEADER_HEIGHT (4) + FOOTER_HEIGHT (4) + SAFETY_BUFFER (2) = 10 rows</code>. If <code>term_rows</code> is 34, <code>max_physical_rows</code> becomes $34 - 10 = 24$.</li>
+<li><strong>Conservative Line Wrapping (<code>visual_height</code>):</strong>
+If a line of text contains 79 characters and <code>term_cols</code> is measured as 78, <code>visual_height</code> calculates that line as taking <strong>2 physical rows</strong>. If 4 or 5 lines on the page wrap by just 1 or 2 characters, those extra calculated rows quickly eat up 5 to 6 physical rows of your budget—causing <code>custom_pager</code> to stop adding lines early to prevent overflowing off the bottom!</li>
+</ol>
+<p>Using <code>pdb++</code> while tiled will let you print <code>term_cols</code>, <code>term_rows</code>, and <code>physical_rows_used</code> side-by-side with what is visually rendered on screen.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235934_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 92</h1>
+<p>off the top of my head, I thought in endeavourOS I was supposed to install python stuff system wide and I am not seeing it:</p>
+<p>[dad84@dad84-2013PC ~]$ pacman -Ss pdb++
+extra/cyrus-sasl-ldap 2.1.28-4
+    ldapdb auxprop module for Cyrus SASL
+extra/php-legacy-phpdbg 8.3.33-1
+    Interactive PHP debugger
+extra/php-phpdbg 8.5.10-1
+    Interactive PHP debugger
+extra/python-ipip-ipdb 1.6.1-1
+    IPIP.net officially supported IP database ipdb format parsing library
+[dad84@dad84-2013PC ~]$ pacman -Ss pdb
+extra/cyrus-sasl-ldap 2.1.28-4
+    ldapdb auxprop module for Cyrus SASL
+extra/php-legacy-phpdbg 8.3.33-1
+    Interactive PHP debugger
+extra/php-phpdbg 8.5.10-1
+    Interactive PHP debugger
+extra/python-ipip-ipdb 1.6.1-1
+    IPIP.net officially supported IP database ipdb format parsing library
+[dad84@dad84-2013PC ~]$</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235938_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 92</h1>
+<p>On EndeavourOS (and standard Arch Linux), Python packages from the official repositories carry a <code>python-</code> prefix in <code>pacman</code>. However, <code>pdb++</code> is named <strong><code>python-pdbpp</code></strong> in the repos, which is why searching for <code>pdb++</code> or <code>pdb</code> didn't catch it.</p>
+<h3>1. Arch Repository Package</h3>
+<p>You can install it system-wide using <code>pacman</code> (or <code>yay</code>):</p>
+<pre><code class="language-bash">sudo pacman -S python-pdbpp
+
+</code></pre>
+<p><em>(Note: In Arch <code>pacman</code>, the package uses <code>pdbpp</code> instead of <code>pdb++</code> because standard package naming drops special characters like <code>+</code>.)</em></p>
+<h3>2. PEP 668 &amp; <code>pip</code> on EndeavourOS</h3>
+<p>Regarding your thought on installing Python packages system-wide: Arch/EndeavourOS strictly enforces <strong>PEP 668</strong>.</p>
+<ul>
+<li><strong>System packages (<code>sudo pacman -S python-foo</code>):</strong> This is the intended Arch way for anything available in the official repos or AUR. It places packages globally in <code>/usr/lib/python3.x/site-packages/</code> safely integrated with the package manager.</li>
+<li><strong>Direct <code>pip install</code>:</strong> Running <code>pip install pdbpp</code> globally without a virtual environment will throw an <code>externally-managed-environment</code> error to prevent breaking system-level Python libraries.</li>
+</ul>
+<p>If you ever need a Python CLI tool/package system-wide that isn't in <code>pacman</code>, the Arch-recommended tool is <code>pipx</code>:</p>
+<pre><code class="language-bash">sudo pacman -S python-pipx
+pipx install pdbpp
+
+</code></pre>
+<p>For now, <code>sudo pacman -S python-pdbpp</code> will get it installed directly into your system environment so you can use <code>import pdb; pdb.set_trace()</code> seamlessly in your script.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235943_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 93</h1>
+<p>I guess I want aur/python-pdbpp?</p>
+<p>[dad84@dad84-2013PC ~]$ pacman -Ss python-pdbpp
+[dad84@dad84-2013PC ~]$ pacman -Ss pdbpp
+[dad84@dad84-2013PC ~]$ yay -Ss pdbpp
+aur/python-pdbp 1.8.2-1 (+0 0.00) [225d23h] 
+    A drop-in replacement for pdb and pdbpp
+aur/python-pdbpp-git 0.12.1.r1.g93db837-2 (+1 0.00) [8d11h] 
+    pdb++, a drop-in replacement for pdb
+aur/python-pdbpp 0.12.1-1 (+8 0.00) [8d11h] 
+    pdb++, a drop-in replacement for pdb</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235945_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 93</h1>
+<p>You've found it—<code>aur/python-pdbpp</code> is the exact one you want.</p>
+<p>You can install it directly with <code>yay</code>:</p>
+<pre><code class="language-bash">yay -S python-pdbpp
+
+</code></pre>
+<p><code>yay</code> will build and install it cleanly into your system Python packages on EndeavourOS without triggering PEP 668 warnings, making <code>pdb++</code> available globally across your Python scripts.</p>
+<p>Once installed, standard Python built-in breakpoints like <code>breakpoint()</code> or <code>import pdb; pdb.set_trace()</code> will automatically launch the <code>pdb++</code> enhanced interface when you run your script.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235948_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 94</h1>
+<p>I have to switch to another part of this project that needs more immediate attention.  originally I was in Mate desktop and at a certain point I started using i3 window manager instead.  Fonts were too small and I took various actions, resulting in the location of the url bar in firefox moving to new positions.  Now I have the problem of the url bar location changing from screenshot to screenshot (potentially).  I am not quite sure how to deal with this, as the original code assumed a fixed, known position for the url bar in all screenshots.  One idea was to have the code try several different 'rectangles' for ocr of the url bar, and then the code could attempt to pick the 'best' url.  in principle, the ocr of the full screenshot might contain some part of the url, which could give something to match candidate urls to.  maybe all of that is overcomplicated.  This difficulty has resulted in me having stopped using my screenshot organizing tool for quite some time, which is not good.  what do you recommended to get 'unstuck?'  the ocr code could write a file for each screenshot with the coordinates of the rectangle used to crop the screenshot for ocr of url.  we could try to invent a way to make a mapping beforehand of rectangle coordinates to screenshot file - this might be useful if the rectangle doesn't actually change too often.  I think I am stuck in theory mode instead of doing mode.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235950_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 94</h1>
+<p>You are spot on: this is classic &quot;analysis paralysis&quot; slowing down a tool that is supposed to be saving you time. The fastest way to get unstuck is to build a fast, pragmatic fallback pipeline that solves 80% of your cases immediately, rather than engineering a perfect general OCR solver up front.</p>
+<p>Here is a recommended roadmap to transition from theory mode to doing mode:</p>
+<h3>1. The Strategy: Try Fixed Order, Fall Back to Full Scan</h3>
+<p>Instead of predicting or pre-mapping rectangles, use a progressive lookup chain in code. It takes less than 20 lines of Python and handles position shifts seamlessly:</p>
+<ol>
+<li><strong>Try Candidate Rectangles (Fast Path):</strong>
+Define a list of 2–3 rectangle coordinates representing the common locations (e.g., standard MATE Firefox top bar, shifted i3 top bar, compact/fullscreen top bar).</li>
+</ol>
+<ul>
+<li>Crop and OCR candidate box #1. If it parses as a valid URL (contains <code>http</code>, <code>www</code>, or standard TLDs like <code>.com</code>/<code>.org</code>), <strong>accept it and stop</strong>.</li>
+<li>If not, try candidate box #2.</li>
+</ul>
+<ol start="2">
+<li><strong>Full-Image Regex Regex Scan (Fallback Path):</strong>
+If no small crop yields a clean URL, run OCR on the <strong>top 25% height of the full screenshot</strong>.</li>
+</ol>
+<ul>
+<li>Search the resulting text using a regex pattern targeting URLs or common web paths (e.g., <code>r'(https?://\S+|[\w-]+\.(com|org|net|gov|edu|io)/[^\s]*)'</code>).</li>
+<li>This handles arbitrary vertical shifts automatically because Firefox URL bars almost always stay within the upper quarter of the monitor.</li>
+</ul>
+<hr />
+<h3>2. Sidecar JSON Metadata (Record as You Go)</h3>
+<p>Instead of creating a mapping file beforehand, write a small <code>.json</code> sidecar alongside each screenshot (or in a hidden <code>.ocr_cache/</code> directory) when processed:</p>
+<pre><code class="language-json">{
+  &quot;image&quot;: &quot;2026-08-19-16:26-56_2560x1380.jpg&quot;,
+  &quot;url_rect&quot;: [0, 40, 1920, 80],
+  &quot;detected_url&quot;: &quot;https://campbellpersonalinjury.com/...&quot;
+}
+
+</code></pre>
+<ul>
+<li><strong>Why this helps:</strong> You don't have to pre-classify thousands of old screenshots. When you inspect a image, if the sidecar exists, read it; if not, run the extraction pipeline once and save the result.</li>
+</ul>
+<hr />
+<h3>3. Actionable Next Steps to Unstuck</h3>
+<p>To start making immediate progress today without getting bogged down:</p>
+<ul>
+<li><strong>Step 1:</strong> Pick 5 screenshots from your MATE era and 5 from your i3 era.</li>
+<li><strong>Step 2:</strong> Measure the pixel coordinates ($x, y, w, h$) of the URL bar for both setups to create your two default candidate crop rectangles.</li>
+<li><strong>Step 3:</strong> Write a standalone test script (<code>test_url_extract.py</code>) that accepts an image path, runs the Candidate Rectangles $\rightarrow$ Upper-25% Fallback pipeline, and prints the extracted string.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260907_235956_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 95</h1>
+<p>I don't know why, but I am leery of the top 25% of the image ocr fallback w regex seeking the url, so let's not implement that for now.  let's simply implement: try 2 different pre-defined rectangles for ocr of url.  the code needs some way to pick which url is 'better.'  let the JSON file contain the 'best' result first, followed by the 'loser.'  The existing ocr_all_screenshots_in_folder.py:</p>
+<p>#!/usr/bin/env python3
+import csv
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;</p>
+<h1>Exact crop coordinates for Firefox URL bar (2560x1440)</h1>
+<p>CROP_W = 1836
+CROP_H = 33
+CROP_X = 230
+CROP_Y = 50</p>
+<h1>PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</h1>
+<p>#PC_SCREENSHOT_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}.<em>.jpg$&quot;, re.IGNORECASE)
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;.</em>.jpg$&quot;, re.IGNORECASE)</p>
+<p>def run_url_ocr(image_path: Path) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract.&quot;&quot;&quot;
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {CROP_W}x{CROP_H}+{CROP_X}+{CROP_Y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;</p>
+<p>def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed</p>
+<p>def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])</p>
+<p>def process_ocr():
+    # rglob(&quot;<em>&quot;) recursively finds matching screenshots at any directory depth
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob(&quot;</em>&quot;)
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return</p>
+<p>    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    indexed_count = 0
+    for image_path in pc_images:
+        # Save sidecars next to the image file itself (whether in root or a subfolder)
+        url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+        full_txt_path = image_path.parent / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>        if not url_txt_path.is_file():
+            url_text = run_url_ocr(image_path)
+            url_txt_path.write_text(url_text, encoding=&quot;utf-8&quot;)</p>
+<p>        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+        else:
+            print(f&quot;Skipped '{image_path.relative_to(WORK_DIR)}' (already indexed)&quot;)</p>
+<p>    print(f&quot;\nOCR Indexing Complete. {indexed_count} new file(s) processed.&quot;)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_ocr()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260908_000004_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 95</h1>
+<p>To keep things moving without overcomplicating, we can use a basic scoring function that checks for typical URL patterns (like <code>http</code>, <code>www</code>, domain extensions like <code>.com</code>/<code>.org</code>, slashes, and general URL-like character structure). The candidate with the higher score is placed first in the JSON payload, followed by the loser.</p>
+<p>Here is the modified script updated to import <code>json</code>, run OCR on two predefined rectangles, score the candidate strings, and output a <code>.url.json</code> sidecar.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import csv
+import json
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;
+
+# Pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
+RECT_MATE = (1836, 33, 230, 50)  # Rectangle 1: MATE layout
+RECT_I3 = (1836, 33, 230, 80)    # Rectangle 2: i3 layout (adjust Y/coordinates as needed)
+
+RECTANGLES = [
+    {&quot;name&quot;: &quot;mate&quot;, &quot;coords&quot;: RECT_MATE},
+    {&quot;name&quot;: &quot;i3&quot;, &quot;coords&quot;: RECT_I3},
+]
+
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;.*\.jpg$&quot;, re.IGNORECASE)
+
+def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract for a specific rectangle.&quot;&quot;&quot;
+    w, h, x, y = crop_coords
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {w}x{h}+{x}+{y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}&quot;)
+        return &quot;&quot;
+
+def score_url_candidate(text: str) -&gt; int:
+    &quot;&quot;&quot;Assigns a heuristic quality score to an OCR string to determine the 'better' URL.&quot;&quot;&quot;
+    if not text:
+        return -100
+
+    score = 0
+    # Strong URL indicators
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|org|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # Penalize whitespace or excessive special non-URL characters
+    if &quot; &quot; in text:
+        score -= 15
+    if len(text) &lt; 5:
+        score -= 20
+
+    return score
+
+def process_url_candidates(image_path: Path) -&gt; dict:
+    &quot;&quot;&quot;Runs OCR across predefined crop rectangles and ranks results best-first.&quot;&quot;&quot;
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info[&quot;coords&quot;]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        score = score_url_candidate(extracted_text)
+
+        candidates.append({
+            &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+            &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+            &quot;text&quot;: extracted_text,
+            &quot;score&quot;: score
+        })
+
+    # Sort candidates descending by score (best result first)
+    candidates.sort(key=lambda c: c[&quot;score&quot;], reverse=True)
+
+    return {
+        &quot;best_url&quot;: candidates[0][&quot;text&quot;],
+        &quot;candidates&quot;: candidates
+    }
+
+def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed
+
+def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])
+
+def process_ocr():
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob(&quot;*&quot;)
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_json_path = image_path.parent / f&quot;{image_path.name}.url.json&quot;
+        full_txt_path = image_path.parent / f&quot;{image_path.name}.full.txt&quot;
+
+        if not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding=&quot;utf-8&quot;)
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+        else:
+            print(f&quot;Skipped '{image_path.relative_to(WORK_DIR)}' (already indexed)&quot;)
+
+    print(f&quot;\nOCR Indexing Complete. {indexed_count} new file(s) processed.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    process_ocr()
+
+</code></pre>
+<h3>JSON Output Structure Produced</h3>
+<p>When run against a screenshot, <code>&lt;filename&gt;.jpg.url.json</code> will look like this:</p>
+<pre><code class="language-json">{
+  &quot;best_url&quot;: &quot;https://github.com/pypa/pip&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: { &quot;w&quot;: 1836, &quot;h&quot;: 33, &quot;x&quot;: 230, &quot;y&quot;: 80 },
+      &quot;text&quot;: &quot;https://github.com/pypa/pip&quot;,
+      &quot;score&quot;: 80
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate&quot;,
+      &quot;crop_coords&quot;: { &quot;w&quot;: 1836, &quot;h&quot;: 33, &quot;x&quot;: 230, &quot;y&quot;: 50 },
+      &quot;text&quot;: &quot;1g1thub.com/ pypa&quot;,
+      &quot;score&quot;: -5
+    }
+  ]
+}
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260908_000012_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 96</h1>
+<p>ok I have a suitable i3 screenshot opened in GIMP.  remind me again how to get those coordinates for the url bar.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260908_000015_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 96</h1>
+<p>I encountered an error doing what you asked. Could you try again?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260908_000016_capture.md&quot;)</p>
+<hr />
