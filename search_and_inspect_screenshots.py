@@ -7,7 +7,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-import pudb
+#import pudb
+import pdb
 
 DEFAULT_SEARCH_FOLDER = Path.home() / "Documents/2026/screenshots"
 
@@ -106,8 +107,6 @@ def highlight_term(text: str, search_term: str) -> str:
 def custom_pager(title: str, search_term: str, search_folder: Path, url_text: str, full_text: str) -> str:
     """Unified Pager UI with context headers, search term highlighting, and line-wrapping prediction."""
 
-    pudb.set_trace()
-
     url_lines = [f"URL OCR: {url_text}", "-" * 60]
     full_lines = full_text.splitlines()
     all_content = url_lines + full_lines
@@ -202,6 +201,9 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
             return "quit"
 
 def review_searchResults(search_term: str, search_folder: Path):
+
+    pdb.set_trace()
+
     items = find_matching_items(search_term, search_folder)
 
     if not items:
