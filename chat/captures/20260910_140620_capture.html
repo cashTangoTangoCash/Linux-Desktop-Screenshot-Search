@@ -1,0 +1,168 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 97</h1>
+<p><strong><a href="20260910_140613_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>To restore the creation of <code>.url.txt</code> containing the top-scoring candidate while keeping <code>.url.json</code>, update <code>process_ocr()</code> to generate both sidecars side by side.</p>
+<p>Here is the updated script:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import csv
+import json
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / &quot;ocr_timing.csv&quot;
+
+# Pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
+RECT_MATE = (1836, 33, 230, 50)  # Rectangle 1: MATE layout
+RECT_I3 = (1621, 47, 284, 58)    # Rectangle 2: i3 layout
+
+RECTANGLES = [
+    {&quot;name&quot;: &quot;mate&quot;, &quot;coords&quot;: RECT_MATE},
+    {&quot;name&quot;: &quot;i3&quot;, &quot;coords&quot;: RECT_I3},
+]
+
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;.*\.jpg$&quot;, re.IGNORECASE)
+
+def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]) -&gt; str:
+    &quot;&quot;&quot;Cropped URL bar OCR using ImageMagick + Tesseract for a specific rectangle.&quot;&quot;&quot;
+    w, h, x, y = crop_coords
+    cmd = (
+        f'magick &quot;{image_path}&quot; '
+        f'-crop {w}x{h}+{x}+{y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f&quot;Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}&quot;)
+        return &quot;&quot;
+
+def score_url_candidate(text: str) -&gt; int:
+    &quot;&quot;&quot;Assigns a heuristic quality score to an OCR string to determine the 'better' URL.&quot;&quot;&quot;
+    if not text:
+        return -100
+
+    score = 0
+    # Strong URL indicators
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|org|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # Penalize whitespace or excessive special non-URL characters
+    if &quot; &quot; in text:
+        score -= 15
+    if len(text) &lt; 5:
+        score -= 20
+
+    return score
+
+def process_url_candidates(image_path: Path) -&gt; dict:
+    &quot;&quot;&quot;Runs OCR across predefined crop rectangles and ranks results best-first.&quot;&quot;&quot;
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info[&quot;coords&quot;]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        score = score_url_candidate(extracted_text)
+
+        candidates.append({
+            &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+            &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+            &quot;text&quot;: extracted_text,
+            &quot;score&quot;: score
+        })
+
+    # Sort candidates descending by score (best result first)
+    candidates.sort(key=lambda c: c[&quot;score&quot;], reverse=True)
+
+    return {
+        &quot;best_url&quot;: candidates[0][&quot;text&quot;],
+        &quot;candidates&quot;: candidates
+    }
+
+def run_full_image_ocr(image_path: Path) -&gt; tuple[str, float]:
+    &quot;&quot;&quot;Runs Tesseract on the entire screenshot and measures execution time in seconds.&quot;&quot;&quot;
+    cmd = [&quot;tesseract&quot;, str(image_path), &quot;stdout&quot;]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f&quot;Warning: Full OCR failed for {image_path.name}: {e}&quot;)
+        return &quot;&quot;, elapsed
+
+def log_timing(image_name: str, seconds: float):
+    &quot;&quot;&quot;Appends full image Tesseract timing data to CSV.&quot;&quot;&quot;
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode=&quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow([&quot;timestamp&quot;, &quot;filename&quot;, &quot;duration_seconds&quot;])
+        writer.writerow([datetime.now().isoformat(timespec=&quot;seconds&quot;), image_name, f&quot;{seconds:.4f}&quot;])
+
+def process_ocr():
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob(&quot;*&quot;)
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...\n&quot;)
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+        url_json_path = image_path.parent / f&quot;{image_path.name}.url.json&quot;
+        full_txt_path = image_path.parent / f&quot;{image_path.name}.full.txt&quot;
+
+        # If either URL sidecar is missing, generate URL candidates
+        if not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            if not url_json_path.is_file():
+                url_json_path.write_text(json.dumps(url_data, indent=2), encoding=&quot;utf-8&quot;)
+                
+            if not url_txt_path.is_file():
+                url_txt_path.write_text(url_data[&quot;best_url&quot;], encoding=&quot;utf-8&quot;)
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+        else:
+            print(f&quot;Skipped '{image_path.relative_to(WORK_DIR)}' (already indexed)&quot;)
+
+    print(f&quot;\nOCR Indexing Complete. {indexed_count} new file(s) processed.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    process_ocr()
+
+</code></pre>
+<h3>Key Changes</h3>
+<ul>
+<li><strong>Dual Checking &amp; Writing:</strong> <code>process_ocr()</code> checks for both <code>.url.txt</code> and <code>.url.json</code>. If either is missing, it evaluates the crops and writes the missing file(s).</li>
+<li><strong><code>url.txt</code> Content:</strong> It extracts <code>url_data[&quot;best_url&quot;]</code> (the top-ranked candidate) and writes it directly to <code>.url.txt</code>.</li>
+</ul>
+<hr />
+<p><strong><a href="20260910_140613_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_140620_capture.md&quot;)</p>
