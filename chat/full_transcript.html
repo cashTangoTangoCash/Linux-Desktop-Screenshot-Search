@@ -12282,3 +12282,853 @@ NameError: name 'i' is not defined. Did you mean: 'id'?</p>
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160911_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 104</h1>
+<p>let's upgrade the inspect..py script by adding new actions</p>
+<p>new actions:</p>
+<ul>
+<li>open url.json file in emacs</li>
+<li>open full.txt file in emacs</li>
+<li>open url.txt file in emacs</li>
+</ul>
+<p>in particular, we want to view the cropped url image in emacs on demand, as an action in inspect..py.  ideally the user would choose which image to view - best or 2nd best</p>
+<p>existing inspect..py:</p>
+<p>#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tty
+import termios
+from pathlib import Path
+import time</p>
+<p>WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+.jpg$&quot;, re.IGNORECASE)</p>
+<p>def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    # 1. Check if the terminal emulator exposes $WINDOWID directly
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    # 2. Fall back to xdotool querying the active window at startup
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None</p>
+<p>def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass  # xdotool not installed, fail gracefully</p>
+<p>def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;</p>
+<p>def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines</p>
+<p>    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 6)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)</p>
+<p>        page_lines = all_content[line_pointer : line_pointer + chunk_size]</p>
+<p>        for line in page_lines:
+            print(line[:term_cols])</p>
+<p>        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)</p>
+<p>        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100</p>
+<p>        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] Screen Down | [b] Screen Up | [j] Line Down | [k] Line Up&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [e] Emacs | [m] Move | [d] Delete | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()</p>
+<p>        # --- Screenful (Page) Controls ---
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)</p>
+<p>        # --- Line-by-Line Controls ---
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;</p>
+<p>        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)</p>
+<p>        # --- Flashcard Workflow Actions ---
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('e', 'emacs', 'edit'):
+            return &quot;emacs&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+    
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file():
+                items.append([img, url_txt, full_txt])</p>
+<p>    if not items:
+        print(&quot;No screenshots with sidecar text files found to review.&quot;)
+        return</p>
+<p>    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0</p>
+<p>    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, full_txt_path = items[idx]</p>
+<p>            # 1. Close previous feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()</p>
+<p>            time.sleep(.1)</p>
+<p>            # 2. Spawn new feh process - stdin=DEVNULL prevents feh from locking terminal input
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )</p>
+<p>            time.sleep(.1)
+            restore_terminal_focus(term_win_id)</p>
+<p>            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;</p>
+<p>            action = custom_pager(title_str, url_text, full_text)
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+            elif action == &quot;emacs&quot;:
+                if full_txt_path.is_file():
+                    try:
+                        # -n / --no-wait returns control to python immediately
+                        subprocess.run(
+                            [&quot;emacsclient&quot;, &quot;-n&quot;, str(full_txt_path.resolve())],
+                            check=False,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except FileNotFoundError:
+                        print(&quot;\nemacsclient binary not found in PATH!&quot;)
+                        time.sleep(1)
+                else:
+                    print(f&quot;\nSidecar file does not exist: {full_txt_path.name}&quot;)
+                    time.sleep(1)
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)  # Remove from queue; next item shifts into current idx
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                # Note: keeping image, unlinking sidecars as per original script
+                items.pop(idx)  # Remove from queue</p>
+<p>    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()</p>
+<p>        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+    
+if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    review_flashcards()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162318_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 104</h1>
+<p>Here is the updated <code>inspect.py</code> script.</p>
+<h3>Key Improvements Added</h3>
+<ol>
+<li><strong>Dedicated Emacs Actions:</strong></li>
+</ol>
+<ul>
+<li><code>[ej]</code> Opens <code>.url.json</code> via <code>emacsclient -n</code></li>
+<li><code>[et]</code> Opens <code>.url.txt</code> via <code>emacsclient -n</code></li>
+<li><code>[ef]</code> Opens <code>.full.txt</code> via <code>emacsclient -n</code></li>
+</ul>
+<ol start="2">
+<li><strong>On-Demand Cropped URL Viewing:</strong></li>
+</ol>
+<ul>
+<li><code>[vc]</code> / <code>[c]</code> Action parses <code>.url.json</code>, lists all candidates sorted by score (Best / 2nd Best), crops the screenshot in <code>/tmp/</code> on the fly using ImageMagick (<code>magick</code>), and opens the crop in <code>feh</code>.</li>
+<li>Automatically restores window focus to your terminal so you don't lose keyboard navigation after inspecting the crop.</li>
+</ul>
+<pre><code class="language-python">#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None
+
+def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def open_in_emacs(file_path: Path):
+    &quot;&quot;&quot;Opens a file using emacsclient without blocking.&quot;&quot;&quot;
+    if file_path.is_file():
+        try:
+            subprocess.run(
+                [&quot;emacsclient&quot;, &quot;-n&quot;, str(file_path.resolve())],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except FileNotFoundError:
+            print(&quot;\nemacsclient binary not found in PATH!&quot;)
+            time.sleep(1)
+    else:
+        print(f&quot;\nFile does not exist: {file_path.name}&quot;)
+        time.sleep(1)
+
+def view_cropped_candidate(img_path: Path, url_json_path: Path, term_win_id: str | None):
+    &quot;&quot;&quot;Parses .url.json, prompts user for candidate choice, crops via ImageMagick, and displays in feh.&quot;&quot;&quot;
+    if not url_json_path.is_file():
+        print(f&quot;\nNo {url_json_path.name} sidecar file found to determine crop coordinates.&quot;)
+        time.sleep(1.2)
+        return
+
+    try:
+        data = json.loads(url_json_path.read_text(encoding=&quot;utf-8&quot;))
+        candidates = data.get(&quot;candidates&quot;, [])
+    except Exception as e:
+        print(f&quot;\nFailed to parse JSON sidecar: {e}&quot;)
+        time.sleep(1.2)
+        return
+
+    if not candidates:
+        print(&quot;\nNo candidates found inside .url.json.&quot;)
+        time.sleep(1.2)
+        return
+
+    print(&quot;\n--- Available Crop Candidates ---&quot;)
+    for i, c in enumerate(candidates):
+        rank = &quot;Best&quot; if i == 0 else f&quot;{i + 1}nd Best&quot; if i == 1 else f&quot;{i + 1}rd Best&quot;
+        crop = c.get(&quot;crop_coords&quot;, {})
+        coords_str = f&quot;{crop.get('w')}x{crop.get('h')}+{crop.get('x')}+{crop.get('y')}&quot;
+        text_preview = (c.get(&quot;text&quot;, &quot;&quot;)[:45] + &quot;...&quot;) if len(c.get(&quot;text&quot;, &quot;&quot;)) &gt; 45 else c.get(&quot;text&quot;, &quot;&quot;)
+        print(f&quot; [{i + 1}] Rank {i + 1} ({rank}) | Score: {c.get('score')} | Crop: {coords_str}&quot;)
+        print(f&quot;     Text: \&quot;{text_preview}\&quot;&quot;)
+
+    choice_str = input(&quot;\nSelect candidate number to view crop [default: 1]: &quot;).strip()
+    if not choice_str:
+        choice_idx = 0
+    elif choice_str.isdigit() and 1 &lt;= int(choice_str) &lt;= len(candidates):
+        choice_idx = int(choice_str) - 1
+    else:
+        print(&quot;Invalid selection.&quot;)
+        time.sleep(0.8)
+        return
+
+    cand = candidates[choice_idx]
+    crop = cand.get(&quot;crop_coords&quot;, {})
+    w, h, x, y = crop.get(&quot;w&quot;), crop.get(&quot;h&quot;), crop.get(&quot;x&quot;), crop.get(&quot;y&quot;)
+
+    tmp_crop = Path(f&quot;/tmp/crop_inspect_{img_path.stem}_cand{choice_idx + 1}.png&quot;)
+
+    # Crop image using ImageMagick
+    cmd = [&quot;magick&quot;, str(img_path.resolve()), &quot;-crop&quot;, f&quot;{w}x{h}+{x}+{y}&quot;, &quot;+repage&quot;, str(tmp_crop)]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f&quot;\nFailed to generate crop with ImageMagick: {e}&quot;)
+        time.sleep(1.2)
+        return
+
+    # Display cropped PNG in feh
+    crop_feh = subprocess.Popen(
+        [&quot;feh&quot;, &quot;--title&quot;, f&quot;Crop_Candidate_{choice_idx + 1}&quot;, &quot;-g&quot;, &quot;800x200&quot;, tmp_crop.name],
+        cwd=&quot;/tmp&quot;,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    time.sleep(0.1)
+    restore_terminal_focus(term_win_id)
+
+def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 7)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] PgDown | [b] PgUp | [j] LineDown | [k] LineUp&quot;)
+        print(&quot;[vc] View Crop | [ej] Emacs .json | [et] Emacs .url.txt | [ef] Emacs .full.txt&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [m] Move | [d] Delete Sidecars | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # Screenful (Page) Controls
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        # Line-by-Line Controls
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        # View Crop Action
+        elif choice in ('vc', 'c', 'crop'):
+            return &quot;view_crop&quot;
+
+        # Emacs Opening Actions
+        elif choice in ('ej', 'json'):
+            return &quot;emacs_json&quot;
+        elif choice in ('et', 'url'):
+            return &quot;emacs_url&quot;
+        elif choice in ('ef', 'e', 'emacs', 'full'):
+            return &quot;emacs_full&quot;
+
+        # Flashcard Workflow Actions
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            url_json = WORK_DIR / f&quot;{img.name}.url.json&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file() or url_json.is_file():
+                items.append([img, url_txt, url_json, full_txt])
+
+    if not items:
+        print(&quot;No screenshots with sidecar files found to review.&quot;)
+        return
+
+    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0
+
+    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, url_json_path, full_txt_path = items[idx]
+
+            # 1. Close previous main screenshot feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            time.sleep(0.1)
+
+            # 2. Spawn main screenshot feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            time.sleep(0.1)
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+
+            elif action == &quot;view_crop&quot;:
+                view_cropped_candidate(img_path, url_json_path, term_win_id)
+
+            elif action == &quot;emacs_json&quot;:
+                open_in_emacs(url_json_path)
+            elif action == &quot;emacs_url&quot;:
+                open_in_emacs(url_txt_path)
+            elif action == &quot;emacs_full&quot;:
+                open_in_emacs(full_txt_path)
+
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if url_json_path.is_file():
+                        shutil.move(str(url_json_path), str(dest / url_json_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)
+
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                url_json_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                items.pop(idx)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162331_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 105</h1>
+<p>no, for the cropped image, I believe we are already viewing the full image in feh.  we don't want to discard or overwrite that full image or even stop viewing it in feh.  I am choosing to show the cropped image in emacs because emacs is running in a 2nd computer monitor and I think it can do a decent job of displaying an image - no need to juggle more open apps.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162334_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 105</h1>
+<p>That makes complete sense—keeping the full-screen image steady on your primary monitor via <code>feh</code> while popping the cropped URL preview directly into Emacs on your secondary monitor keeps your workspace clean and prevents window focus fighting.</p>
+<p>Emacs handles inline images natively with <code>emacsclient</code>.</p>
+<p>Here is the updated script. When you choose <code>[vc]</code> (View Crop), it will:</p>
+<ol>
+<li>Slice the chosen candidate crop to <code>/tmp/crop_inspect_...png</code> using ImageMagick (<code>magick</code>).</li>
+<li>Dispatch <code>emacsclient -n</code> on that cropped image file so it opens in your Emacs frame on your second monitor without stealing focus or closing your <code>feh</code> full-screen view.</li>
+</ol>
+<pre><code class="language-python">#!/usr/bin/env python3
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_PATTERN = re.compile(r&quot;^\d{4}-\d{2}-\d{2}-.*_\d+x\d+\.jpg$&quot;, re.IGNORECASE)
+
+def get_terminal_window_id() -&gt; str | None:
+    &quot;&quot;&quot;Retrieves the X11 Window ID for the terminal emulator running this script.&quot;&quot;&quot;
+    win_id = os.environ.get(&quot;WINDOWID&quot;)
+    if win_id:
+        return win_id
+    
+    try:
+        out = subprocess.check_output([&quot;xdotool&quot;, &quot;getactivewindow&quot;], text=True).strip()
+        return out if out else None
+    except Exception:
+        return None
+
+def restore_terminal_focus(term_win_id: str | None):
+    &quot;&quot;&quot;Restores X11 focus and activates the terminal window running the pager.&quot;&quot;&quot;
+    if not term_win_id:
+        return
+    try:
+        subprocess.run(
+            [&quot;xdotool&quot;, &quot;windowactivate&quot;, &quot;--sync&quot;, term_win_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except FileNotFoundError:
+        pass
+
+def read_sidecar(path: Path) -&gt; str:
+    &quot;&quot;&quot;Reads sidecar text file safely.&quot;&quot;&quot;
+    if not path.is_file():
+        return &quot;[FILE NOT FOUND]&quot;
+    try:
+        text = path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).strip()
+        return text if text else &quot;[EMPTY / NO TEXT DETECTED]&quot;
+    except Exception as e:
+        return f&quot;&lt;Failed to read: {e}&gt;&quot;
+
+def open_in_emacs(file_path: Path):
+    &quot;&quot;&quot;Opens a file using emacsclient without blocking.&quot;&quot;&quot;
+    if file_path.is_file():
+        try:
+            subprocess.run(
+                [&quot;emacsclient&quot;, &quot;-n&quot;, str(file_path.resolve())],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except FileNotFoundError:
+            print(&quot;\nemacsclient binary not found in PATH!&quot;)
+            time.sleep(1)
+    else:
+        print(f&quot;\nFile does not exist: {file_path.name}&quot;)
+        time.sleep(1)
+
+def view_cropped_candidate_in_emacs(img_path: Path, url_json_path: Path, term_win_id: str | None):
+    &quot;&quot;&quot;Parses .url.json, prompts for candidate choice, crops via ImageMagick, and opens in Emacs.&quot;&quot;&quot;
+    if not url_json_path.is_file():
+        print(f&quot;\nNo {url_json_path.name} sidecar file found to determine crop coordinates.&quot;)
+        time.sleep(1.2)
+        return
+
+    try:
+        data = json.loads(url_json_path.read_text(encoding=&quot;utf-8&quot;))
+        candidates = data.get(&quot;candidates&quot;, [])
+    except Exception as e:
+        print(f&quot;\nFailed to parse JSON sidecar: {e}&quot;)
+        time.sleep(1.2)
+        return
+
+    if not candidates:
+        print(&quot;\nNo candidates found inside .url.json.&quot;)
+        time.sleep(1.2)
+        return
+
+    print(&quot;\n--- Available Crop Candidates ---&quot;)
+    for i, c in enumerate(candidates):
+        rank = &quot;Best&quot; if i == 0 else f&quot;{i + 1}nd Best&quot; if i == 1 else f&quot;{i + 1}rd Best&quot;
+        crop = c.get(&quot;crop_coords&quot;, {})
+        coords_str = f&quot;{crop.get('w')}x{crop.get('h')}+{crop.get('x')}+{crop.get('y')}&quot;
+        text_preview = (c.get(&quot;text&quot;, &quot;&quot;)[:45] + &quot;...&quot;) if len(c.get(&quot;text&quot;, &quot;&quot;)) &gt; 45 else c.get(&quot;text&quot;, &quot;&quot;)
+        print(f&quot; [{i + 1}] Rank {i + 1} ({rank}) | Score: {c.get('score')} | Crop: {coords_str}&quot;)
+        print(f&quot;     Text: \&quot;{text_preview}\&quot;&quot;)
+
+    choice_str = input(&quot;\nSelect candidate number to view crop in Emacs [default: 1]: &quot;).strip()
+    if not choice_str:
+        choice_idx = 0
+    elif choice_str.isdigit() and 1 &lt;= int(choice_str) &lt;= len(candidates):
+        choice_idx = int(choice_str) - 1
+    else:
+        print(&quot;Invalid selection.&quot;)
+        time.sleep(0.8)
+        return
+
+    cand = candidates[choice_idx]
+    crop = cand.get(&quot;crop_coords&quot;, {})
+    w, h, x, y = crop.get(&quot;w&quot;), crop.get(&quot;h&quot;), crop.get(&quot;x&quot;), crop.get(&quot;y&quot;)
+
+    tmp_crop = Path(f&quot;/tmp/crop_inspect_{img_path.stem}_cand{choice_idx + 1}.png&quot;)
+
+    # Crop image using ImageMagick
+    cmd = [&quot;magick&quot;, str(img_path.resolve()), &quot;-crop&quot;, f&quot;{w}x{h}+{x}+{y}&quot;, &quot;+repage&quot;, str(tmp_crop)]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f&quot;\nFailed to generate crop with ImageMagick: {e}&quot;)
+        time.sleep(1.2)
+        return
+
+    # Send cropped image to Emacs via emacsclient
+    open_in_emacs(tmp_crop)
+    restore_terminal_focus(term_win_id)
+
+def custom_pager(title: str, url_text: str, full_text: str) -&gt; str:
+    &quot;&quot;&quot;Unified Pager UI using standard input().&quot;&quot;&quot;
+    url_lines = [f&quot;URL OCR: {url_text}&quot;, &quot;-&quot; * 60]
+    full_lines = full_text.splitlines()
+    all_content = url_lines + full_lines
+
+    line_pointer = 0
+    while True:
+        term_cols, term_rows = shutil.get_terminal_size(fallback=(80, 24))
+        chunk_size = max(5, term_rows - 7)
+        
+        os.system(&quot;clear&quot;)
+        print(f&quot;=== {title} ===&quot;)
+        print(&quot;=&quot; * 60)
+
+        page_lines = all_content[line_pointer : line_pointer + chunk_size]
+
+        for line in page_lines:
+            print(line[:term_cols])
+
+        for _ in range(chunk_size - len(page_lines)):
+            print(&quot;&quot;)
+
+        total_lines = len(all_content)
+        end_idx = min(line_pointer + chunk_size, total_lines)
+        pct = int((end_idx / total_lines) * 100) if total_lines else 100
+
+        print(&quot;=&quot; * 60)
+        print(f&quot;PAGER [{line_pointer + 1}-{end_idx}/{total_lines} L ({pct}%)]&quot;)
+        print(&quot;[f/Enter] PgDown | [b] PgUp | [j] LineDown | [k] LineUp&quot;)
+        print(&quot;[vc] Crop -&gt; Emacs | [ej] Emacs .json | [et] Emacs .url.txt | [ef] Emacs .full.txt&quot;)
+        print(&quot;[p] Prev Card | [n] Next Card | [m] Move | [d] Delete Sidecars | [q] Quit&quot;)
+        
+        choice = input(&quot;Choice -&gt; &quot;).strip().lower()
+
+        # Screenful (Page) Controls
+        if choice in ('f', '', 'pgdn'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer = min(total_lines - chunk_size, line_pointer + chunk_size)
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('b', 'pgup'):
+            line_pointer = max(0, line_pointer - chunk_size)
+
+        # Line-by-Line Controls
+        elif choice in ('j', 'down'):
+            if line_pointer + chunk_size &lt; total_lines:
+                line_pointer += 1
+            else:
+                return &quot;next&quot;
+
+        elif choice in ('k', 'up'):
+            line_pointer = max(0, line_pointer - 1)
+
+        # View Crop Action
+        elif choice in ('vc', 'c', 'crop'):
+            return &quot;view_crop&quot;
+
+        # Emacs Opening Actions
+        elif choice in ('ej', 'json'):
+            return &quot;emacs_json&quot;
+        elif choice in ('et', 'url'):
+            return &quot;emacs_url&quot;
+        elif choice in ('ef', 'e', 'emacs', 'full'):
+            return &quot;emacs_full&quot;
+
+        # Flashcard Workflow Actions
+        elif choice in ('p', 'prev', 'back'):
+            return &quot;prev&quot;
+        elif choice in ('n', 'next'):
+            return &quot;next&quot;
+        elif choice in ('m', 'move'):
+            return &quot;move&quot;
+        elif choice in ('d', 'del', 'delete'):
+            return &quot;delete&quot;
+        elif choice in ('q', 'quit'):
+            return &quot;quit&quot;
+
+def review_flashcards():
+    items = []
+    for img in sorted(WORK_DIR.iterdir()):
+        if img.is_file() and PC_PATTERN.match(img.name):
+            url_txt = WORK_DIR / f&quot;{img.name}.url.txt&quot;
+            url_json = WORK_DIR / f&quot;{img.name}.url.json&quot;
+            full_txt = WORK_DIR / f&quot;{img.name}.full.txt&quot;
+            if url_txt.is_file() or full_txt.is_file() or url_json.is_file():
+                items.append([img, url_txt, url_json, full_txt])
+
+    if not items:
+        print(&quot;No screenshots with sidecar files found to review.&quot;)
+        return
+
+    term_win_id = get_terminal_window_id()
+    feh_proc = None
+    idx = 0
+
+    try:
+        while 0 &lt;= idx &lt; len(items):
+            img_path, url_txt_path, url_json_path, full_txt_path = items[idx]
+
+            # 1. Close previous main screenshot feh instance
+            if feh_proc and feh_proc.poll() is None:
+                feh_proc.terminate()
+                feh_proc.wait()
+
+            time.sleep(0.1)
+
+            # 2. Spawn main screenshot feh process
+            feh_proc = subprocess.Popen(
+                [&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+
+            time.sleep(0.1)
+            restore_terminal_focus(term_win_id)
+
+            url_text = read_sidecar(url_txt_path)
+            full_text = read_sidecar(full_txt_path)
+            title_str = f&quot;Flashcard ({idx + 1}/{len(items)}) - {img_path.name}&quot;
+
+            action = custom_pager(title_str, url_text, full_text)
+
+            if action == &quot;quit&quot;:
+                break
+            elif action == &quot;next&quot;:
+                idx += 1
+            elif action == &quot;prev&quot;:
+                if idx &gt; 0:
+                    idx -= 1
+                else:
+                    print(&quot;\nAlready at the first card!&quot;)
+                    time.sleep(0.8)
+
+            elif action == &quot;view_crop&quot;:
+                view_cropped_candidate_in_emacs(img_path, url_json_path, term_win_id)
+
+            elif action == &quot;emacs_json&quot;:
+                open_in_emacs(url_json_path)
+            elif action == &quot;emacs_url&quot;:
+                open_in_emacs(url_txt_path)
+            elif action == &quot;emacs_full&quot;:
+                open_in_emacs(full_txt_path)
+
+            elif action == &quot;move&quot;:
+                print(&quot;\n&quot;)
+                target_folder = input(&quot;Enter subfolder name to move into: &quot;).strip()
+                if target_folder:
+                    dest = WORK_DIR / target_folder
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(img_path), str(dest / img_path.name))
+                    if url_txt_path.is_file():
+                        shutil.move(str(url_txt_path), str(dest / url_txt_path.name))
+                    if url_json_path.is_file():
+                        shutil.move(str(url_json_path), str(dest / url_json_path.name))
+                    if full_txt_path.is_file():
+                        shutil.move(str(full_txt_path), str(dest / full_txt_path.name))
+                    
+                    items.pop(idx)
+
+            elif action == &quot;delete&quot;:
+                url_txt_path.unlink(missing_ok=True)
+                url_json_path.unlink(missing_ok=True)
+                full_txt_path.unlink(missing_ok=True)
+                items.pop(idx)
+
+    finally:
+        if feh_proc and feh_proc.poll() is None:
+            feh_proc.terminate()
+
+        os.system(&quot;clear&quot;)
+        print(&quot;Flashcard review complete.&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    review_flashcards()
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162345_capture.md&quot;)</p>
+<hr />
