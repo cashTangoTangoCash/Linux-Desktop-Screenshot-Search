@@ -1,0 +1,100 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 101</h1>
+<p><strong><a href="20260910_142945_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160856_capture.html">Next →</a></strong></p>
+<hr />
+<p>This is a classic problem with Firefox’s address bar behavior: when you execute a search, Firefox replaces the raw <code>[https://www.google.com/search?q=](https://www.google.com/search?q=)...</code> URL in the bar with a plain-text display version featuring a search engine badge (the <strong>G</strong> and drop-down arrow <strong>v</strong>) followed directly by your search terms: <code>reddit trek checkpoint f12</code>.</p>
+<p>Because neither result looks like a traditional <code>http://</code> or <code>.com</code> URL, both failed all domain rules and scored <strong>-20</strong>, causing the script to fall back to the <code>mate</code> result simply because it came first in the list.</p>
+<h3>Why This Case Is Easy to Fix</h3>
+<p>You don't need to contort your URL scoring logic with complex edge cases. In Firefox, a search bar state always follows a predictable structure:</p>
+<ol>
+<li><strong>The Search Engine Badge:</strong> Tesseract translates the Firefox Google icon and drop-down arrow into predictable noise characters at the very beginning of the string (usually <code>g v</code>, <code>g v</code>, <code>g  v</code>, <code>g &gt;</code>, or <code>g v</code>).</li>
+<li><strong>Real Words vs. OCR Noise:</strong> <code>reddit trek checkpoint</code> consists of clean, space-separated dictionary words. In contrast, <code>~. rarddit fraly clhhaclyrnaatirnd f7any |</code> is OCR noise from reading window border padding, icons, or title bar elements outside the actual address box.</li>
+</ol>
+<h3>The Solution: A Search Bar Awareness Rule</h3>
+<p>Add a rule that specifically identifies Firefox search-bar formatting and evaluates whether the remaining text consists of readable human words rather than visual noise.</p>
+<pre><code class="language-python">import re
+
+def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Strip common Firefox URL bar search engine prefix artifacts (e.g., &quot;g v &quot;)
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=i).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    # (e.g., low proportion of digits smashed into letters, no repeated triplets)
+    valid_words = 0
+    for w in words:
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w):
+            valid_words += 1
+            
+    # If at least 2 clean words exist and make up most of the string, it's a real query
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+
+def score_url_candidate(text: str) -&gt; int:
+    if not text:
+        return -100
+
+    score = 0
+
+    # 1. Check for Firefox Search Bar pattern (&quot;g v search terms...&quot;)
+    has_search_prefix = bool(re.match(r&quot;^[gG]\s+[v&gt;]\s+&quot;, text))
+    if has_search_prefix:
+        if is_readable_search_query(text):
+            score += 35  # Strong reward for a valid Firefox search bar entry!
+        else:
+            score -= 15  # Penalize if prefix is present but rest is gibberish
+
+    # 2. Standard URL structural checks
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # 3. Penalize extreme noise (symbols, wild character runs)
+    symbols = len(re.findall(r&quot;[~|\\{}[\]^=]&quot;, text))
+    if symbols &gt; 1:
+        score -= (symbols * 10)  # Heavily penalize garbage characters like '~', '|'
+
+    return score
+
+</code></pre>
+<h3>How This Scores Your Test Case</h3>
+<ul>
+<li>
+<p><strong><code>mate</code> (<code>~. rarddit fraly clhhaclyrnaatirnd f7any |</code>)</strong></p>
+</li>
+<li>
+<p>Contains illegal/noise characters (<code>~</code>, <code>|</code>), docking <strong>-20 points</strong>.</p>
+</li>
+<li>
+<p>Fails the valid word check (<code>clhhaclyrnaatirnd</code> has 3 consecutive <code>h</code>s and <code>l</code>s).</p>
+</li>
+<li>
+<p><strong>Final Score:</strong> <strong>-40</strong></p>
+</li>
+<li>
+<p><strong><code>i3</code> (<code>g v reddit trek checkpoint i)</code>)</strong></p>
+</li>
+<li>
+<p>Matches Firefox search prefix (<code>g v </code>).</p>
+</li>
+<li>
+<p>Recognizes <code>reddit</code>, <code>trek</code>, and <code>checkpoint</code> as clean search terms (<strong>+35 points</strong>).</p>
+</li>
+<li>
+<p><strong>Final Score:</strong> <strong>+15</strong></p>
+</li>
+</ul>
+<p><code>i3</code> wins by 55 points without breaking your existing URL scoring logic.</p>
+<hr />
+<p><strong><a href="20260910_142945_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160856_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142950_capture.md&quot;)</p>

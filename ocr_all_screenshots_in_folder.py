@@ -45,59 +45,83 @@ def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]
         print(f"Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}")
         return ""
 
-def score_url_candidate(text: str) -> int:
-    """Assigns a heuristic quality score to an OCR string to determine the 'better' URL."""
+
+def is_readable_search_query(text: str) -> bool:
+    """Checks if a string looks like a clean, human-typed search query."""
+    # Use re.IGNORECASE or re.I instead of bare 'i'
+    cleaned = re.sub(r"^[a-z]\s+[v>]\s+", "", text, flags=re.IGNORECASE).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r"\s+", cleaned) if len(w) > 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    valid_words = 0
+    for w in words:
+        if not re.search(r"(.)\1\1", w) and not re.search(r"[a-z]{3,}\d+[a-z]+", w):
+            valid_words += 1
+            
+    return (valid_words >= 2) and (valid_words / len(words) >= 0.7)
+
+def score_url_candidate(text: str) -> dict:
     if not text:
-        return -100
+        return {"score": -100, "report": ["Empty text string"]}
 
     score = 0
+    report = []
 
-    # Strong URL indicators
+    # 1. Structural URL checks
     if re.search(r"https?://", text):
         score += 50
+        report.append("+50: Contains protocol (http/https)")
     if "www." in text:
         score += 30
+        report.append("+30: Contains 'www.'")
     if re.search(r"\.(com|org|net|edu|gov|io|uk|de)\b", text):
         score += 20
+        report.append("+20: Contains valid top-level domain")
     if "/" in text:
         score += 10
+        report.append("+10: Contains path slash '/'")
 
-    # NEW: Penalize leading junk before www. or http(s)://
-    if re.search(r"^[^w h]*www\.", text) or re.search(r"^[^h]*https?://", text):
-        # Text starts with stray OCR artifacts before the actual domain
-        if not text.startswith("www.") and not text.startswith("http"):
-            score -= 15
+    # 2. Penalize garbage domains / typos
+    if "qgoog" in text or "googq" in text:
+        score -= 40
+        report.append("-40: Detected mangled domain name typo ('qgoogqgle')")
 
-    # NEW: Catch ALL whitespace variants (including non-breaking spaces \xa0)
+    # 3. Penalize whitespace and noise
     if re.search(r"\s", text):
         score -= 20
+        report.append("-20: Contains whitespace/non-breaking spaces")
+    
+    symbols = len(re.findall(r"[~|\\{}[\]^=]", text))
+    if symbols > 0:
+        penalty = symbols * 5
+        score -= penalty
+        report.append(f"-{penalty}: Contains {symbols} symbol noise character(s)")
 
-    # NEW: Penalize obvious OCR typos in high-frequency domains
-    if "qgoog" in text or "googq" in text:
-        score -= 30
-
-    if len(text) < 5:
-        score -= 20
-
-    return score
+    return {"score": score, "report": report}
 
 def process_url_candidates(image_path: Path) -> dict:
-    """Runs OCR across predefined crop rectangles and ranks results best-first."""
     candidates = []
 
     for rect_info in RECTANGLES:
         coords = rect_info["coords"]
         extracted_text = run_single_crop_ocr(image_path, coords)
-        score = score_url_candidate(extracted_text)
+        
+        # Get score and report card dict
+        eval_result = score_url_candidate(extracted_text)
 
         candidates.append({
             "rect_name": rect_info["name"],
             "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
             "text": extracted_text,
-            "score": score
+            "score": eval_result["score"],
+            "scoring_report": eval_result["report"]  # <--- Stored in JSON
         })
 
-    # Sort candidates descending by score (best result first)
+    # Sort descending by score
     candidates.sort(key=lambda c: c["score"], reverse=True)
 
     return {

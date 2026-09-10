@@ -1,0 +1,117 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 103</h1>
+<p><strong><a href="20260910_160904_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Embedding a blow-by-blow breakdown directly in the JSON output is a great approach for a quick visual inspection script. It lets you scan through your results file and instantly see <em>why</em> the script made its choice without dropping into an interactive debugger like <code>pudb</code> or <code>pdb</code>.</p>
+<p>To do this cleanly, you can have your scoring function return a dictionary containing both the final score and a list of specific reasons or point adjustments, rather than just returning a single integer.</p>
+<h3>How to Implement a Scoring Report Card in JSON</h3>
+<p>Update your scoring logic to build a structured report during evaluation:</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; dict:
+    if not text:
+        return {&quot;score&quot;: -100, &quot;report&quot;: [&quot;Empty text string&quot;]}
+
+    score = 0
+    report = []
+
+    # 1. Structural URL checks
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+        report.append(&quot;+50: Contains protocol (http/https)&quot;)
+    if &quot;www.&quot; in text:
+        score += 30
+        report.append(&quot;+30: Contains 'www.'&quot;)
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+        report.append(&quot;+20: Contains valid top-level domain&quot;)
+    if &quot;/&quot; in text:
+        score += 10
+        report.append(&quot;+10: Contains path slash '/'&quot;)
+
+    # 2. Penalize garbage domains / typos
+    if &quot;qgoog&quot; in text or &quot;googq&quot; in text:
+        score -= 40
+        report.append(&quot;-40: Detected mangled domain name typo ('qgoogqgle')&quot;)
+
+    # 3. Penalize whitespace and noise
+    if re.search(r&quot;\s&quot;, text):
+        score -= 20
+        report.append(&quot;-20: Contains whitespace/non-breaking spaces&quot;)
+    
+    symbols = len(re.findall(r&quot;[~|\\{}[\]^=]&quot;, text))
+    if symbols &gt; 0:
+        penalty = symbols * 5
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains {symbols} symbol noise character(s)&quot;)
+
+    return {&quot;score&quot;: score, &quot;report&quot;: report}
+
+</code></pre>
+<h3>Updating <code>process_url_candidates</code></h3>
+<p>Then, unpack that dictionary inside your candidate loop so the report gets saved right alongside the score in your JSON sidecar:</p>
+<pre><code class="language-python">def process_url_candidates(image_path: Path) -&gt; dict:
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info[&quot;coords&quot;]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        # Get score and report card dict
+        eval_result = score_url_candidate(extracted_text)
+
+        candidates.append({
+            &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+            &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+            &quot;text&quot;: extracted_text,
+            &quot;score&quot;: eval_result[&quot;score&quot;],
+            &quot;scoring_report&quot;: eval_result[&quot;report&quot;]  # &lt;--- Stored in JSON
+        })
+
+    # Sort descending by score
+    candidates.sort(key=lambda c: c[&quot;score&quot;], reverse=True)
+
+    return {
+        &quot;best_url&quot;: candidates[0][&quot;text&quot;],
+        &quot;candidates&quot;: candidates
+    }
+
+</code></pre>
+<h3>What the JSON Output Looks Like Now</h3>
+<p>When you inspect a misbehaving case later, your <code>.url.json</code> will explicitly tell you the story:</p>
+<pre><code class="language-json">{
+  &quot;best_url&quot;: &quot;== www.google.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqqay&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;text&quot;: &quot;== www.google.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqqay&quot;,
+      &quot;score&quot;: 50,
+      &quot;scoring_report&quot;: [
+        &quot;+30: Contains 'www.'&quot;,
+        &quot;+20: Contains valid top-level domain&quot;,
+        &quot;+10: Contains path slash '/'&quot;,
+        &quot;-10: Contains 2 symbol noise character(s)&quot;
+      ]
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate&quot;,
+      &quot;text&quot;: &quot;o 6 = www.qgoogqgle.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqgay 13!&quot;,
+      &quot;score&quot;: 10,
+      &quot;scoring_report&quot;: [
+        &quot;+30: Contains 'www.'&quot;,
+        &quot;+20: Contains valid top-level domain&quot;,
+        &quot;+10: Contains path slash '/'&quot;,
+        &quot;-40: Detected mangled domain name typo ('qgoogqgle')&quot;,
+        &quot;-20: Contains whitespace/non-breaking spaces&quot;
+      ]
+    }
+  ]
+}
+
+</code></pre>
+<h3>When to use JSON Report Cards vs. Debuggers (<code>pudb</code>)</h3>
+<ul>
+<li><strong>Use JSON Report Cards when:</strong> You are doing batch processing (like scanning 18+ screenshots overnight), a few edge cases fail, and you want to grep or quickly read the JSON logs to see <em>why</em> the script preferred one crop over another. It saves you from pausing execution.</li>
+<li><strong>Use <code>pudb</code> / <code>pdb</code> when:</strong> The OCR text itself is completely bizarre, you aren't sure what regex pattern will match it, or you need to interactively step through how Tesseract and ImageMagick are slicing the bounding boxes in real-time.</li>
+</ul>
+<hr />
+<p><strong><a href="20260910_160904_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160911_capture.md&quot;)</p>

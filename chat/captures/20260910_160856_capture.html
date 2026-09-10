@@ -1,0 +1,31 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 102</h1>
+<p><strong><a href="20260910_142950_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160900_capture.html">Next →</a></strong></p>
+<hr />
+<p>[dad84@dad84-2013PC try-url-ocr]$ ocr_all_screenshots_in_folder.py 
+Starting OCR indexing for 18 screenshot(s)...</p>
+<p>Skipped '2026-01-13-22:42-05_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:06-55_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:07-18_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-00_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-25_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-48_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:12-28_2560x1380.jpg' (already indexed)
+Traceback (most recent call last):
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 185, in <module>
+    process_ocr()
+    ~~~~~~~~~~~^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 165, in process_ocr
+    url_data = process_url_candidates(image_path)
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 106, in process_url_candidates
+    score = score_url_candidate(extracted_text)
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 77, in score_url_candidate
+    if is_readable_search_query(text):
+       ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 51, in is_readable_search_query
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=i).strip()
+                                                          ^
+NameError: name 'i' is not defined. Did you mean: 'id'?</p>
+<hr />
+<p><strong><a href="20260910_142950_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160900_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160856_capture.md&quot;)</p>

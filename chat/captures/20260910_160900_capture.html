@@ -1,0 +1,30 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 102</h1>
+<p><strong><a href="20260910_160856_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160904_capture.html">Next →</a></strong></p>
+<hr />
+<p>That's a classic Python typo in <code>re.sub()</code>. In Python's <code>re</code> module, the regex flag for case-insensitivity is <code>re.IGNORECASE</code> (or <code>re.I</code>), rather than a bare variable <code>i</code>.</p>
+<h3>The Fix</h3>
+<p>In <code>is_readable_search_query()</code>, change <code>flags=i</code> to <code>flags=re.IGNORECASE</code> (or <code>flags=re.I</code>).</p>
+<pre><code class="language-python">def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Use re.IGNORECASE or re.I instead of bare 'i'
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    valid_words = 0
+    for w in words:
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w):
+            valid_words += 1
+            
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+</code></pre>
+<p>Updating line 51 with <code>flags=re.IGNORECASE</code> will resolve the <code>NameError</code> and allow <code>ocr_all_screenshots_in_folder.py</code> to finish indexing the remaining images.</p>
+<hr />
+<p><strong><a href="20260910_160856_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_160904_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160900_capture.md&quot;)</p>

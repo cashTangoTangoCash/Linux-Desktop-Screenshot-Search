@@ -11956,3 +11956,329 @@ def score_url_candidate(text: str) -&gt; int:
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142545_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 101</h1>
+<p>ok, now we come across another common case.  in firefox, you can google search directly in the url bar (or maybe just go to google.com and put a search query in the box).  you hit enter and you get a screen with google search results.  the firefox url bar then contains your google search.  so we have:</p>
+<p>{
+  &quot;best_url&quot;: &quot;<del>. rarddit fraly clhhaclyrnaatirnd f7any |&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;mate&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1836,
+        &quot;h&quot;: 33,
+        &quot;x&quot;: 230,
+        &quot;y&quot;: 50
+      },
+      &quot;text&quot;: &quot;</del>. rarddit fraly clhhaclyrnaatirnd f7any |&quot;,
+      &quot;score&quot;: -20
+    },
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1621,
+        &quot;h&quot;: 47,
+        &quot;x&quot;: 284,
+        &quot;y&quot;: 58
+      },</p>
+<p>in firefox, there is an artistic-looking G for google in the url bar, followed by an arrow to click on and select a different search engine.  that is giving us the g v in the i3 rectangle result.  I don't know if it's worth trying to contort the url scoring code to try to catch this unfortunately common case.  the current url scoring code is picking the obviously mangled one with rarddit fraly etc as the best one.
+      &quot;text&quot;: &quot;g v reddit trek checkpoint i)&quot;,
+      &quot;score&quot;: -20
+    }
+  ]
+}</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142945_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 101</h1>
+<p>This is a classic problem with Firefox’s address bar behavior: when you execute a search, Firefox replaces the raw <code>[https://www.google.com/search?q=](https://www.google.com/search?q=)...</code> URL in the bar with a plain-text display version featuring a search engine badge (the <strong>G</strong> and drop-down arrow <strong>v</strong>) followed directly by your search terms: <code>reddit trek checkpoint f12</code>.</p>
+<p>Because neither result looks like a traditional <code>http://</code> or <code>.com</code> URL, both failed all domain rules and scored <strong>-20</strong>, causing the script to fall back to the <code>mate</code> result simply because it came first in the list.</p>
+<h3>Why This Case Is Easy to Fix</h3>
+<p>You don't need to contort your URL scoring logic with complex edge cases. In Firefox, a search bar state always follows a predictable structure:</p>
+<ol>
+<li><strong>The Search Engine Badge:</strong> Tesseract translates the Firefox Google icon and drop-down arrow into predictable noise characters at the very beginning of the string (usually <code>g v</code>, <code>g v</code>, <code>g  v</code>, <code>g &gt;</code>, or <code>g v</code>).</li>
+<li><strong>Real Words vs. OCR Noise:</strong> <code>reddit trek checkpoint</code> consists of clean, space-separated dictionary words. In contrast, <code>~. rarddit fraly clhhaclyrnaatirnd f7any |</code> is OCR noise from reading window border padding, icons, or title bar elements outside the actual address box.</li>
+</ol>
+<h3>The Solution: A Search Bar Awareness Rule</h3>
+<p>Add a rule that specifically identifies Firefox search-bar formatting and evaluates whether the remaining text consists of readable human words rather than visual noise.</p>
+<pre><code class="language-python">import re
+
+def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Strip common Firefox URL bar search engine prefix artifacts (e.g., &quot;g v &quot;)
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=i).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    # (e.g., low proportion of digits smashed into letters, no repeated triplets)
+    valid_words = 0
+    for w in words:
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w):
+            valid_words += 1
+            
+    # If at least 2 clean words exist and make up most of the string, it's a real query
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+
+def score_url_candidate(text: str) -&gt; int:
+    if not text:
+        return -100
+
+    score = 0
+
+    # 1. Check for Firefox Search Bar pattern (&quot;g v search terms...&quot;)
+    has_search_prefix = bool(re.match(r&quot;^[gG]\s+[v&gt;]\s+&quot;, text))
+    if has_search_prefix:
+        if is_readable_search_query(text):
+            score += 35  # Strong reward for a valid Firefox search bar entry!
+        else:
+            score -= 15  # Penalize if prefix is present but rest is gibberish
+
+    # 2. Standard URL structural checks
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # 3. Penalize extreme noise (symbols, wild character runs)
+    symbols = len(re.findall(r&quot;[~|\\{}[\]^=]&quot;, text))
+    if symbols &gt; 1:
+        score -= (symbols * 10)  # Heavily penalize garbage characters like '~', '|'
+
+    return score
+
+</code></pre>
+<h3>How This Scores Your Test Case</h3>
+<ul>
+<li>
+<p><strong><code>mate</code> (<code>~. rarddit fraly clhhaclyrnaatirnd f7any |</code>)</strong></p>
+</li>
+<li>
+<p>Contains illegal/noise characters (<code>~</code>, <code>|</code>), docking <strong>-20 points</strong>.</p>
+</li>
+<li>
+<p>Fails the valid word check (<code>clhhaclyrnaatirnd</code> has 3 consecutive <code>h</code>s and <code>l</code>s).</p>
+</li>
+<li>
+<p><strong>Final Score:</strong> <strong>-40</strong></p>
+</li>
+<li>
+<p><strong><code>i3</code> (<code>g v reddit trek checkpoint i)</code>)</strong></p>
+</li>
+<li>
+<p>Matches Firefox search prefix (<code>g v </code>).</p>
+</li>
+<li>
+<p>Recognizes <code>reddit</code>, <code>trek</code>, and <code>checkpoint</code> as clean search terms (<strong>+35 points</strong>).</p>
+</li>
+<li>
+<p><strong>Final Score:</strong> <strong>+15</strong></p>
+</li>
+</ul>
+<p><code>i3</code> wins by 55 points without breaking your existing URL scoring logic.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142950_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 102</h1>
+<p>[dad84@dad84-2013PC try-url-ocr]$ ocr_all_screenshots_in_folder.py 
+Starting OCR indexing for 18 screenshot(s)...</p>
+<p>Skipped '2026-01-13-22:42-05_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:06-55_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:07-18_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-00_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-25_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:11-48_2560x1380.jpg' (already indexed)
+Skipped '2026-01-13-23:12-28_2560x1380.jpg' (already indexed)
+Traceback (most recent call last):
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 185, in <module>
+    process_ocr()
+    ~~~~~~~~~~~^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 165, in process_ocr
+    url_data = process_url_candidates(image_path)
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 106, in process_url_candidates
+    score = score_url_candidate(extracted_text)
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 77, in score_url_candidate
+    if is_readable_search_query(text):
+       ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 51, in is_readable_search_query
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=i).strip()
+                                                          ^
+NameError: name 'i' is not defined. Did you mean: 'id'?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160856_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 102</h1>
+<p>That's a classic Python typo in <code>re.sub()</code>. In Python's <code>re</code> module, the regex flag for case-insensitivity is <code>re.IGNORECASE</code> (or <code>re.I</code>), rather than a bare variable <code>i</code>.</p>
+<h3>The Fix</h3>
+<p>In <code>is_readable_search_query()</code>, change <code>flags=i</code> to <code>flags=re.IGNORECASE</code> (or <code>flags=re.I</code>).</p>
+<pre><code class="language-python">def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Use re.IGNORECASE or re.I instead of bare 'i'
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    valid_words = 0
+    for w in words:
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w):
+            valid_words += 1
+            
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+</code></pre>
+<p>Updating line 51 with <code>flags=re.IGNORECASE</code> will resolve the <code>NameError</code> and allow <code>ocr_all_screenshots_in_folder.py</code> to finish indexing the remaining images.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160900_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 103</h1>
+<p>I am using inspect script to review the results and quickly hit on this one misbehaving:</p>
+<p>{
+  &quot;best_url&quot;: &quot;o 6 = <a href="http://www.qgoogqgle.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqgay">www.qgoogqgle.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqgay</a> 13!&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;mate&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1836,
+        &quot;h&quot;: 33,
+        &quot;x&quot;: 230,
+        &quot;y&quot;: 50
+      },
+      &quot;text&quot;: &quot;o 6 = www.qgoogqgle.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqgay 13!&quot;,
+      &quot;score&quot;: 20
+    },
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1621,
+        &quot;h&quot;: 47,
+        &quot;x&quot;: 284,
+        &quot;y&quot;: 58
+      },
+      &quot;text&quot;: &quot;== www.google.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqqay&quot;,
+      &quot;score&quot;: 10
+    }
+  ]
+}</p>
+<p>is it possible to have the json contain the blow by blow scoring report card, or is this better left to debugging e.g. pudb/pdb?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160904_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 103</h1>
+<p>Embedding a blow-by-blow breakdown directly in the JSON output is a great approach for a quick visual inspection script. It lets you scan through your results file and instantly see <em>why</em> the script made its choice without dropping into an interactive debugger like <code>pudb</code> or <code>pdb</code>.</p>
+<p>To do this cleanly, you can have your scoring function return a dictionary containing both the final score and a list of specific reasons or point adjustments, rather than just returning a single integer.</p>
+<h3>How to Implement a Scoring Report Card in JSON</h3>
+<p>Update your scoring logic to build a structured report during evaluation:</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; dict:
+    if not text:
+        return {&quot;score&quot;: -100, &quot;report&quot;: [&quot;Empty text string&quot;]}
+
+    score = 0
+    report = []
+
+    # 1. Structural URL checks
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+        report.append(&quot;+50: Contains protocol (http/https)&quot;)
+    if &quot;www.&quot; in text:
+        score += 30
+        report.append(&quot;+30: Contains 'www.'&quot;)
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+        report.append(&quot;+20: Contains valid top-level domain&quot;)
+    if &quot;/&quot; in text:
+        score += 10
+        report.append(&quot;+10: Contains path slash '/'&quot;)
+
+    # 2. Penalize garbage domains / typos
+    if &quot;qgoog&quot; in text or &quot;googq&quot; in text:
+        score -= 40
+        report.append(&quot;-40: Detected mangled domain name typo ('qgoogqgle')&quot;)
+
+    # 3. Penalize whitespace and noise
+    if re.search(r&quot;\s&quot;, text):
+        score -= 20
+        report.append(&quot;-20: Contains whitespace/non-breaking spaces&quot;)
+    
+    symbols = len(re.findall(r&quot;[~|\\{}[\]^=]&quot;, text))
+    if symbols &gt; 0:
+        penalty = symbols * 5
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains {symbols} symbol noise character(s)&quot;)
+
+    return {&quot;score&quot;: score, &quot;report&quot;: report}
+
+</code></pre>
+<h3>Updating <code>process_url_candidates</code></h3>
+<p>Then, unpack that dictionary inside your candidate loop so the report gets saved right alongside the score in your JSON sidecar:</p>
+<pre><code class="language-python">def process_url_candidates(image_path: Path) -&gt; dict:
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info[&quot;coords&quot;]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        # Get score and report card dict
+        eval_result = score_url_candidate(extracted_text)
+
+        candidates.append({
+            &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+            &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+            &quot;text&quot;: extracted_text,
+            &quot;score&quot;: eval_result[&quot;score&quot;],
+            &quot;scoring_report&quot;: eval_result[&quot;report&quot;]  # &lt;--- Stored in JSON
+        })
+
+    # Sort descending by score
+    candidates.sort(key=lambda c: c[&quot;score&quot;], reverse=True)
+
+    return {
+        &quot;best_url&quot;: candidates[0][&quot;text&quot;],
+        &quot;candidates&quot;: candidates
+    }
+
+</code></pre>
+<h3>What the JSON Output Looks Like Now</h3>
+<p>When you inspect a misbehaving case later, your <code>.url.json</code> will explicitly tell you the story:</p>
+<pre><code class="language-json">{
+  &quot;best_url&quot;: &quot;== www.google.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqqay&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;text&quot;: &quot;== www.google.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqqay&quot;,
+      &quot;score&quot;: 50,
+      &quot;scoring_report&quot;: [
+        &quot;+30: Contains 'www.'&quot;,
+        &quot;+20: Contains valid top-level domain&quot;,
+        &quot;+10: Contains path slash '/'&quot;,
+        &quot;-10: Contains 2 symbol noise character(s)&quot;
+      ]
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate&quot;,
+      &quot;text&quot;: &quot;o 6 = www.qgoogqgle.com/search?client=firefox-b-1-d&amp;q=reddit+medicaid+work+requirements&amp;sei=sbznafvgm7tfp84pvltqgay 13!&quot;,
+      &quot;score&quot;: 10,
+      &quot;scoring_report&quot;: [
+        &quot;+30: Contains 'www.'&quot;,
+        &quot;+20: Contains valid top-level domain&quot;,
+        &quot;+10: Contains path slash '/'&quot;,
+        &quot;-40: Detected mangled domain name typo ('qgoogqgle')&quot;,
+        &quot;-20: Contains whitespace/non-breaking spaces&quot;
+      ]
+    }
+  ]
+}
+
+</code></pre>
+<h3>When to use JSON Report Cards vs. Debuggers (<code>pudb</code>)</h3>
+<ul>
+<li><strong>Use JSON Report Cards when:</strong> You are doing batch processing (like scanning 18+ screenshots overnight), a few edge cases fail, and you want to grep or quickly read the JSON logs to see <em>why</em> the script preferred one crop over another. It saves you from pausing execution.</li>
+<li><strong>Use <code>pudb</code> / <code>pdb</code> when:</strong> The OCR text itself is completely bizarre, you aren't sure what regex pattern will match it, or you need to interactively step through how Tesseract and ImageMagick are slicing the bounding boxes in real-time.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_160911_capture.md&quot;)</p>
+<hr />
