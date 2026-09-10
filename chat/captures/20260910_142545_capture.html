@@ -1,0 +1,62 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 100</h1>
+<p><strong><a href="20260910_142541_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>The regular expression extracts a standard domain name (like <code>google.com</code> or <code>my-site.org</code>) from a longer string or full URL.</p>
+<p>Here is the pattern broken down piece by piece:</p>
+<pre><code class="language-regex">([\w-]+\.(?:com|org|net|edu|gov))
+
+</code></pre>
+<h3>Breakdown of the Components</h3>
+<ul>
+<li>
+<p><strong><code>(</code> ... <code>)</code> — Capture Group 1</strong></p>
+</li>
+<li>
+<p>Anything inside these parentheses gets &quot;captured&quot; so Python can isolate and return just the domain name via <code>domain_match.group(1)</code>.</p>
+</li>
+<li>
+<p><strong><code>[\w-]+</code> — The Domain Name Part</strong></p>
+</li>
+<li>
+<p><code>\w</code> matches any alphanumeric character (A–Z, a–z, 0–9) and underscores (<code>_</code>).</p>
+</li>
+<li>
+<p><code>-</code> includes hyphens, allowing domains like <code>my-site</code>.</p>
+</li>
+<li>
+<p>The square brackets <code>[...]</code> create a character set meaning &quot;any letter, number, underscore, or hyphen&quot;.</p>
+</li>
+<li>
+<p>The <code>+</code> means &quot;one or more&quot; of these characters in a row.</p>
+</li>
+<li>
+<p><strong><code>\.</code> — The Literal Dot</strong></p>
+</li>
+<li>
+<p>In regex, a bare <code>.</code> means &quot;match any character.&quot; Escaping it with a backslash (<code>\.</code>) ensures it matches an actual period character before the top-level domain (TLD).</p>
+</li>
+<li>
+<p><strong><code>(?: ... )</code> — Non-Capturing Group</strong></p>
+</li>
+<li>
+<p>The <code>?:</code> tells the regex engine to treat the TLD options as a logical group without creating a separate nested capture group in Python.</p>
+</li>
+<li>
+<p><strong><code>com|org|net|edu|gov</code> — Top-Level Domain Options</strong></p>
+</li>
+<li>
+<p>The pipe <code>|</code> acts as an <code>OR</code> operator, matching any one of these standard domain extensions.</p>
+</li>
+</ul>
+<hr />
+<h3>How It Works on Your OCR Strings</h3>
+<ul>
+<li>Input: <code>&quot;o 6 = [www.qgoogqgle.com/search?client=firefox](https://www.qgoogqgle.com/search?client=firefox)&quot;</code></li>
+<li><strong>Matches:</strong> <code>qgoogqgle.com</code></li>
+<li>Input: <code>&quot;== [www.google.com/search?client=firefox](https://www.google.com/search?client=firefox)&quot;</code></li>
+<li><strong>Matches:</strong> <code>google.com</code></li>
+</ul>
+<hr />
+<p><strong><a href="20260910_142541_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142545_capture.md&quot;)</p>

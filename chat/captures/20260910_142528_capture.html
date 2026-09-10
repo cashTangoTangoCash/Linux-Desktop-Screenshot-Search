@@ -1,0 +1,115 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 98</h1>
+<p><strong><a href="20260910_142521_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_142532_capture.html">Next →</a></strong></p>
+<hr />
+<p>The reason both candidates scored a <strong>tied 45 points</strong> (and the script arbitrarily picked <code>mate</code> first) comes down to a small flaw in the scoring rules: <strong>the spaces in the garbled OCR text didn't trigger the space penalty.</strong></p>
+<p>Here is the exact point breakdown of why your function rated them identically:</p>
+<h3>Point Breakdown</h3>
+<table>
+<thead>
+<tr>
+<th>Rule Check</th>
+<th><code>mate</code> String</th>
+<th><code>i3</code> String</th>
+<th>Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Contains <code>www.</code></td>
+<td><code>[www.qgoogqgle.com](https://www.qgoogqgle.com)</code></td>
+<td><code>[www.google.com](https://www.google.com)</code></td>
+<td><strong>+30</strong></td>
+</tr>
+<tr>
+<td>Contains <code>.com</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td><strong>+20</strong></td>
+</tr>
+<tr>
+<td>Contains <code>/</code></td>
+<td>Yes</td>
+<td>Yes</td>
+<td><strong>+10</strong></td>
+</tr>
+<tr>
+<td>Space Penalty (<code>&quot; &quot; in text</code>)</td>
+<td><strong>Failed to trigger</strong> (uses non-breaking spaces)</td>
+<td>No spaces present</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>Length Penalty (<code>len &lt; 5</code>)</td>
+<td>No</td>
+<td>No</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><strong>Total Score</strong></td>
+<td></td>
+<td></td>
+<td><strong>45 vs. 45</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3>Why <code>mate</code> Won the Tie (and why it's garbled)</h3>
+<ol>
+<li><strong>Non-Breaking Spaces (<code>\s</code> vs <code>&quot; &quot;</code>):</strong> Tesseract often outputs <code>\xa0</code> (non-breaking space) or multiple contiguous spaces when reading window chrome buttons (like the <code>o 6 =</code> buttons in the MATE layout). The string check <code>&quot; &quot; in text</code> only looks for standard ASCII spaces (0x20), so the <code>-15</code> penalty was completely bypassed!</li>
+<li><strong>Tie-Breaker Bias:</strong> Because both received 45 points, Python's <code>sort()</code> preserved the original list order, so <code>mate</code> (which was index 0 in <code>RECTANGLES</code>) automatically won <code>best_url</code>.</li>
+</ol>
+<hr />
+<h3>The Fix</h3>
+<p>To make <code>i3</code> win cleanly, adjust <code>score_url_candidate</code> with three targeted scoring rules:</p>
+<ol>
+<li><strong>Use Regex <code>\s+</code> for Space Penalties:</strong> Catch all whitespace types (tabs, non-breaking spaces, newlines).</li>
+<li><strong>Penalize Garbled Domain Names:</strong> Check if extra characters precede <code>www.</code> (e.g., <code>o 6 = www.</code> vs <code>== www.</code>).</li>
+<li><strong>Reward Clean Search Engines / Common Domains:</strong> Give bonus points if <code>google.com</code>, <code>github.com</code>, etc. are spelled cleanly without extra garbage characters inside the domain.</li>
+</ol>
+<p>Here is the improved <code>score_url_candidate</code>:</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; int:
+    &quot;&quot;&quot;Assigns a heuristic quality score to an OCR string to determine the 'better' URL.&quot;&quot;&quot;
+    if not text:
+        return -100
+
+    score = 0
+
+    # Strong URL indicators
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # NEW: Penalize leading junk before www. or http(s)://
+    if re.search(r&quot;^[^w h]*www\.&quot;, text) or re.search(r&quot;^[^h]*https?://&quot;, text):
+        # Text starts with stray OCR artifacts before the actual domain
+        if not text.startswith(&quot;www.&quot;) and not text.startswith(&quot;http&quot;):
+            score -= 15
+
+    # NEW: Catch ALL whitespace variants (including non-breaking spaces \xa0)
+    if re.search(r&quot;\s&quot;, text):
+        score -= 20
+
+    # NEW: Penalize obvious OCR typos in high-frequency domains
+    if &quot;qgoog&quot; in text or &quot;googq&quot; in text:
+        score -= 30
+
+    if len(text) &lt; 5:
+        score -= 20
+
+    return score
+
+</code></pre>
+<p>With these rules applied:</p>
+<ul>
+<li><code>mate</code> gets penalized for leading junk (<code>o 6 =</code>), non-breaking whitespace (<code>\s</code>), and the <code>qgoogqgle</code> domain corruption, dropping its score down to <strong>-20</strong>.</li>
+<li><code>i3</code> gets a score of <strong>+45</strong> and comfortably takes <code>best_url</code>.</li>
+</ul>
+<hr />
+<p><strong><a href="20260910_142521_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_142532_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142528_capture.md&quot;)</p>

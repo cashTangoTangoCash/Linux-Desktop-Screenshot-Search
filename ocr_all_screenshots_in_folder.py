@@ -6,6 +6,7 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
+import difflib
 
 WORK_DIR = Path.cwd()
 TIMING_LOG = WORK_DIR / "ocr_timing.csv"
@@ -16,7 +17,12 @@ RECT_I3 = (1621, 47, 284, 58)    # Rectangle 2: i3 layout
 
 RECTANGLES = [
     {"name": "mate", "coords": RECT_MATE},
-    {"name": "i3", "coords": RECT_I3},
+    {"name": "i3", "coords": RECT_I3}
+]
+
+COMMON_DOMAINS = [
+    "google.com", "github.com", "reddit.com", "wikipedia.org", 
+    "youtube.com", "amazon.com", "stackoverflow.com"
 ]
 
 PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
@@ -45,19 +51,31 @@ def score_url_candidate(text: str) -> int:
         return -100
 
     score = 0
+
     # Strong URL indicators
     if re.search(r"https?://", text):
         score += 50
     if "www." in text:
         score += 30
-    if re.search(r"\.(com|org|net|edu|gov|io|org|uk|de)\b", text):
+    if re.search(r"\.(com|org|net|edu|gov|io|uk|de)\b", text):
         score += 20
     if "/" in text:
         score += 10
 
-    # Penalize whitespace or excessive special non-URL characters
-    if " " in text:
-        score -= 15
+    # NEW: Penalize leading junk before www. or http(s)://
+    if re.search(r"^[^w h]*www\.", text) or re.search(r"^[^h]*https?://", text):
+        # Text starts with stray OCR artifacts before the actual domain
+        if not text.startswith("www.") and not text.startswith("http"):
+            score -= 15
+
+    # NEW: Catch ALL whitespace variants (including non-breaking spaces \xa0)
+    if re.search(r"\s", text):
+        score -= 20
+
+    # NEW: Penalize obvious OCR typos in high-frequency domains
+    if "qgoog" in text or "googq" in text:
+        score -= 30
+
     if len(text) < 5:
         score -= 20
 

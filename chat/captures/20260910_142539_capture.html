@@ -1,0 +1,70 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 99</h1>
+<p><strong><a href="20260910_142532_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_142541_capture.html">Next →</a></strong></p>
+<hr />
+<p>You hit the nail on the head! Humans have a lifetime of visual and language intuition built-in, so when you look at <code>qgoogqgle.com</code> versus <code>google.com</code>, your brain instantly flags the extra 'q's as obvious garbage without even thinking about it.</p>
+<p>To a computer (and a basic scoring script), every letter is just a generic byte. Unless we explicitly code a dictionary or a spell-checker, the computer sees <code>qgoogqgle</code> as just another string of characters that happens to match the pattern <code>.com</code>.</p>
+<h3>The &quot;Human Intuition&quot; Fix</h3>
+<p>If we want the code to evaluate text more like a human, we shouldn't rely on manually guessing every possible typo like <code>qgoogqgle</code>. Instead, we can give the script a small, general-purpose <strong>&quot;English &amp; Web Realism&quot;</strong> test:</p>
+<ol>
+<li><strong>Vowel-to-Consonant Ratio / Repeating Letters:</strong> English domains rarely have four consonants/q's smashed together like <code>qgoogqg</code>.</li>
+<li><strong>Levenshtein / Edit Distance against Popular Domains:</strong> Compare extracted domains to a small list of common sites (<code>google.com</code>, <code>github.com</code>, <code>reddit.com</code>, <code>wikipedia.org</code>). If an OCR string is <em>1 or 2 characters off</em> from a famous domain (like <code>qgoogqgle</code>), penalize it heavily because it's almost certainly a corrupted OCR read!</li>
+<li><strong>Character Entropy (Garbage Filter):</strong> Humans immediately recognize that strings with weird punctuation or random clusters of symbols aren't real words.</li>
+</ol>
+<p>Here is how you can write a smart, domain-aware scoring function using Python's built-in <code>difflib</code> (no extra external libraries needed):</p>
+<pre><code class="language-python">import difflib
+import re
+
+COMMON_DOMAINS = [
+    &quot;google.com&quot;, &quot;github.com&quot;, &quot;reddit.com&quot;, &quot;wikipedia.org&quot;, 
+    &quot;youtube.com&quot;, &quot;amazon.com&quot;, &quot;stackoverflow.com&quot;
+]
+
+def score_url_candidate(text: str) -&gt; int:
+    if not text:
+        return -100
+
+    score = 0
+
+    # 1. Structural URL checks
+    if re.search(r&quot;https?://&quot;, text):
+        score += 50
+    if &quot;www.&quot; in text:
+        score += 30
+    if re.search(r&quot;\.(com|org|net|edu|gov|io|uk|de)\b&quot;, text):
+        score += 20
+    if &quot;/&quot; in text:
+        score += 10
+
+    # 2. &quot;Human Eye&quot; Check: Penalize near-misses on famous domains
+    # Extracts the domain part (e.g., 'qgoogqgle.com' out of the full URL)
+    domain_match = re.search(r&quot;([\w-]+\.(?:com|org|net|edu|gov))&quot;, text)
+    if domain_match:
+        extracted_domain = domain_match.group(1)
+        
+        for real_domain in COMMON_DOMAINS:
+            # Measure similarity ratio between 0.0 and 1.0
+            similarity = difflib.SequenceMatcher(None, extracted_domain, real_domain).ratio()
+            
+            # Perfect match gets a boost
+            if similarity == 1.0:
+                score += 25
+                break
+            # A near-miss (e.g., 0.70 to 0.95) means OCR mangled a real word!
+            elif 0.65 &lt;= similarity &lt; 1.0:
+                score -= 40  # Heavy penalty for mangled domain names like qgoogqgle
+                break
+
+    # 3. Penalize whitespace, non-printable noise, and leading garbage before www/http
+    if re.search(r&quot;\s&quot;, text):
+        score -= 20
+    if re.search(r&quot;^[^w h]*www\.&quot;, text):
+        score -= 20
+
+    return score
+
+</code></pre>
+<p>Now, when <code>qgoogqgle.com</code> runs through <code>difflib</code>, the script recognizes: <em>&quot;Hey, this is 80% similar to <code>google.com</code>, but not exact—this is an OCR typo!&quot;</em> and docks 40 points automatically.</p>
+<hr />
+<p><strong><a href="20260910_142532_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260910_142541_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_142539_capture.md&quot;)</p>
