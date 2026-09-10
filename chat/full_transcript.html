@@ -13132,3 +13132,34 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162345_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 106</h1>
+<p>as I use inspect..py to review results in i3 window manager, I am finding an odd behavior where feh goes full-screen after I do an action, which adds extra work for me.  I can make it tile again with Win+f.  I don't want to get bogged down in heavy i3 studies at this point - any quick idea on what is happening here?  just a quirk of my i3 config (I am no i3 expert)?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_163757_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 106</h1>
+<p>That isn't a quirk in your <code>config</code>—it's coming directly from line 186 in <code>inspect.py</code>:</p>
+<pre><code class="language-python">[&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())]
+
+</code></pre>
+<p>The <code>-F</code> flag forces <code>feh</code> to enter fullscreen mode on startup.</p>
+<h3>Why it snaps back to fullscreen after actions</h3>
+<p>Every time you press a key for an action that stays on the same card (like <code>[vc]</code>, <code>[ej]</code>, <code>[et]</code>, or <code>[ef]</code>), the main loop in <code>review_flashcards()</code> executes again:</p>
+<ol>
+<li>It terminates the running <code>feh</code> process.</li>
+<li>It launches a <strong>brand new</strong> <code>feh</code> process.</li>
+<li>Because <code>-F</code> is in the command arguments, the new instance explicitly tells your window manager: <em>&quot;Open me fullscreen!&quot;</em></li>
+</ol>
+<p>When you hit <code>Win+f</code> (<code>Mod4+f</code>), i3 toggles that specific window back to tiled mode. But as soon as you trigger another action, <code>inspect.py</code> kills that window and spawns a new one with <code>-F</code>, resetting it to fullscreen.</p>
+<h3>The Quick Fix</h3>
+<p>If you want <code>feh</code> to open as a standard tiled window so i3 manages its size naturally alongside your terminal and Emacs:</p>
+<p>Open <code>inspect.py</code> and remove the <code>&quot;-F&quot;</code> argument:</p>
+<pre><code class="language-python"># Change this:
+[&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;-F&quot;, &quot;--auto-zoom&quot;, str(img_path.resolve())]
+
+# To this:
+[&quot;feh&quot;, &quot;--title&quot;, &quot;feh_flashcard_review&quot;, &quot;--auto-zoom&quot;, &quot;--scale-down&quot;, str(img_path.resolve())]
+
+</code></pre>
+<p><em>Adding <code>--scale-down</code> ensures large screenshots scale to fit inside whatever tile size i3 gives the <code>feh</code> window without blowing past the window borders.</em></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_163802_capture.md&quot;)</p>
+<hr />

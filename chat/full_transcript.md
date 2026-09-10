@@ -15201,3 +15201,51 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_162345_capture.md")
 
 ---
+
+# PROMPT 106
+as I use inspect..py to review results in i3 window manager, I am finding an odd behavior where feh goes full-screen after I do an action, which adds extra work for me.  I can make it tile again with Win+f.  I don't want to get bogged down in heavy i3 studies at this point - any quick idea on what is happening here?  just a quirk of my i3 config (I am no i3 expert)?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_163757_capture.md")
+
+---
+
+# RESPONSE 106
+That isn't a quirk in your `config`—it's coming directly from line 186 in `inspect.py`:
+
+```python
+["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())]
+
+```
+
+The `-F` flag forces `feh` to enter fullscreen mode on startup.
+
+### Why it snaps back to fullscreen after actions
+
+Every time you press a key for an action that stays on the same card (like `[vc]`, `[ej]`, `[et]`, or `[ef]`), the main loop in `review_flashcards()` executes again:
+
+1. It terminates the running `feh` process.
+2. It launches a **brand new** `feh` process.
+3. Because `-F` is in the command arguments, the new instance explicitly tells your window manager: *"Open me fullscreen!"*
+
+When you hit `Win+f` (`Mod4+f`), i3 toggles that specific window back to tiled mode. But as soon as you trigger another action, `inspect.py` kills that window and spawns a new one with `-F`, resetting it to fullscreen.
+
+### The Quick Fix
+
+If you want `feh` to open as a standard tiled window so i3 manages its size naturally alongside your terminal and Emacs:
+
+Open `inspect.py` and remove the `"-F"` argument:
+
+```python
+# Change this:
+["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())]
+
+# To this:
+["feh", "--title", "feh_flashcard_review", "--auto-zoom", "--scale-down", str(img_path.resolve())]
+
+```
+
+*Adding `--scale-down` ensures large screenshots scale to fit inside whatever tile size i3 gives the `feh` window without blowing past the window borders.*
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260910_163802_capture.md")
+
+---

@@ -231,13 +231,23 @@ def review_flashcards():
             time.sleep(0.1)
 
             # 2. Spawn main screenshot feh process
+
+            # probably for Mate desktop use:
+            # feh_proc = subprocess.Popen(
+            #     ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+            #     stdin=subprocess.DEVNULL,
+            #     stdout=subprocess.DEVNULL,
+            #     stderr=subprocess.DEVNULL
+            # )
+
+            # for i3 window manager use:
             feh_proc = subprocess.Popen(
-                ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                ["feh", "--title", "feh_flashcard_review", "--auto-zoom", "--scale-down", str(img_path.resolve())],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-
+            
             time.sleep(0.1)
             restore_terminal_focus(term_win_id)
 
