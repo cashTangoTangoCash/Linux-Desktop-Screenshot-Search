@@ -1,0 +1,46 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 117</h1>
+<p><strong><a href="20260911_122434_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_125529_capture.html">Next →</a></strong></p>
+<hr />
+<p>ok, I ran this and popped some files.  Instead of diving into the report details, I am going to manually sort these files and see for myself directly what things look like.  One idea to eliminate mistakes in manual sorting is an emacs lisp function that will let me just mark and move the screenshot and the lisp function would find the sidecars and move them also.  The simplest function would act on just one screenshot at a time.  I hit m on a screenshot to mark it and then call my/dired-move-screenshot-with-sidecars.  My dired init file code AFAIK contains something that enables having 2 windows open in the emacs frame and dired knowing that R moves a file from the active dired window to the other dired window:</p>
+<p>;; -<em>- lexical-binding: t; -</em>-
+(use-package dired
+  :ensure nil  ; Built-in, do not download
+  :custom
+  ;; 3. Core Dired Behavior
+  (dired-listing-switches &quot;-aghlo --group-directories-first&quot;)
+  (dired-dwim-target t)
+  (dired-clean-confirm-killing-deleted-buffers nil)
+  
+  :config
+  ;; 1. Load Dired-X (Extra features)
+  (require 'dired-x)
+  (setq find-file-visit-truename t)
+  ;; 2. External Applications (The &quot;Guess Shell&quot; feature)
+  (setq dired-guess-shell-alist-user 
+        '((&quot;\.pdf\'&quot; &quot;qpdfview &amp;&quot;)
+          (&quot;\.eps\'&quot; &quot;gv &amp;&quot;)
+          (&quot;\.ps\'&quot; &quot;gv &amp;&quot;)
+          (&quot;\.xoj\'&quot; &quot;xournal &amp;&quot;)
+          (&quot;\.sciprj\'&quot; &quot;scidavis &amp;&quot;)
+          (&quot;\.timeline\'&quot; &quot;/snap/bin/timeline &amp;&quot;)
+          (&quot;\.jpg\'&quot; &quot;eog &amp;&quot;)
+          (&quot;\.png\'&quot; &quot;eog &amp;&quot;)
+          (&quot;\.webp\'&quot; &quot;eog &amp;&quot;)
+          (&quot;\.mkv\'&quot; &quot;mpv &amp;&quot;)
+          (&quot;\.mp4\'&quot; &quot;mpv &amp;&quot;)
+          (&quot;\.mm\'&quot; &quot;freeplane &amp;&quot;)
+          (&quot;\.vym\'&quot; &quot;vym &amp;&quot;)
+          (&quot;\.\(docx?\|xlsx?\|pptx?\|odt\|ods\|odp\|odb\)\'&quot; &quot;libreoffice &amp;&quot;)))</p>
+<p>  ;; Allow 'a' to open folders in same buffer
+  (put 'dired-find-alternate-file 'disabled nil)</p>
+<p>  ;; 4. Keybindings
+  ;; use-package's :bind keyword is cleaner, but define-key in :config works too
+  (define-key dired-mode-map (kbd &quot;C-t C-d&quot;) 'image-dired)
+  (define-key dired-mode-map (kbd &quot;C-<return>&quot;) 'image-dired-dired-display-external)
+  (define-key dired-mode-map (kbd &quot;b&quot;) 'dired-do-eww)
+  (define-key dired-mode-map (kbd &quot;W&quot;) 'browse-url-of-dired-file))</p>
+<p>(provide 'dired-config)</p>
+<hr />
+<p><strong><a href="20260911_122434_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_125529_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125524_capture.md&quot;)</p>

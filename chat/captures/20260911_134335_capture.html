@@ -1,0 +1,51 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 121</h1>
+<p><strong><a href="20260911_134329_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134338_capture.html">Next →</a></strong></p>
+<hr />
+<p>That Flymake diagnostics buffer (<code>M-x flymake-show-buffer-diagnostics</code> or clicking the mode line count) is one of the best parts of the built-in Emacs diagnostic workflow.</p>
+<p>Looking at lines 112 and 113, Pyright's complaint is very specific: <strong>it believes <code>eval_result</code> is a <code>list</code> or a <code>tuple</code>, not a <code>dict</code>.</strong></p>
+<p>When you write <code>eval_result[&quot;score&quot;]</code>, Python lists don't accept string keys like <code>&quot;score&quot;</code> (they only take integer indices like <code>eval_result[0]</code> or slice objects like <code>eval_result[0:2]</code>). That is why Pyright says <code>&quot;Literal['score']&quot; cannot be assigned to parameter &quot;key&quot; of type &quot;slice&quot;</code>.</p>
+<hr />
+<h3>Why Pyright Thinks <code>eval_result</code> is a List/Tuple</h3>
+<p>Earlier in your script, <code>eval_result</code> is likely assigned from a function that returns a <strong>tuple</strong> of two elements (the integer score and the list of report strings), rather than returning a dictionary.</p>
+<p>For example, if your scoring function looks like this:</p>
+<pre><code class="language-python">def score_url_candidate(text):
+    # ... calculation logic ...
+    return score, report  # Returns a tuple: (int, list)
+
+</code></pre>
+<p>And then around line 110 you call it like this:</p>
+<pre><code class="language-python">eval_result = score_url_candidate(text)  # eval_result is now (score, report)
+
+</code></pre>
+<p>At runtime, <code>eval_result</code> is a tuple <code>(10, [&quot;+20: TLD match&quot;, ...])</code>. Trying to access <code>eval_result[&quot;score&quot;]</code> will cause a runtime <code>TypeError: tuple indices must be integers or slices, not str</code>.</p>
+<hr />
+<h3>The Two Ways to Fix It</h3>
+<h4>Solution A: Unpack the Tuple directly (Most common)</h4>
+<p>If <code>score_url_candidate()</code> returns <code>(score, report)</code>, unpack the tuple directly into your dictionary construction:</p>
+<pre><code class="language-python"># Instead of storing the tuple in 'eval_result':
+score, report = score_url_candidate(text)
+
+candidate_dict = {
+    &quot;rect_name&quot;: rect_name,
+    &quot;crop_coords&quot;: crop_coords,
+    &quot;text&quot;: text,
+    &quot;score&quot;: score,
+    &quot;scoring_report&quot;: report
+}
+
+</code></pre>
+<h4>Solution B: Return a Dictionary from the Function</h4>
+<p>If you want to keep using <code>eval_result[&quot;score&quot;]</code>, update the scoring function so it explicitly returns a <code>dict</code> instead of a tuple:</p>
+<pre><code class="language-python">def score_url_candidate(text) -&gt; dict:
+    # ... calculation logic ...
+    return {
+        &quot;score&quot;: score,
+        &quot;report&quot;: report
+    }
+
+</code></pre>
+<p>Once you make either change, Pyright will immediately see that <code>eval_result</code> is either unpacked correctly or is a proper dictionary, and all 4 Flymake errors on lines 112 and 113 will vanish.</p>
+<hr />
+<p><strong><a href="20260911_134329_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134338_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134335_capture.md&quot;)</p>

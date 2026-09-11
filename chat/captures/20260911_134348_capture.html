@@ -1,0 +1,21 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 123</h1>
+<p><strong><a href="20260911_134345_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134353_capture.html">Next →</a></strong></p>
+<hr />
+<p>Now I would like to regenerate the url.txt and url.json files, using the updated logic for url scoring.  process_ocr needs a temporary commenting out of the normal code and some other code added on a temporary basis - is that the best approach?</p>
+<p>    for image_path in pc_images:
+        url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+        url_json_path = image_path.parent / f&quot;{image_path.name}.url.json&quot;
+        full_txt_path = image_path.parent / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>        # If either URL sidecar is missing, generate URL candidates
+        if not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            if not url_json_path.is_file():
+                url_json_path.write_text(json.dumps(url_data, indent=2), encoding=&quot;utf-8&quot;)
+                
+            if not url_txt_path.is_file():
+                url_txt_path.write_text(url_data[&quot;best_url&quot;], encoding=&quot;utf-8&quot;)</p>
+<hr />
+<p><strong><a href="20260911_134345_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134353_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134348_capture.md&quot;)</p>

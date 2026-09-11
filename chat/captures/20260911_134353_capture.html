@@ -1,0 +1,75 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 123</h1>
+<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Instead of hacking up <code>process_ocr()</code> with temporary commented blocks—which is error-prone and easy to forget to revert in Git (<code>magit</code>)—a cleaner, production-friendly pattern is to add a CLI flag like <code>--force-urls</code> or <code>--overwrite-urls</code>.</p>
+<p>However, if you want a quick, clean standard approach without adding <code>argparse</code> overhead, here are the two best ways to handle it:</p>
+<hr />
+<h3>Option 1: Clean standard Python approach (CLI Flag with <code>sys.argv</code>)</h3>
+<p>Adding a quick flag check right in <code>process_ocr</code> keeps your code clean, requires zero commenting out, and gives you a feature you can re-use in the future whenever you tune your scoring algorithm.</p>
+<pre><code class="language-python">import sys
+
+def process_ocr():
+    # Check if user passed --force-urls or -f as a command-line argument
+    force_urls = &quot;--force-urls&quot; in sys.argv or &quot;-f&quot; in sys.argv
+
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob(&quot;*&quot;)
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to index in {WORK_DIR}&quot;)
+        return
+
+    print(f&quot;Starting OCR indexing for {len(pc_images)} screenshot(s)...&quot;)
+    if force_urls:
+        print(&quot;--&gt; Overwriting existing URL sidecars with new scoring logic.\n&quot;)
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+        url_json_path = image_path.parent / f&quot;{image_path.name}.url.json&quot;
+        full_txt_path = image_path.parent / f&quot;{image_path.name}.full.txt&quot;
+
+        # Regenerate if force_urls is True, OR if either sidecar file is missing
+        if force_urls or not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding=&quot;utf-8&quot;)
+            url_txt_path.write_text(url_data[&quot;best_url&quot;], encoding=&quot;utf-8&quot;)
+            print(f&quot;Updated URL sidecars for: {image_path.relative_to(WORK_DIR)}&quot;)
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding=&quot;utf-8&quot;)
+            log_timing(image_path.name, duration)
+            print(f&quot;Indexed full image '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)&quot;)
+            indexed_count += 1
+
+    print(f&quot;\nOCR Indexing Complete.&quot;)
+
+</code></pre>
+<h4>How to run it:</h4>
+<ul>
+<li><strong>To force-regenerate all URL sidecars:</strong>
+<code>python3 ocr_script.py --force-urls</code></li>
+<li><strong>Normal daily run (skips existing files):</strong>
+<code>python3 ocr_script.py</code></li>
+</ul>
+<hr />
+<h3>Option 2: The Fast Shell Way (If you prefer not changing code)</h3>
+<p>If you don't want to touch the Python script at all, you can use standard CLI tools in your terminal or Emacs <code>eat</code>/<code>eshell</code> to remove only the <code>.url.txt</code> and <code>.url.json</code> files. Because <code>full.txt</code> remains intact, running the script normally will quickly regenerate the URL sidecars while skipping the slow full-image Tesseract OCR.</p>
+<pre><code class="language-bash"># Find and remove only the URL sidecar files
+find . -type f \( -name &quot;*.url.txt&quot; -o -name &quot;*.url.json&quot; \) -delete
+
+# Then run your script normally
+python3 ocr_script.py
+
+</code></pre>
+<hr />
+<h3>Recommendation</h3>
+<p>Option 1 is the cleanest in code because it protects you from having to remember <code>find ... -delete</code> syntax whenever you adjust your scoring logic in the future.</p>
+<hr />
+<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134353_capture.md&quot;)</p>

@@ -1,0 +1,17 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 121</h1>
+<p><strong><a href="20260911_134326_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134335_capture.html">Next →</a></strong></p>
+<hr />
+<p>wait, I don't know much about flymake.  I click on the red error integer count in the modeline.  A little buffer appears at the bottom of emacs with in this case 4 errors, one on a line.  I click an error with the mouse and point moves to the problem line in the python script.  so, we can match errors to problem lines:</p>
+<p> 112  21 error Pyright reportArgumentType Argument of type &quot;Literal['score']&quot; cannot be assigned to parameter &quot;key&quot; of type &quot;slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]&quot; in function &quot;<strong>getitem</strong>&quot;
+ 112  21 error Pyright reportCallIssue    No overloads for &quot;<strong>getitem</strong>&quot; match the provided arguments
+ 113  30 error Pyright reportArgumentType Argument of type &quot;Literal['report']&quot; cannot be assigned to parameter &quot;key&quot; of type &quot;slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]&quot; in function &quot;<strong>getitem</strong>&quot;
+ 113  30 error Pyright reportCallIssue    No overloads for &quot;<strong>getitem</strong>&quot; match the provided arguments</p>
+<p>line 112 is:
+            &quot;score&quot;: eval_result[&quot;score&quot;],</p>
+<p>while line 113 is:</p>
+<p>            &quot;scoring_report&quot;: eval_result[&quot;report&quot;]  # &lt;--- Stored in JSON</p>
+<p>m-x count-lines-page confirms the line numbers.</p>
+<hr />
+<p><strong><a href="20260911_134326_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134335_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134329_capture.md&quot;)</p>

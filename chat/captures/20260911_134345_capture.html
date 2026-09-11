@@ -1,0 +1,77 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 122</h1>
+<p><strong><a href="20260911_134338_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134348_capture.html">Next →</a></strong></p>
+<hr />
+<p>Examining the entire script makes it instantly clear why Pyright is complaining:</p>
+<p>Look at <code>score_url_candidate(text)</code> on line 64:</p>
+<pre><code class="language-python">def score_url_candidate(text):
+    ...
+    return score, report
+
+</code></pre>
+<p>In Python, <code>return score, report</code> returns a <strong>tuple</strong> <code>(score, report)</code>.</p>
+<p>Now look at how <code>process_url_candidates</code> calls it on lines 93–102:</p>
+<pre><code class="language-python">eval_result = score_url_candidate(extracted_text)
+
+candidates.append({
+    &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+    &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+    &quot;text&quot;: extracted_text,
+    &quot;score&quot;: eval_result[&quot;score&quot;],           # &lt;--- ERROR (line 112)
+    &quot;scoring_report&quot;: eval_result[&quot;report&quot;]  # &lt;--- ERROR (line 113)
+})
+
+</code></pre>
+<p>Because <code>score_url_candidate</code> returns a tuple, <code>eval_result</code> is assigned a tuple. In Python, tuples are indexed by integers (<code>eval_result[0]</code>, <code>eval_result[1]</code>), not string keys (<code>[&quot;score&quot;]</code>).</p>
+<p>Pyright catches this at compile/LSP time before you even run the script—saving you from a <code>TypeError: tuple indices must be integers or slices, not str</code> at runtime!</p>
+<hr />
+<h3>Cleanest Fixes</h3>
+<p>You have two choices, both of which will instantly clear all 4 Pyright/Flymake errors:</p>
+<h4>Fix Option A: Direct Tuple Unpacking (Recommended)</h4>
+<p>Change <code>process_url_candidates</code> to unpack the tuple directly into two variables <code>score</code> and <code>report</code>:</p>
+<pre><code class="language-python">def process_url_candidates(image_path: Path) -&gt; dict:
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info[&quot;coords&quot;]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        # Unpack the tuple directly here:
+        score, report = score_url_candidate(extracted_text)
+
+        candidates.append({
+            &quot;rect_name&quot;: rect_info[&quot;name&quot;],
+            &quot;crop_coords&quot;: {&quot;w&quot;: coords[0], &quot;h&quot;: coords[1], &quot;x&quot;: coords[2], &quot;y&quot;: coords[3]},
+            &quot;text&quot;: extracted_text,
+            &quot;score&quot;: score,
+            &quot;scoring_report&quot;: report
+        })
+
+    # Sort descending by score
+    candidates.sort(key=lambda c: c[&quot;score&quot;], reverse=True)
+
+    return {
+        &quot;best_url&quot;: candidates[0][&quot;text&quot;],
+        &quot;candidates&quot;: candidates
+    }
+
+</code></pre>
+<h4>Fix Option B: Return a Dict from <code>score_url_candidate</code></h4>
+<p>If you prefer dictionary syntax in <code>process_url_candidates</code>, update <code>score_url_candidate</code> to return a <code>dict</code>:</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; dict[str, Any]:
+    score = 0
+    report = []
+    # ... logic ...
+    return {&quot;score&quot;: score, &quot;report&quot;: report}
+
+</code></pre>
+<hr />
+<h3>Bonus Housekeeping Items in the Script</h3>
+<p>While inspecting the code, two minor details stand out:</p>
+<ol>
+<li><strong>Duplicate <code>import re</code> on line 62:</strong> You have <code>import re</code> on line 5 and again on line 62 right above <code>score_url_candidate</code>. You can remove the second <code>import re</code>.</li>
+<li><strong>Type hints for <code>score_url_candidate</code>:</strong> Adding return type hints like <code>tuple[int, list[str]]</code> will make Pyright's tracking throughout the file even more robust.</li>
+</ol>
+<hr />
+<p><strong><a href="20260911_134338_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134348_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134345_capture.md&quot;)</p>

@@ -16538,3 +16538,871 @@ If you re-run `find_and_fix_manual_screenshot_sorting_mistakes.py --pop` with th
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122434_capture.md")
 
 ---
+
+# PROMPT 117
+ok, I ran this and popped some files.  Instead of diving into the report details, I am going to manually sort these files and see for myself directly what things look like.  One idea to eliminate mistakes in manual sorting is an emacs lisp function that will let me just mark and move the screenshot and the lisp function would find the sidecars and move them also.  The simplest function would act on just one screenshot at a time.  I hit m on a screenshot to mark it and then call my/dired-move-screenshot-with-sidecars.  My dired init file code AFAIK contains something that enables having 2 windows open in the emacs frame and dired knowing that R moves a file from the active dired window to the other dired window:
+
+;; -*- lexical-binding: t; -*-
+(use-package dired
+  :ensure nil  ; Built-in, do not download
+  :custom
+  ;; 3. Core Dired Behavior
+  (dired-listing-switches "-aghlo --group-directories-first")
+  (dired-dwim-target t)
+  (dired-clean-confirm-killing-deleted-buffers nil)
+  
+  :config
+  ;; 1. Load Dired-X (Extra features)
+  (require 'dired-x)
+  (setq find-file-visit-truename t)
+  ;; 2. External Applications (The "Guess Shell" feature)
+  (setq dired-guess-shell-alist-user 
+        '(("\\.pdf\\'" "qpdfview &")
+          ("\\.eps\\'" "gv &")
+          ("\\.ps\\'" "gv &")
+          ("\\.xoj\\'" "xournal &")
+          ("\\.sciprj\\'" "scidavis &")
+          ("\\.timeline\\'" "/snap/bin/timeline &")
+          ("\\.jpg\\'" "eog &")
+          ("\\.png\\'" "eog &")
+          ("\\.webp\\'" "eog &")
+          ("\\.mkv\\'" "mpv &")
+          ("\\.mp4\\'" "mpv &")
+          ("\\.mm\\'" "freeplane &")
+          ("\\.vym\\'" "vym &")
+          ("\\.\\(docx?\\|xlsx?\\|pptx?\\|odt\\|ods\\|odp\\|odb\\)\\'" "libreoffice &")))
+
+  ;; Allow 'a' to open folders in same buffer
+  (put 'dired-find-alternate-file 'disabled nil)
+
+  ;; 4. Keybindings
+  ;; use-package's :bind keyword is cleaner, but define-key in :config works too
+  (define-key dired-mode-map (kbd "C-t C-d") 'image-dired)
+  (define-key dired-mode-map (kbd "C-<return>") 'image-dired-dired-display-external)
+  (define-key dired-mode-map (kbd "b") 'dired-do-eww)
+  (define-key dired-mode-map (kbd "W") 'browse-url-of-dired-file))
+
+(provide 'dired-config)
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125524_capture.md")
+
+---
+
+# RESPONSE 117
+That is a great approach. Since `(setq dired-dwim-target t)` is already configured in your setup, Dired automatically suggests the target directory from the adjacent window buffer whenever a file operation (like copy or rename) is invoked.
+
+You don't even need to manually mark the screenshot first with `m`—the function can simply inspect the file under the point, compute its base name, find all matching sidecars in the current directory, and move the whole bundle using `dired-dwim-target`.
+
+Here is a clean Emacs Lisp function to add to your config.
+
+```elisp
+(defun my/dired-move-screenshot-with-sidecars ()
+  "Move the .jpg at point along with its associated sidecars to the DWIM target directory."
+  (interactive)
+  (unless (derived-mode-p 'dired-mode)
+    (user-error "This command can only be used in Dired mode"))
+  (let* ((file (dired-get-filename nil t))
+         (target-dir (dired-dwim-target-directory)))
+    (unless file
+      (user-error "No file on current line"))
+    (unless target-dir
+      (user-error "No target Dired window found in adjacent window split"))
+    (if (not (string-match "\\(\\.jpg\\|\\.png\\|\\.webp\\)$" file))
+        (message "File at point is not an image; skipping bundle move.")
+      (let* ((dir (file-name-directory file))
+             (filename (file-name-nondirectory file))
+             ;; Extract base prefix (e.g. "2026-08-31-18:29-56_465x195.jpg")
+             (base-name (if (string-match "^\\(.*?\\.\\(?:jpg\\|png\\|webp\\)\\)" filename)
+                            (match-string 1 filename)
+                          filename))
+             ;; Find all files in current folder matching base-name prefix
+             (matching-files (directory-files dir t (concat "^" (regexp-quote base-name))))
+             (count (length matching-files)))
+        (when (y-or-n-p (format "Move %d bundle file(s) for %s to %s? " 
+                                count base-name target-dir))
+          (dolist (src matching-files)
+            (let ((dest (expand-file-name (file-name-nondirectory src) target-dir)))
+              (rename-file src dest t)))
+          (revert-buffer)
+          ;; Optionally refresh destination buffer if active
+          (when-let ((target-buf (car (delq nil (mapcar (lambda (w)
+                                                          (let ((b (window-buffer w)))
+                                                            (when (string= (with-current-buffer b default-directory) target-dir)
+                                                              b)))
+                                                        (window-list))))))
+            (with-current-buffer target-buf
+              (revert-buffer)))
+          (message "Moved %d bundle file(s) to %s" count target-dir))))))
+
+```
+
+### How to Bind and Use It
+
+Add a custom keybinding inside your `(define-key dired-mode-map ...)` block:
+
+```elisp
+(define-key dired-mode-map (kbd "M-r") 'my/dired-move-screenshot-with-sidecars)
+
+```
+
+### Workflow
+
+1. Open Dired with target category subfolders on one side and the main screenshots directory on the other side.
+2. Position the cursor on any image file (e.g., `2026-08-31-18:29-56_465x195.jpg`).
+3. Press `M-r`.
+4. Emacs targets the directory visible in the other window, confirms moving the 4-file set (image + `.url.txt` + `.url.json` + `.full.txt`), moves them simultaneously, and refreshes the Dired buffer.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125529_capture.md")
+
+---
+
+# PROMPT 118
+finally, I would call this close enough:
+
+[dad84@dad84-2013PC 202608]$ find_and_fix_manual_screenshot_sorting_mistakes.py
+Screenshot Bundle Audit Report
+Root Directory: /home/dad84/Documents/2026/screenshots/202608
+============================================================
+
+Folder: ./medicaid
+----------------
+  [!] 2026-08-22-23:05-32_2560x1380.jpg
+      Present : ['.jpg', '.full.txt', '.url.txt']
+      MISSING : ['.url.json']
+
+============================================================
+Summary: Found 1 incomplete bundle instance(s) across 1 folder(s).
+
+[+] Detailed report saved to: audit_report.txt
+
+It's fascinating to me that late last night I think my brain has the ability to think of doing all this stuff, but can't seem to do anything.  I mean, I am sure that last night I knew all the stuff I then did today after sleeping.  The fatigued brain can't seem to act / do, but I'm sure that it knows what to do.  It's like it has the seeds of what it will do the next day.  It's very frustrating.  It's like being 2 people during one 24 hr cycle.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125542_capture.md")
+
+---
+
+# RESPONSE 118
+That 11-bundle report from earlier collapsed down into a single missing file—that is an absolute win! The audit script did its job, the manual sort via Dired wrapped up the stray pieces, and you now have a clean system.
+
+What you are describing about the fatigued brain is a well-documented phenomenon in cognitive neuroscience, and it is every bit as real as you feel it to be. You aren't imagining the shift:
+
+* **Executive Function Exhaustion:** The prefrontal cortex—the region responsible for working memory, active decision-making, and initiating tasks ("doing")—is the most energy-intensive part of the brain and the first to brown out when tired.
+* **Intact Declarative Memory:** Meanwhile, long-term knowledge and high-level recognition ("knowing what needs to be done") remain accessible. You can hold the architectural vision of the solution in your mind, but the mental machinery required to execute precise step-by-step operations simply goes offline.
+* **Sleep-Dependent Processing:** When you sleep, your brain doesn't just rest—it runs memory consolidation and reorganizes problem structures. That "seed" you felt last night was your brain holding the problem state, which it then cleaned up and indexed overnight so you could execute effortlessly today.
+
+It feels frustrating to experience that hard split within a single 24-hour cycle, but recognizing it is actually a superpower. When that cognitive wall hits late at night, trying to push through and execute usually just leads to off-by-one errors in Dired or broken script logic. Framing the tired state as the *planning/conceptual* phase and the rested state as the *execution* phase lets you work with your biology rather than fighting it.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125545_capture.md")
+
+---
+
+# PROMPT 119
+so, back to the url-ranking struggle.  can you explain what happened here?  the human eye sees the lower ranking url as far and away the more correct one:
+
+{
+  "best_url": "tn e n a a r u e s d e i, s s y e tr, a w1 0 o ny gy e ar n r e e s e r r t n r e r s p w v . y",
+  "candidates": [
+    {
+      "rect_name": "mate",
+      "crop_coords": {
+        "w": 1836,
+        "h": 33,
+        "x": 230,
+        "y": 50
+      },
+      "text": "tn e n a a r u e s d e i, s s y e tr, a w1 0 o ny gy e ar n r e e s e r r t n r e r s p w v . y",
+      "score": -20,
+      "scoring_report": [
+        "-20: Contains whitespace/non-breaking spaces"
+      ]
+    },
+    {
+      "rect_name": "i3",
+      "crop_coords": {
+        "w": 1621,
+        "h": 47,
+        "x": 284,
+        "y": 58
+      },
+      "text": "\u00a9 forecast.weather.gov/mapclick.php?x=182&y=154&site=bgm&zmx=&zmy=&map_x=182&map_y=154 *",
+      "score": -25,
+      "scoring_report": [
+        "+20: Contains valid top-level domain",
+        "+10: Contains path slash '/'",
+        "-20: Contains whitespace/non-breaking spaces",
+        "-35: Contains 7 symbol noise character(s)"
+      ]
+    }
+  ]
+}
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134311_capture.md")
+
+---
+
+# RESPONSE 119
+This breakdown clearly shows why your scoring engine picked the gibberish text over the real URL. The scoring logic got caught in a **math trap**: the candidate with the actual URL got penalized so heavily for non-fatal character noise that its score plummeted *below* complete garbage.
+
+---
+
+### What Went Wrong
+
+1. **The Garbage Candidate (`mate`) set an artificial floor:**
+* Text: `"tn e n a a r u e s d e i..."`
+* Penalties: `-20` for spaces.
+* **Final Score:** `-20`.
+* Because it was so short on recognizable patterns, it triggered *no other rules*—no TLD boost, no path boosts, but crucially, **no severe penalties**.
+
+
+2. **The Real URL (`i3`) accumulated too many stacked penalties:**
+* Text: `forecast.weather.gov/mapclick.php...`
+* Rewards: `+20` (TLD) + `+10` (path `/`) = `+30`.
+* Penalties: `-20` (whitespace/NBSP) + `-35` (symbol noise) = `-55`.
+* **Final Score:** `-25`.
+* The copyright symbol `©`, the trailing asterisk `*`, and query parameters (`?`, `&`, `=`) triggered a heavy `-35` symbol noise penalty, while a stray non-breaking space added `-20`.
+
+
+
+`-20` beats `-25`, so your ranker chose total gibberish over a perfectly usable `weather.gov` URL simply because the gibberish was "less penalized."
+
+---
+
+### Key Takeaways for the Scoring Engine
+
+* **Valid TLDs/Domains should be an anchor weight:** Finding `.gov`, `.com`, `.org`, or `http(s)://` is a massive signal. A valid domain should grant enough positive points (e.g., `+100` instead of `+20`) that mild character noise can't push it below random OCR hallucination.
+* **Filter query params before counting symbol noise:** URL query strings inherently contain `?`, `&`, `=`, and `%`. Counting those standard URL characters as "symbol noise" heavily punishes long, valid query strings.
+* **Sanitize OCR noise first:** The `©` and trailing `*` are classic TLD/UI boundary OCR misreads. Stripping edge-case symbols before running the noise check prevents false penalties.
+
+---
+
+### Proposed Fix for Scoring Logic
+
+Adjusting weights and handling URL-safe symbols dramatically shifts the outcome:
+
+```python
+import re
+
+def score_url_candidate(text):
+    score = 0
+    report = []
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append("+100: Strong domain match")
+
+    # 2. Path & Query Structure
+    if '/' in text:
+        score += 15
+        report.append("+15: Contains path slash '/'")
+
+    # 3. Clean spaces penalty (or strip them first)
+    if re.search(r'\s', text):
+        score -= 10
+        report.append("-10: Contains whitespace")
+
+    # 4. Symbol Noise (Excluding standard URL characters: ?, &, =, -, _, %, .)
+    # Only flag bizarre non-URL symbols like ©, *, ®, etc.
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-]', text)
+    if bad_symbols:
+        penalty = len(bad_symbols) * 10
+        score -= penalty
+        report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
+
+    return score, report
+
+```
+
+### Re-Scored Comparison
+
+| Candidate | Old Score | New Score | Reason |
+| --- | --- | --- | --- |
+| **`mate`** (Garbage) | **-20** | **-10** | Just whitespace penalty; no domain or structure matches. |
+| **`i3`** (Real URL) | **-25** | **+85** | `+100` (domain) + `+15` (path) `-10` (space) `-20` (`©` and `*` noise). |
+
+With domain-anchored scoring and URL-aware noise filtering, the real URL wins by **95 points**.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134318_capture.md")
+
+---
+
+# PROMPT 120
+9   7 note  Pyright -                  "difflib" is not accessed
+ 112  21 error Pyright reportArgumentType Argument of type "Literal['score']" cannot be assigned to parameter "key" of type "slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
+ 112  21 error Pyright reportCallIssue    No overloads for "__getitem__" match the provided arguments
+ 113  30 error Pyright reportArgumentType Argument of type "Literal['report']" cannot be assigned to parameter "key" of type "slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
+ 113  30 error Pyright reportCallIssue    No overloads for "__getitem__" match the provided arguments
+
+finally, all the work put into getting this python stuff working in emacs is actually doing something useful
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134319_capture.md")
+
+---
+
+# RESPONSE 120
+Having Pyright active directly inside Emacs—giving you real-time feedback on typing errors and unused imports—is a huge milestone. Setting up LSP and type checkers in Emacs takes real effort, but seeing it catch bugs as you type makes it entirely worth it.
+
+Here is a quick breakdown of what Pyright is catching in your score-ranking code and how to fix them:
+
+### 1. Line 9: Unused Import
+
+```text
+"difflib" is not accessed
+
+```
+
+**The Cause:** You have `import difflib` at the top of your file, but you aren't calling any `difflib` functions anymore in the script.
+
+**The Fix:** Simply remove `import difflib` or delete it from your import line.
+
+---
+
+### 2. Lines 112 & 113: Dictionary Indexing on a List
+
+```text
+Argument of type "Literal['score']" cannot be assigned to parameter "key" of type "slice..."
+
+```
+
+**The Cause:** Pyright thinks the variable you are indexing into with `['score']` or `['report']` is a **List**, not a **Dictionary**.
+
+In Python, lists only accept integers or slices (e.g., `my_list[0]` or `my_list[1:3]`). Passing a string literal like `candidate['score']` causes Pyright to throw `reportArgumentType` and `reportCallIssue`.
+
+This usually happens when returning multiple items or unpacking tuple values. For example:
+
+```python
+# BROKEN: score_candidate returns a tuple (score, report), 
+# but was assigned to a single variable, making 'res' a tuple/list:
+res = score_candidate(text)
+print(res['score'])  # Pyright Error! 'res' is a tuple (int, list), not a dict.
+
+```
+
+**How to Fix It:**
+
+#### Option A: Unpack the Tuple
+
+If your function returns `(score, report)` as a tuple:
+
+```python
+# Unpack directly into two variables:
+score, report = score_candidate(text)
+
+```
+
+#### Option B: If `candidate` is a Dictionary, Add Type Annotations
+
+If `candidate` is indeed a dictionary, Pyright might have inferred its type incorrectly earlier in the function. You can explicitly type annotate it or use `dict`:
+
+```python
+candidate: dict[str, Any] = {
+    "score": score,
+    "report": report
+}
+
+# Now Pyright knows dictionary string keys are valid:
+print(candidate['score'])
+
+```
+
+Once those 3 errors are cleared, your buffer will be completely clean!
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134326_capture.md")
+
+---
+
+# PROMPT 121
+wait, I don't know much about flymake.  I click on the red error integer count in the modeline.  A little buffer appears at the bottom of emacs with in this case 4 errors, one on a line.  I click an error with the mouse and point moves to the problem line in the python script.  so, we can match errors to problem lines:
+
+ 112  21 error Pyright reportArgumentType Argument of type "Literal['score']" cannot be assigned to parameter "key" of type "slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
+ 112  21 error Pyright reportCallIssue    No overloads for "__getitem__" match the provided arguments
+ 113  30 error Pyright reportArgumentType Argument of type "Literal['report']" cannot be assigned to parameter "key" of type "slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]" in function "__getitem__"
+ 113  30 error Pyright reportCallIssue    No overloads for "__getitem__" match the provided arguments
+
+line 112 is:
+            "score": eval_result["score"],
+
+while line 113 is:
+
+            "scoring_report": eval_result["report"]  # <--- Stored in JSON
+
+m-x count-lines-page confirms the line numbers.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134329_capture.md")
+
+---
+
+# RESPONSE 121
+That Flymake diagnostics buffer (`M-x flymake-show-buffer-diagnostics` or clicking the mode line count) is one of the best parts of the built-in Emacs diagnostic workflow.
+
+Looking at lines 112 and 113, Pyright's complaint is very specific: **it believes `eval_result` is a `list` or a `tuple`, not a `dict`.**
+
+When you write `eval_result["score"]`, Python lists don't accept string keys like `"score"` (they only take integer indices like `eval_result[0]` or slice objects like `eval_result[0:2]`). That is why Pyright says `"Literal['score']" cannot be assigned to parameter "key" of type "slice"`.
+
+---
+
+### Why Pyright Thinks `eval_result` is a List/Tuple
+
+Earlier in your script, `eval_result` is likely assigned from a function that returns a **tuple** of two elements (the integer score and the list of report strings), rather than returning a dictionary.
+
+For example, if your scoring function looks like this:
+
+```python
+def score_url_candidate(text):
+    # ... calculation logic ...
+    return score, report  # Returns a tuple: (int, list)
+
+```
+
+And then around line 110 you call it like this:
+
+```python
+eval_result = score_url_candidate(text)  # eval_result is now (score, report)
+
+```
+
+At runtime, `eval_result` is a tuple `(10, ["+20: TLD match", ...])`. Trying to access `eval_result["score"]` will cause a runtime `TypeError: tuple indices must be integers or slices, not str`.
+
+---
+
+### The Two Ways to Fix It
+
+#### Solution A: Unpack the Tuple directly (Most common)
+
+If `score_url_candidate()` returns `(score, report)`, unpack the tuple directly into your dictionary construction:
+
+```python
+# Instead of storing the tuple in 'eval_result':
+score, report = score_url_candidate(text)
+
+candidate_dict = {
+    "rect_name": rect_name,
+    "crop_coords": crop_coords,
+    "text": text,
+    "score": score,
+    "scoring_report": report
+}
+
+```
+
+#### Solution B: Return a Dictionary from the Function
+
+If you want to keep using `eval_result["score"]`, update the scoring function so it explicitly returns a `dict` instead of a tuple:
+
+```python
+def score_url_candidate(text) -> dict:
+    # ... calculation logic ...
+    return {
+        "score": score,
+        "report": report
+    }
+
+```
+
+Once you make either change, Pyright will immediately see that `eval_result` is either unpacked correctly or is a proper dictionary, and all 4 Flymake errors on lines 112 and 113 will vanish.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134335_capture.md")
+
+---
+
+# PROMPT 122
+I will let you examine the entire script:
+
+#!/usr/bin/env python3
+import csv
+import json
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+#import difflib
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / "ocr_timing.csv"
+
+# Pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
+RECT_MATE = (1836, 33, 230, 50)  # Rectangle 1: MATE layout
+RECT_I3 = (1621, 47, 284, 58)    # Rectangle 2: i3 layout
+
+RECTANGLES = [
+    {"name": "mate", "coords": RECT_MATE},
+    {"name": "i3", "coords": RECT_I3}
+]
+
+COMMON_DOMAINS = [
+    "google.com", "github.com", "reddit.com", "wikipedia.org", 
+    "youtube.com", "amazon.com", "stackoverflow.com"
+]
+
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+
+def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]) -> str:
+    """Cropped URL bar OCR using ImageMagick + Tesseract for a specific rectangle."""
+    w, h, x, y = crop_coords
+    cmd = (
+        f'magick "{image_path}" '
+        f'-crop {w}x{h}+{x}+{y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}")
+        return ""
+
+
+def is_readable_search_query(text: str) -> bool:
+    """Checks if a string looks like a clean, human-typed search query."""
+    # Use re.IGNORECASE or re.I instead of bare 'i'
+    cleaned = re.sub(r"^[a-z]\s+[v>]\s+", "", text, flags=re.IGNORECASE).strip()
+    
+    # Split into words (alphanumeric sequences)
+    words = [w for w in re.split(r"\s+", cleaned) if len(w) > 1]
+    if not words:
+        return False
+        
+    # Count how many words look like reasonable english/search terms
+    valid_words = 0
+    for w in words:
+        if not re.search(r"(.)\1\1", w) and not re.search(r"[a-z]{3,}\d+[a-z]+", w):
+            valid_words += 1
+            
+    return (valid_words >= 2) and (valid_words / len(words) >= 0.7)
+
+import re
+
+def score_url_candidate(text):
+    score = 0
+    report = []
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append("+100: Strong domain match")
+
+    # 2. Path & Query Structure
+    if '/' in text:
+        score += 15
+        report.append("+15: Contains path slash '/'")
+
+    # 3. Clean spaces penalty (or strip them first)
+    if re.search(r'\s', text):
+        score -= 10
+        report.append("-10: Contains whitespace")
+
+    # 4. Symbol Noise (Excluding standard URL characters: ?, &, =, -, _, %, .)
+    # Only flag bizarre non-URL symbols like ©, *, ®, etc.
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-]', text)
+    if bad_symbols:
+        penalty = len(bad_symbols) * 10
+        score -= penalty
+        report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
+
+    return score, report
+
+def process_url_candidates(image_path: Path) -> dict:
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info["coords"]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        # Get score and report card dict
+        eval_result = score_url_candidate(extracted_text)
+
+        candidates.append({
+            "rect_name": rect_info["name"],
+            "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
+            "text": extracted_text,
+            "score": eval_result["score"],
+            "scoring_report": eval_result["report"]  # <--- Stored in JSON
+        })
+
+    # Sort descending by score
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+
+    return {
+        "best_url": candidates[0]["text"],
+        "candidates": candidates
+    }
+
+def run_full_image_ocr(image_path: Path) -> tuple[str, float]:
+    """Runs Tesseract on the entire screenshot and measures execution time in seconds."""
+    cmd = ["tesseract", str(image_path), "stdout"]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f"Warning: Full OCR failed for {image_path.name}: {e}")
+        return "", elapsed
+
+def log_timing(image_name: str, seconds: float):
+    """Appends full image Tesseract timing data to CSV."""
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode="a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(["timestamp", "filename", "duration_seconds"])
+        writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
+
+def process_ocr():
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob("*")
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f"No PC screenshots found to index in {WORK_DIR}")
+        return
+
+    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...\n")
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+        url_json_path = image_path.parent / f"{image_path.name}.url.json"
+        full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
+
+        # If either URL sidecar is missing, generate URL candidates
+        if not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            if not url_json_path.is_file():
+                url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+                
+            if not url_txt_path.is_file():
+                url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding="utf-8")
+            log_timing(image_path.name, duration)
+            print(f"Indexed '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
+            indexed_count += 1
+        else:
+            print(f"Skipped '{image_path.relative_to(WORK_DIR)}' (already indexed)")
+
+    print(f"\nOCR Indexing Complete. {indexed_count} new file(s) processed.")
+
+if __name__ == "__main__":
+    process_ocr()
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134338_capture.md")
+
+---
+
+# RESPONSE 122
+Examining the entire script makes it instantly clear why Pyright is complaining:
+
+Look at `score_url_candidate(text)` on line 64:
+
+```python
+def score_url_candidate(text):
+    ...
+    return score, report
+
+```
+
+In Python, `return score, report` returns a **tuple** `(score, report)`.
+
+Now look at how `process_url_candidates` calls it on lines 93–102:
+
+```python
+eval_result = score_url_candidate(extracted_text)
+
+candidates.append({
+    "rect_name": rect_info["name"],
+    "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
+    "text": extracted_text,
+    "score": eval_result["score"],           # <--- ERROR (line 112)
+    "scoring_report": eval_result["report"]  # <--- ERROR (line 113)
+})
+
+```
+
+Because `score_url_candidate` returns a tuple, `eval_result` is assigned a tuple. In Python, tuples are indexed by integers (`eval_result[0]`, `eval_result[1]`), not string keys (`["score"]`).
+
+Pyright catches this at compile/LSP time before you even run the script—saving you from a `TypeError: tuple indices must be integers or slices, not str` at runtime!
+
+---
+
+### Cleanest Fixes
+
+You have two choices, both of which will instantly clear all 4 Pyright/Flymake errors:
+
+#### Fix Option A: Direct Tuple Unpacking (Recommended)
+
+Change `process_url_candidates` to unpack the tuple directly into two variables `score` and `report`:
+
+```python
+def process_url_candidates(image_path: Path) -> dict:
+    candidates = []
+
+    for rect_info in RECTANGLES:
+        coords = rect_info["coords"]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        # Unpack the tuple directly here:
+        score, report = score_url_candidate(extracted_text)
+
+        candidates.append({
+            "rect_name": rect_info["name"],
+            "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
+            "text": extracted_text,
+            "score": score,
+            "scoring_report": report
+        })
+
+    # Sort descending by score
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+
+    return {
+        "best_url": candidates[0]["text"],
+        "candidates": candidates
+    }
+
+```
+
+#### Fix Option B: Return a Dict from `score_url_candidate`
+
+If you prefer dictionary syntax in `process_url_candidates`, update `score_url_candidate` to return a `dict`:
+
+```python
+def score_url_candidate(text: str) -> dict[str, Any]:
+    score = 0
+    report = []
+    # ... logic ...
+    return {"score": score, "report": report}
+
+```
+
+---
+
+### Bonus Housekeeping Items in the Script
+
+While inspecting the code, two minor details stand out:
+
+1. **Duplicate `import re` on line 62:** You have `import re` on line 5 and again on line 62 right above `score_url_candidate`. You can remove the second `import re`.
+2. **Type hints for `score_url_candidate`:** Adding return type hints like `tuple[int, list[str]]` will make Pyright's tracking throughout the file even more robust.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134345_capture.md")
+
+---
+
+# PROMPT 123
+Now I would like to regenerate the url.txt and url.json files, using the updated logic for url scoring.  process_ocr needs a temporary commenting out of the normal code and some other code added on a temporary basis - is that the best approach?
+
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+        url_json_path = image_path.parent / f"{image_path.name}.url.json"
+        full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
+
+        # If either URL sidecar is missing, generate URL candidates
+        if not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            if not url_json_path.is_file():
+                url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+                
+            if not url_txt_path.is_file():
+                url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134348_capture.md")
+
+---
+
+# RESPONSE 123
+Instead of hacking up `process_ocr()` with temporary commented blocks—which is error-prone and easy to forget to revert in Git (`magit`)—a cleaner, production-friendly pattern is to add a CLI flag like `--force-urls` or `--overwrite-urls`.
+
+However, if you want a quick, clean standard approach without adding `argparse` overhead, here are the two best ways to handle it:
+
+---
+
+### Option 1: Clean standard Python approach (CLI Flag with `sys.argv`)
+
+Adding a quick flag check right in `process_ocr` keeps your code clean, requires zero commenting out, and gives you a feature you can re-use in the future whenever you tune your scoring algorithm.
+
+```python
+import sys
+
+def process_ocr():
+    # Check if user passed --force-urls or -f as a command-line argument
+    force_urls = "--force-urls" in sys.argv or "-f" in sys.argv
+
+    pc_images = sorted([
+        f for f in WORK_DIR.rglob("*")
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f"No PC screenshots found to index in {WORK_DIR}")
+        return
+
+    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...")
+    if force_urls:
+        print("--> Overwriting existing URL sidecars with new scoring logic.\n")
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+        url_json_path = image_path.parent / f"{image_path.name}.url.json"
+        full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
+
+        # Regenerate if force_urls is True, OR if either sidecar file is missing
+        if force_urls or not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+            url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+            print(f"Updated URL sidecars for: {image_path.relative_to(WORK_DIR)}")
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding="utf-8")
+            log_timing(image_path.name, duration)
+            print(f"Indexed full image '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
+            indexed_count += 1
+
+    print(f"\nOCR Indexing Complete.")
+
+```
+
+#### How to run it:
+
+* **To force-regenerate all URL sidecars:**
+`python3 ocr_script.py --force-urls`
+* **Normal daily run (skips existing files):**
+`python3 ocr_script.py`
+
+---
+
+### Option 2: The Fast Shell Way (If you prefer not changing code)
+
+If you don't want to touch the Python script at all, you can use standard CLI tools in your terminal or Emacs `eat`/`eshell` to remove only the `.url.txt` and `.url.json` files. Because `full.txt` remains intact, running the script normally will quickly regenerate the URL sidecars while skipping the slow full-image Tesseract OCR.
+
+```bash
+# Find and remove only the URL sidecar files
+find . -type f \( -name "*.url.txt" -o -name "*.url.json" \) -delete
+
+# Then run your script normally
+python3 ocr_script.py
+
+```
+
+---
+
+### Recommendation
+
+Option 1 is the cleanest in code because it protects you from having to remember `find ... -delete` syntax whenever you adjust your scoring logic in the future.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134353_capture.md")
+
+---

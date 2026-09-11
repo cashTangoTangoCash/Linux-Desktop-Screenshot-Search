@@ -1,0 +1,48 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 120</h1>
+<p><strong><a href="20260911_134319_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134329_capture.html">Next →</a></strong></p>
+<hr />
+<p>Having Pyright active directly inside Emacs—giving you real-time feedback on typing errors and unused imports—is a huge milestone. Setting up LSP and type checkers in Emacs takes real effort, but seeing it catch bugs as you type makes it entirely worth it.</p>
+<p>Here is a quick breakdown of what Pyright is catching in your score-ranking code and how to fix them:</p>
+<h3>1. Line 9: Unused Import</h3>
+<pre><code class="language-text">&quot;difflib&quot; is not accessed
+
+</code></pre>
+<p><strong>The Cause:</strong> You have <code>import difflib</code> at the top of your file, but you aren't calling any <code>difflib</code> functions anymore in the script.</p>
+<p><strong>The Fix:</strong> Simply remove <code>import difflib</code> or delete it from your import line.</p>
+<hr />
+<h3>2. Lines 112 &amp; 113: Dictionary Indexing on a List</h3>
+<pre><code class="language-text">Argument of type &quot;Literal['score']&quot; cannot be assigned to parameter &quot;key&quot; of type &quot;slice...&quot;
+
+</code></pre>
+<p><strong>The Cause:</strong> Pyright thinks the variable you are indexing into with <code>['score']</code> or <code>['report']</code> is a <strong>List</strong>, not a <strong>Dictionary</strong>.</p>
+<p>In Python, lists only accept integers or slices (e.g., <code>my_list[0]</code> or <code>my_list[1:3]</code>). Passing a string literal like <code>candidate['score']</code> causes Pyright to throw <code>reportArgumentType</code> and <code>reportCallIssue</code>.</p>
+<p>This usually happens when returning multiple items or unpacking tuple values. For example:</p>
+<pre><code class="language-python"># BROKEN: score_candidate returns a tuple (score, report), 
+# but was assigned to a single variable, making 'res' a tuple/list:
+res = score_candidate(text)
+print(res['score'])  # Pyright Error! 'res' is a tuple (int, list), not a dict.
+
+</code></pre>
+<p><strong>How to Fix It:</strong></p>
+<h4>Option A: Unpack the Tuple</h4>
+<p>If your function returns <code>(score, report)</code> as a tuple:</p>
+<pre><code class="language-python"># Unpack directly into two variables:
+score, report = score_candidate(text)
+
+</code></pre>
+<h4>Option B: If <code>candidate</code> is a Dictionary, Add Type Annotations</h4>
+<p>If <code>candidate</code> is indeed a dictionary, Pyright might have inferred its type incorrectly earlier in the function. You can explicitly type annotate it or use <code>dict</code>:</p>
+<pre><code class="language-python">candidate: dict[str, Any] = {
+    &quot;score&quot;: score,
+    &quot;report&quot;: report
+}
+
+# Now Pyright knows dictionary string keys are valid:
+print(candidate['score'])
+
+</code></pre>
+<p>Once those 3 errors are cleared, your buffer will be completely clean!</p>
+<hr />
+<p><strong><a href="20260911_134319_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_134329_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134326_capture.md&quot;)</p>

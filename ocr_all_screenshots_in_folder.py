@@ -6,7 +6,8 @@ import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
-import difflib
+#import difflib
+import sys
 
 WORK_DIR = Path.cwd()
 TIMING_LOG = WORK_DIR / "ocr_timing.csv"
@@ -64,44 +65,34 @@ def is_readable_search_query(text: str) -> bool:
             
     return (valid_words >= 2) and (valid_words / len(words) >= 0.7)
 
-def score_url_candidate(text: str) -> dict:
-    if not text:
-        return {"score": -100, "report": ["Empty text string"]}
-
+def score_url_candidate(text):
     score = 0
     report = []
 
-    # 1. Structural URL checks
-    if re.search(r"https?://", text):
-        score += 50
-        report.append("+50: Contains protocol (http/https)")
-    if "www." in text:
-        score += 30
-        report.append("+30: Contains 'www.'")
-    if re.search(r"\.(com|org|net|edu|gov|io|uk|de)\b", text):
-        score += 20
-        report.append("+20: Contains valid top-level domain")
-    if "/" in text:
-        score += 10
-        report.append("+10: Contains path slash '/'")
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append("+100: Strong domain match")
 
-    # 2. Penalize garbage domains / typos
-    if "qgoog" in text or "googq" in text:
-        score -= 40
-        report.append("-40: Detected mangled domain name typo ('qgoogqgle')")
+    # 2. Path & Query Structure
+    if '/' in text:
+        score += 15
+        report.append("+15: Contains path slash '/'")
 
-    # 3. Penalize whitespace and noise
-    if re.search(r"\s", text):
-        score -= 20
-        report.append("-20: Contains whitespace/non-breaking spaces")
-    
-    symbols = len(re.findall(r"[~|\\{}[\]^=]", text))
-    if symbols > 0:
-        penalty = symbols * 5
+    # 3. Clean spaces penalty (or strip them first)
+    if re.search(r'\s', text):
+        score -= 10
+        report.append("-10: Contains whitespace")
+
+    # 4. Symbol Noise (Excluding standard URL characters: ?, &, =, -, _, %, .)
+    # Only flag bizarre non-URL symbols like ©, *, ®, etc.
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-]', text)
+    if bad_symbols:
+        penalty = len(bad_symbols) * 10
         score -= penalty
-        report.append(f"-{penalty}: Contains {symbols} symbol noise character(s)")
+        report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
 
-    return {"score": score, "report": report}
+    return score, report
 
 def process_url_candidates(image_path: Path) -> dict:
     candidates = []
@@ -111,14 +102,14 @@ def process_url_candidates(image_path: Path) -> dict:
         extracted_text = run_single_crop_ocr(image_path, coords)
         
         # Get score and report card dict
-        eval_result = score_url_candidate(extracted_text)
+        score, report = score_url_candidate(extracted_text)
 
         candidates.append({
             "rect_name": rect_info["name"],
             "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
             "text": extracted_text,
-            "score": eval_result["score"],
-            "scoring_report": eval_result["report"]  # <--- Stored in JSON
+            "score": score,
+            "scoring_report": report  # <--- Stored in JSON
         })
 
     # Sort descending by score
@@ -152,6 +143,9 @@ def log_timing(image_name: str, seconds: float):
         writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
 
 def process_ocr():
+    # Check if user passed --force-urls or -f as a command-line argument
+    force_urls = "--force-urls" in sys.argv or "-f" in sys.argv
+
     pc_images = sorted([
         f for f in WORK_DIR.rglob("*")
         if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
@@ -161,7 +155,9 @@ def process_ocr():
         print(f"No PC screenshots found to index in {WORK_DIR}")
         return
 
-    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...\n")
+    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...")
+    if force_urls:
+        print("--> Overwriting existing URL sidecars with new scoring logic.\n")
 
     indexed_count = 0
     for image_path in pc_images:
@@ -169,26 +165,22 @@ def process_ocr():
         url_json_path = image_path.parent / f"{image_path.name}.url.json"
         full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
 
-        # If either URL sidecar is missing, generate URL candidates
-        if not url_txt_path.is_file() or not url_json_path.is_file():
+        # Regenerate if force_urls is True, OR if either sidecar file is missing
+        if force_urls or not url_txt_path.is_file() or not url_json_path.is_file():
             url_data = process_url_candidates(image_path)
             
-            if not url_json_path.is_file():
-                url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
-                
-            if not url_txt_path.is_file():
-                url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+            url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+            print(f"Updated URL sidecars for: {image_path.relative_to(WORK_DIR)}")
 
         if not full_txt_path.is_file():
             full_text, duration = run_full_image_ocr(image_path)
             full_txt_path.write_text(full_text, encoding="utf-8")
             log_timing(image_path.name, duration)
-            print(f"Indexed '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
+            print(f"Indexed full image '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
             indexed_count += 1
-        else:
-            print(f"Skipped '{image_path.relative_to(WORK_DIR)}' (already indexed)")
 
-    print(f"\nOCR Indexing Complete. {indexed_count} new file(s) processed.")
+    print(f"\nOCR Indexing Complete.")
 
 if __name__ == "__main__":
     process_ocr()

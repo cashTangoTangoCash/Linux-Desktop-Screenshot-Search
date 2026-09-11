@@ -1,0 +1,61 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 117</h1>
+<p><strong><a href="20260911_125524_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_125542_capture.html">Next →</a></strong></p>
+<hr />
+<p>That is a great approach. Since <code>(setq dired-dwim-target t)</code> is already configured in your setup, Dired automatically suggests the target directory from the adjacent window buffer whenever a file operation (like copy or rename) is invoked.</p>
+<p>You don't even need to manually mark the screenshot first with <code>m</code>—the function can simply inspect the file under the point, compute its base name, find all matching sidecars in the current directory, and move the whole bundle using <code>dired-dwim-target</code>.</p>
+<p>Here is a clean Emacs Lisp function to add to your config.</p>
+<pre><code class="language-elisp">(defun my/dired-move-screenshot-with-sidecars ()
+  &quot;Move the .jpg at point along with its associated sidecars to the DWIM target directory.&quot;
+  (interactive)
+  (unless (derived-mode-p 'dired-mode)
+    (user-error &quot;This command can only be used in Dired mode&quot;))
+  (let* ((file (dired-get-filename nil t))
+         (target-dir (dired-dwim-target-directory)))
+    (unless file
+      (user-error &quot;No file on current line&quot;))
+    (unless target-dir
+      (user-error &quot;No target Dired window found in adjacent window split&quot;))
+    (if (not (string-match &quot;\\(\\.jpg\\|\\.png\\|\\.webp\\)$&quot; file))
+        (message &quot;File at point is not an image; skipping bundle move.&quot;)
+      (let* ((dir (file-name-directory file))
+             (filename (file-name-nondirectory file))
+             ;; Extract base prefix (e.g. &quot;2026-08-31-18:29-56_465x195.jpg&quot;)
+             (base-name (if (string-match &quot;^\\(.*?\\.\\(?:jpg\\|png\\|webp\\)\\)&quot; filename)
+                            (match-string 1 filename)
+                          filename))
+             ;; Find all files in current folder matching base-name prefix
+             (matching-files (directory-files dir t (concat &quot;^&quot; (regexp-quote base-name))))
+             (count (length matching-files)))
+        (when (y-or-n-p (format &quot;Move %d bundle file(s) for %s to %s? &quot; 
+                                count base-name target-dir))
+          (dolist (src matching-files)
+            (let ((dest (expand-file-name (file-name-nondirectory src) target-dir)))
+              (rename-file src dest t)))
+          (revert-buffer)
+          ;; Optionally refresh destination buffer if active
+          (when-let ((target-buf (car (delq nil (mapcar (lambda (w)
+                                                          (let ((b (window-buffer w)))
+                                                            (when (string= (with-current-buffer b default-directory) target-dir)
+                                                              b)))
+                                                        (window-list))))))
+            (with-current-buffer target-buf
+              (revert-buffer)))
+          (message &quot;Moved %d bundle file(s) to %s&quot; count target-dir))))))
+
+</code></pre>
+<h3>How to Bind and Use It</h3>
+<p>Add a custom keybinding inside your <code>(define-key dired-mode-map ...)</code> block:</p>
+<pre><code class="language-elisp">(define-key dired-mode-map (kbd &quot;M-r&quot;) 'my/dired-move-screenshot-with-sidecars)
+
+</code></pre>
+<h3>Workflow</h3>
+<ol>
+<li>Open Dired with target category subfolders on one side and the main screenshots directory on the other side.</li>
+<li>Position the cursor on any image file (e.g., <code>2026-08-31-18:29-56_465x195.jpg</code>).</li>
+<li>Press <code>M-r</code>.</li>
+<li>Emacs targets the directory visible in the other window, confirms moving the 4-file set (image + <code>.url.txt</code> + <code>.url.json</code> + <code>.full.txt</code>), moves them simultaneously, and refreshes the Dired buffer.</li>
+</ol>
+<hr />
+<p><strong><a href="20260911_125524_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_125542_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_125529_capture.md&quot;)</p>
