@@ -202,7 +202,7 @@ def custom_pager(title: str, search_term: str, search_folder: Path, url_text: st
 
 def review_searchResults(search_term: str, search_folder: Path):
 
-    pdb.set_trace()
+    #pdb.set_trace()
 
     items = find_matching_items(search_term, search_folder)
 
