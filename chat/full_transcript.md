@@ -16293,3 +16293,248 @@ Running `--pop` now will pull those 11 broken pieces back into the root `202608`
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122320_capture.md")
 
 ---
+
+# PROMPT 116
+looks like maybe the code isn't quite there yet:
+
+[dad84@dad84-2013PC 202608]$ find_and_fix_manual_screenshot_sorting_mistakes.py --pop
+Popping problem files for 1 broken bundle(s) back to root: /home/dad84/Documents/2026/screenshots/202608
+
+if we rerun the report:
+
+Screenshot Bundle Audit Report
+Root Directory: /home/dad84/Documents/2026/screenshots/202608
+============================================================
+
+Folder: ./.
+---------
+  [!] 2026-08-22-23:05-32_2560x1380.jpg
+      Present : ['.jpg', '.full.txt', '.url.txt']
+      MISSING : ['.url.json']
+  [!] 2026-08-31-18:29-56_465x195.jpg
+      Present : ['.full.txt', '.url.json', '.url.txt']
+      MISSING : ['.jpg']
+
+Folder: ./news
+------------
+  [!] 2026-08-31-12:39-23_816x1000.jpg
+      Present : ['.full.txt', '.url.json', '.url.txt']
+      MISSING : ['.jpg']
+  [!] 2026-08-31-18:29-56_465x195.jpg
+      Present : ['.jpg']
+      MISSING : ['.full.txt', '.url.json', '.url.txt']
+
+Folder: ./nua-bike-on-craigslist
+------------------------------
+  [!] 2026-08-29-00:14-25_2528x1368.jpg
+      Present : ['.full.txt', '.url.json', '.url.txt']
+      MISSING : ['.jpg']
+  [!] 2026-08-30-11:09-24_2560x1349.jpg
+      Present : ['.jpg']
+      MISSING : ['.full.txt', '.url.json', '.url.txt']
+
+Folder: ./protonmail-unlimited-offer-vpn
+--------------------------------------
+  [!] 2026-08-31-11:12-08_2528x1368.jpg
+      Present : ['.full.txt', '.url.json', '.url.txt']
+      MISSING : ['.jpg']
+  [!] 2026-08-31-12:39-23_816x1000.jpg
+      Present : ['.jpg']
+      MISSING : ['.full.txt', '.url.json', '.url.txt']
+
+Folder: ./soloflex
+----------------
+  [!] 2026-08-29-00:14-25_2528x1368.jpg
+      Present : ['.jpg']
+      MISSING : ['.full.txt', '.url.json', '.url.txt']
+
+Folder: ./weather
+---------------
+  [!] 2026-08-30-11:09-24_2560x1349.jpg
+      Present : ['.full.txt', '.url.json', '.url.txt']
+      MISSING : ['.jpg']
+  [!] 2026-08-31-11:12-08_2528x1368.jpg
+      Present : ['.jpg']
+      MISSING : ['.full.txt', '.url.json', '.url.txt']
+
+============================================================
+Summary: Found 11 incomplete bundle instance(s) across 6 folder(s).
+
+  [Popped] 20260723-your-bike-accident/2026-08-22-23:05-32_2560x1380.jpg -> ./2026-08-22-23:05-32_2560x1380.jpg
+  [Popped] 20260723-your-bike-accident/2026-08-22-23:05-32_2560x1380.jpg.url.txt -> ./2026-08-22-23:05-32_2560x1380.jpg.url.txt
+  [Popped] 20260723-your-bike-accident/2026-08-22-23:05-32_2560x1380.jpg.full.txt -> ./2026-08-22-23:05-32_2560x1380.jpg.full.txt
+
+============================================================
+Pop Complete: Moved 3 problem file(s) back to root.
+============================================================
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122426_capture.md")
+
+---
+
+# RESPONSE 116
+The bug was in how `analyze_bundles()` decided what counts as an "incomplete bundle."
+
+It evaluated completeness **per folder**, rather than checking if a screenshot base name had all 4 required files **globally across all folders**.
+
+Because `2026-08-31-18:29-56_465x195.jpg` had `.jpg` in `./news` and its text sidecars in `.`, neither folder had all 4 files locally. But when the code checked if the base name was incomplete across the whole system, the union of present suffixes was `['.jpg', '.full.txt', '.url.json', '.url.txt']` (all 4!), so it falsely concluded: *"This bundle is complete somewhere across the tree, don't pop it."*
+
+The only one it popped (`2026-08-22-23:05-32_2560x1380.jpg`) was the one that was legitimately missing its `.url.json` file everywhere on disk!
+
+### The Fix
+
+A base name needs popping if **either**:
+
+1. A subfolder has *some* of its files, but not all 4 (it got split/scattered across folders).
+2. It is missing one of the 4 files globally.
+
+Here is the corrected script that properly catches split/scattered bundles and pops their files back to root:
+
+```python
+#!/usr/bin/env python3
+import sys
+import re
+import shutil
+from collections import defaultdict
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+REPORT_FILE = WORK_DIR / "audit_report.txt"
+
+# Matches base screenshot naming (e.g. image.jpg, image.jpg.url.txt, etc.)
+IMAGE_PATTERN = re.compile(r"^(.*?\.jpg)", re.IGNORECASE)
+
+# The 4 file suffixes required for a complete bundle
+EXPECTED_SUFFIXES = [
+    "",           # The .jpg itself
+    ".url.txt",   # URL text
+    ".url.json",  # URL JSON
+    ".full.txt",  # Full OCR text
+]
+
+def analyze_bundles():
+    """Scans all files in WORK_DIR and subfolders, identifying incomplete or split bundles."""
+    # Folder -> Base Name -> Set of present suffixes
+    folder_manifest = defaultdict(lambda: defaultdict(set))
+    
+    for file_path in WORK_DIR.rglob("*"):
+        if not file_path.is_file() or file_path.name == REPORT_FILE.name:
+            continue
+        
+        match = IMAGE_PATTERN.match(file_path.name)
+        if match:
+            base_jpg = match.group(1)
+            suffix = file_path.name[len(base_jpg):]
+            
+            rel_folder = file_path.parent.relative_to(WORK_DIR)
+            folder_str = "." if str(rel_folder) == "." else str(rel_folder)
+            
+            folder_manifest[folder_str][base_jpg].add(suffix)
+
+    # A base is "incomplete" if ANY folder contains an incomplete set of the 4 files
+    incomplete_bases = set()
+    for folder, bases in folder_manifest.items():
+        for base_jpg, present_suffixes in bases.items():
+            if any(s not in present_suffixes for s in EXPECTED_SUFFIXES):
+                incomplete_bases.add(base_jpg)
+
+    return folder_manifest, incomplete_bases
+
+def pop_problem_files():
+    """Moves ONLY files associated with incomplete/split bundles back to the root WORK_DIR."""
+    folder_manifest, incomplete_bases = analyze_bundles()
+
+    if not incomplete_bases:
+        print("No broken or incomplete screenshot bundles detected. Nothing to pop!")
+        return
+
+    print(f"Popping problem files for {len(incomplete_bases)} broken/split bundle(s) back to root: {WORK_DIR}\n")
+    moved_count = 0
+    conflict_count = 0
+
+    # Walk files and move only those matching an incomplete base name
+    for file_path in WORK_DIR.rglob("*"):
+        if not file_path.is_file() or file_path.parent == WORK_DIR or file_path.name == REPORT_FILE.name:
+            continue
+
+        match = IMAGE_PATTERN.match(file_path.name)
+        if match:
+            base_jpg = match.group(1)
+            
+            # Target ONLY files that belong to an incomplete or split bundle
+            if base_jpg in incomplete_bases:
+                dest_path = WORK_DIR / file_path.name
+
+                if not dest_path.exists():
+                    shutil.move(str(file_path), str(dest_path))
+                    print(f"  [Popped] {file_path.relative_to(WORK_DIR)} -> ./{file_path.name}")
+                    moved_count += 1
+                else:
+                    print(f"  [Conflict] File already exists at root, skipping: ./{file_path.name}")
+                    conflict_count += 1
+
+    print("\n" + "=" * 60)
+    print(f"Pop Complete: Moved {moved_count} problem file(s) back to root.")
+    if conflict_count > 0:
+        print(f"Skipped {conflict_count} file(s) due to name collisions at root.")
+    print("=" * 60)
+
+def run_audit():
+    folder_manifest, incomplete_bases = analyze_bundles()
+
+    report_lines = []
+    report_lines.append("Screenshot Bundle Audit Report")
+    report_lines.append(f"Root Directory: {WORK_DIR}")
+    report_lines.append("=" * 60 + "\n")
+
+    incomplete_folders_count = 0
+    total_mismatched_bases = 0
+
+    for folder in sorted(folder_manifest.keys()):
+        bases = folder_manifest[folder]
+        missing_in_folder = []
+
+        for base_jpg, present_suffixes in bases.items():
+            missing_suffixes = [s for s in EXPECTED_SUFFIXES if s not in present_suffixes]
+            
+            if missing_suffixes:
+                missing_in_folder.append((base_jpg, present_suffixes, missing_suffixes))
+
+        if missing_in_folder:
+            incomplete_folders_count += 1
+            total_mismatched_bases += len(missing_in_folder)
+            
+            report_lines.append(f"Folder: ./{folder}")
+            report_lines.append("-" * (8 + len(folder)))
+            
+            for base_jpg, present, missing in sorted(missing_in_folder):
+                present_str = ", ".join([f"'{s}'" if s else "'.jpg'" for s in sorted(present)])
+                missing_str = ", ".join([f"'{s}'" if s else "'.jpg'" for s in sorted(missing)])
+                
+                report_lines.append(f"  [!] {base_jpg}")
+                report_lines.append(f"      Present : [{present_str}]")
+                report_lines.append(f"      MISSING : [{missing_str}]")
+            report_lines.append("")
+
+    report_lines.append("=" * 60)
+    report_lines.append(f"Summary: Found {total_mismatched_bases} incomplete bundle instance(s) across {incomplete_folders_count} folder(s).")
+
+    full_report_text = "\n".join(report_lines)
+
+    print(full_report_text)
+    REPORT_FILE.write_text(full_report_text, encoding="utf-8")
+    print(f"\n[+] Detailed report saved to: {REPORT_FILE.name}")
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--pop":
+        pop_problem_files()
+    else:
+        run_audit()
+
+```
+
+If you re-run `find_and_fix_manual_screenshot_sorting_mistakes.py --pop` with this code, it will correctly identify all 6 split base names and pop their scattered files out of `news`, `soloflex`, `weather`, `nua-bike-on-craigslist`, and `protonmail-unlimited-offer-vpn`.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122434_capture.md")
+
+---
