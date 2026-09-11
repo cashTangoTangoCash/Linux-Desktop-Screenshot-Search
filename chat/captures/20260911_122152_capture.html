@@ -1,0 +1,29 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 109</h1>
+<p><strong><a href="20260911_122147_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122201_capture.html">Next →</a></strong></p>
+<hr />
+<p>You aren't imagining it—that sorting toggle behavior is a built-in Dired feature that can easily trip you up when you're moving fast, especially late in a session.</p>
+<h3>The Mystery of Dired's Reversing <code>g</code></h3>
+<p>In Emacs, <code>g</code> runs <code>revert-buffer</code>. By default, it just re-reads the directory. However, if you hit <strong><code>s</code></strong> (which runs <code>dired-sort-toggle-or-edit</code>) by accident instead of <code>g</code>—or if you press <code>g</code> while a prefix argument or specific <code>ls</code> switch hook is active—Dired switches between sorting by <strong>Name</strong> and sorting by <strong>Date/Time</strong> (or reverses the current sort order).</p>
+<p>Because <code>.jpg</code>, <code>.full.txt</code>, <code>.url.json</code>, and <code>.url.txt</code> all have slightly different modification times or alphabetical sort weight:</p>
+<ul>
+<li><strong>Sorted by Name:</strong> All 4 sidecar files for a screenshot sit contiguous right next to each other in alphabetical order.</li>
+<li><strong>Sorted by Date/Time (<code>ls -t</code>):</strong> If sidecar files were generated or modified a few seconds apart during OCR batch execution, <strong>they split up</strong>. A <code>.jpg</code> might be separated from its <code>.url.json</code> by 10 other files in the buffer.</li>
+</ul>
+<p>If <code>s</code> accidentally gets pressed during rapid keypresses, the buffer silently reshuffles. If you then count &quot;1, 2, 3, 4&quot; and hit <code>m</code> four times based on visual habit, you end up marking a mixed group of completely unrelated images and sidecars.</p>
+<h3>Why a Git Repo is Great Here (And How to Keep it Clean)</h3>
+<p>Having a Git repository in your <code>202608</code> folder is actually an <strong>ideal safety net</strong> for this exact scenario, provided you set it up to track what matters:</p>
+<ol>
+<li><strong>Safety Net for Sidecars:</strong> Tracking all <code>.txt</code> and <code>.json</code> files in Git means if a Dired session goes sideways, <code>git status</code> instantly highlights misplaced sidecars, and <code>git checkout .</code> resets any accidental moves.</li>
+<li><strong>Ignoring Heavy Images (<code>.gitignore</code>):</strong> Storing 1,000 <code>.jpg</code> files in local Git is fine, but if you don't want Git tracking large binary images, you can ignore the binaries and only version-control the OCR text:</li>
+</ol>
+<pre><code class="language-gitignore"># .gitignore in your screenshots folder
+*.jpg
+*.png
+
+</code></pre>
+<p>This keeps your repo ultra-light weight (~few MBs of pure text), while still tracking every <code>.url.txt</code>, <code>.url.json</code>, and <code>.full.txt</code> sidecar so you can track where text files belong.</p>
+<p>Once you run the flatten script to pull everything back to the root folder, running <code>git status</code> (or <code>magit</code> inside Emacs) will give you a clean list of any orphan sidecars before you run your automated <code>sort.py</code> pass.</p>
+<hr />
+<p><strong><a href="20260911_122147_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122201_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122152_capture.md&quot;)</p>

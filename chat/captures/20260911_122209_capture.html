@@ -1,0 +1,55 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 110</h1>
+<p><strong><a href="20260911_122201_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122222_capture.html">Next →</a></strong></p>
+<hr />
+<p>That &quot;general haze&quot; is the classic late-night tax. When fatigue sets in, the brain naturally gravitates toward big-picture speculation and loses the meticulous patience required for manual file audits. Trying to brute-force a multi-year backlog at midnight using destructive scripts or Dired multi-marks is a recipe for silent data chaos.</p>
+<h3>What is Actually Happening (The &quot;Haze&quot; Mechanics)</h3>
+<ol>
+<li><strong>Rule Staleness:</strong> Your rules files (<code>rules_url.txt</code> and <code>rules_full.txt</code>) reflect patterns you knew <em>when you wrote them</em>. When going backward in time, web browsing habits, saved domain names, and folder naming schemes shift.</li>
+<li><strong>Sidecar Desync:</strong> When manual moves were done in Dired without atomic bundle-moving (like <code>inspect.py</code>'s <code>[m]</code> action), screenshot <code>.jpg</code>s and their sidecars got split across folders.</li>
+<li><strong>Loss of Baseline:</strong> Without a clean log or rule audit, it's hard to tell whether a subfolder was created by an automated regex match or by a manual Dired move six weeks ago.</li>
+</ol>
+<hr />
+<h3>A Safe Strategy to Clear the Haze (Without Data Loss)</h3>
+<p>Instead of moving files around in the dark right now, here is a clean, non-destructive recovery workflow for when you return to this with a fresh mind:</p>
+<h4>1. Audit Existing Subfolders Against Your Rules</h4>
+<p>Before pulling files out or running automated sorts, run a quick dry-run script to extract all unique folder names defined in your rule files vs. the subfolders that actually exist on disk:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+
+# Extract target folders defined in rule files
+rule_folders = set()
+for rule_file in [&quot;rules_url.txt&quot;, &quot;rules_full.txt&quot;]:
+    f = WORK_DIR / rule_file
+    if f.is_file():
+        for line in f.read_text().splitlines():
+            if &quot;|&quot; in line and not line.strip().startswith(&quot;#&quot;):
+                rule_folders.add(line.rsplit(&quot;|&quot;, 1)[1].strip())
+
+# Find actual subfolders present on disk
+existing_folders = {d.name for d in WORK_DIR.iterdir() if d.is_dir()}
+
+print(&quot;=== SUBFOLDERS NOT CREATED BY CURRENT RULES ===&quot;)
+unknown = existing_folders - rule_folders
+for u in sorted(unknown):
+    print(f&quot; - {u}&quot;)
+
+</code></pre>
+<p>This immediately tells you which subfolders were manually created (or created by older rules) vs. which ones your script understands today.</p>
+<h4>2. Re-Sync Orphaned Sidecars</h4>
+<p>If a <code>.jpg</code> is in <code>202608/finance/</code> but its <code>.url.json</code> is sitting in <code>202608/</code>, you don't need to guess where it goes. The filenames share the exact same base timestamp prefix (e.g., <code>2026-08-15-...</code>). A simple matching script can find any sidecar sitting at the root and move it directly into whichever subfolder contains its matching <code>.jpg</code>.</p>
+<h4>3. Shift the Mental Model</h4>
+<p>Going backward through years of screenshots will naturally reveal gaps in your regex rules.</p>
+<ul>
+<li><strong>The Script's Job:</strong> Catch the obvious, high-volume, low-friction categories (e.g., github, reddit, local bills, specific web apps) automatically.</li>
+<li><strong>The Unsorted Bucket's Job:</strong> Collect everything else into a single <code>_review</code> directory.</li>
+<li><strong>Your Job (When Fresh):</strong> Run <code>inspect.py</code> on the remaining handful of unsorted items. Whenever you spot a recurring pattern during inspection, append <strong>one new rule</strong> to <code>rules_url.txt</code> or <code>rules_full.txt</code> rather than manually moving the files individually.</li>
+</ul>
+<hr />
+<h3>Call It a Night</h3>
+<p>Late-night energy is great for conceiving systems, tweaking Emacs workflows, or outlining higher-level automation architecture. It is terrible for clicking through 1,000 files in Dired. Step away from the buffer for now—the OCR sidecars and regex tools will be right there waiting when your focus is sharp.</p>
+<hr />
+<p><strong><a href="20260911_122201_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122222_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122209_capture.md&quot;)</p>

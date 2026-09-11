@@ -1,0 +1,122 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 111</h1>
+<p><strong><a href="20260911_122222_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122236_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is a standalone script that scans your working directory (<code>.</code>) and all its subdirectories, checks every base screenshot name for the 4 expected files, and lists any folder with incomplete or orphaned sets.</p>
+<p>It prints the summary directly to your terminal and saves a detailed log to <code>audit_report.txt</code> in the folder where you run it.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import re
+from collections import defaultdict
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+REPORT_FILE = WORK_DIR / &quot;audit_report.txt&quot;
+
+# Matches base screenshot naming (e.g. image.jpg, image.jpg.url.txt, etc.)
+IMAGE_PATTERN = re.compile(r&quot;^(.*?\.jpg)&quot;, re.IGNORECASE)
+
+# The 4 file suffixes required for a complete bundle
+EXPECTED_SUFFIXES = [
+    &quot;&quot;,           # The .jpg itself
+    &quot;.url.txt&quot;,   # URL text
+    &quot;.url.json&quot;,  # URL JSON
+    &quot;.full.txt&quot;,  # Full OCR text
+]
+
+def run_audit():
+    # Folder -&gt; Base Name -&gt; Set of present suffixes
+    folder_manifest = defaultdict(lambda: defaultdict(set))
+    
+    # 1. Scan and index all files in WORK_DIR and subdirectories
+    for file_path in WORK_DIR.rglob(&quot;*&quot;):
+        if not file_path.is_file() or file_path.name == REPORT_FILE.name:
+            continue
+        
+        match = IMAGE_PATTERN.match(file_path.name)
+        if match:
+            base_jpg = match.group(1)
+            # Extrapolate suffix from the base .jpg name
+            # e.g., 'photo.jpg.url.json' -&gt; suffix is '.url.json'
+            suffix = file_path.name[len(base_jpg):]
+            
+            rel_folder = file_path.parent.relative_to(WORK_DIR)
+            folder_str = &quot;.&quot; if str(rel_folder) == &quot;.&quot; else str(rel_folder)
+            
+            folder_manifest[folder_str][base_jpg].add(suffix)
+
+    # 2. Analyze for missing or partial sets
+    report_lines = []
+    report_lines.append(f&quot;Screenshot Bundle Audit Report&quot;)
+    report_lines.append(f&quot;Root Directory: {WORK_DIR}&quot;)
+    report_lines.append(&quot;=&quot; * 60 + &quot;\n&quot;)
+
+    incomplete_folders_count = 0
+    total_mismatched_bases = 0
+
+    for folder in sorted(folder_manifest.keys()):
+        bases = folder_manifest[folder]
+        missing_in_folder = []
+
+        for base_jpg, present_suffixes in bases.items():
+            missing_suffixes = [s for s in EXPECTED_SUFFIXES if s not in present_suffixes]
+            
+            if missing_suffixes:
+                missing_in_folder.append((base_jpg, present_suffixes, missing_suffixes))
+
+        if missing_in_folder:
+            incomplete_folders_count += 1
+            total_mismatched_bases += len(missing_in_folder)
+            
+            report_lines.append(f&quot;Folder: ./{folder}&quot;)
+            report_lines.append(&quot;-&quot; * (8 + len(folder)))
+            
+            for base_jpg, present, missing in sorted(missing_in_folder):
+                present_str = &quot;, &quot;.join([f&quot;'{s}'&quot; if s else &quot;'.jpg'&quot; for s in sorted(present)])
+                missing_str = &quot;, &quot;.join([f&quot;'{s}'&quot; if s else &quot;'.jpg'&quot; for s in sorted(missing)])
+                
+                report_lines.append(f&quot;  [!] {base_jpg}&quot;)
+                report_lines.append(f&quot;      Present : [{present_str}]&quot;)
+                report_lines.append(f&quot;      MISSING : [{missing_str}]&quot;)
+            report_lines.append(&quot;&quot;)
+
+    report_lines.append(&quot;=&quot; * 60)
+    report_lines.append(f&quot;Summary: Found {total_mismatched_bases} incomplete bundle(s) across {incomplete_folders_count} folder(s).&quot;)
+
+    full_report_text = &quot;\n&quot;.join(report_lines)
+
+    # 3. Output results to console and file
+    print(full_report_text)
+    REPORT_FILE.write_text(full_report_text, encoding=&quot;utf-8&quot;)
+    print(f&quot;\n[+] Detailed report saved to: {REPORT_FILE.name}&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    run_audit()
+
+</code></pre>
+<h3>How to use it:</h3>
+<ol>
+<li>Save it as <code>audit_bundles.py</code> (e.g., in your <code>~/bin</code> or script path) and make it executable:</li>
+</ol>
+<pre><code class="language-bash">chmod +x audit_bundles.py
+
+</code></pre>
+<ol start="2">
+<li>Navigate to your target directory and execute:</li>
+</ol>
+<pre><code class="language-bash">cd ~/Documents/2026/screenshots/202608
+audit_bundles.py
+
+</code></pre>
+<h3>How it helps with Dired:</h3>
+<p>The output groups problems by folder and explicitly tells you which sidecar is missing from that directory. If you see:</p>
+<pre><code class="language-text">Folder: ./finance
+------------------
+  [!] 2026-08-12-142011_1920x1080.jpg
+      Present : ['.jpg', '.full.txt']
+      MISSING : ['.url.txt', '.url.json']
+
+</code></pre>
+<p>...and another entry under <code>Folder: .</code> shows the corresponding <code>.url.txt</code> and <code>.url.json</code> sitting in the root, you know instantly which files need to be moved to reconcile the bundle.</p>
+<hr />
+<p><strong><a href="20260911_122222_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260911_122236_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_122230_capture.md&quot;)</p>
