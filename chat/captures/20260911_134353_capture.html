@@ -1,6 +1,6 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
 <h1>RESPONSE 123</h1>
-<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260912_230211_capture.html">Next →</a></strong></p>
 <hr />
 <p>Instead of hacking up <code>process_ocr()</code> with temporary commented blocks—which is error-prone and easy to forget to revert in Git (<code>magit</code>)—a cleaner, production-friendly pattern is to add a CLI flag like <code>--force-urls</code> or <code>--overwrite-urls</code>.</p>
 <p>However, if you want a quick, clean standard approach without adding <code>argparse</code> overhead, here are the two best ways to handle it:</p>
@@ -71,5 +71,5 @@ python3 ocr_script.py
 <h3>Recommendation</h3>
 <p>Option 1 is the cleanest in code because it protects you from having to remember <code>find ... -delete</code> syntax whenever you adjust your scoring logic in the future.</p>
 <hr />
-<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p><strong><a href="20260911_134348_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260912_230211_capture.html">Next →</a></strong></p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134353_capture.md&quot;)</p>

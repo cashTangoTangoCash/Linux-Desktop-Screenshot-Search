@@ -14969,3 +14969,386 @@ python3 ocr_script.py
 <p>Option 1 is the cleanest in code because it protects you from having to remember <code>find ... -delete</code> syntax whenever you adjust your scoring logic in the future.</p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260911_134353_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 124</h1>
+<p>as I use my scripts, I notice that it would be useful to have the ability to sort based on both full text and url.  for example:</p>
+<p>url 'matches' instagram AND full text 'matches' nua</p>
+<p>does a nice job for picking out screenshots of the nua bikes instagram pages - it's a bit hard to think offhand of how to pick out those screenshots using url only or full text only rules.</p>
+<p>I think this would be a 3rd rules file, and this combination rule would be applied before the full-text rules and the url rules.</p>
+<p>existing sorting script:</p>
+<p>#!/usr/bin/env python3
+import json
+import re
+import shutil
+from pathlib import Path</p>
+<p>WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;.*.jpg$&quot;, re.IGNORECASE)</p>
+<p>def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules</p>
+<p>    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            # rsplit from the right so regexes can safely contain OR '|' pipes
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;)
+    return rules</p>
+<p>def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt, .url.json, and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)</p>
+<p>    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    url_json = WORK_DIR / f&quot;{image_path.name}.url.json&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;</p>
+<p>    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if url_json.is_file():
+        shutil.move(str(url_json), str(target_dir / url_json.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))</p>
+<p>def sort_by_full_text(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - Full Text&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+        full_text = full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if full_txt_path.is_file() else &quot;&quot;</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def sort_by_url(images: list[Path], rules: list[tuple[re.Pattern, str]], pass_label: str = &quot;Pass - URL&quot;) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL sidecars (.url.txt or .url.json). Returns (remaining_images, moved_count).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+        url_json_path = WORK_DIR / f&quot;{image_path.name}.url.json&quot;</p>
+<p>        url_text = url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;) if url_txt_path.is_file() else &quot;&quot;</p>
+<p>        # Fall back to inspecting .url.json if .url.txt is missing/empty
+        if not url_text and url_json_path.is_file():
+            try:
+                data = json.loads(url_json_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;))
+                url_text = data.get(&quot;best_url&quot;, &quot;&quot;)
+            except Exception:
+                pass</p>
+<p>        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break</p>
+<p>        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)</p>
+<p>    return remaining, moved_count</p>
+<p>def process_sort():
+    pc_images = sorted([
+        f for f in WORK_DIR.iterdir()
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])</p>
+<p>    if not pc_images:
+        print(f&quot;No PC screenshots found to sort in {WORK_DIR}&quot;)
+        return</p>
+<p>    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)</p>
+<p>    print(f&quot;Loaded {len(rules_url)} URL rules and {len(rules_full)} Full-Text rules.&quot;)
+    print(f&quot;Sorting {len(pc_images)} screenshot(s)...\n&quot;)</p>
+<p>    # --- EXECUTE SORT PASSES ---
+    remaining_images, sorted_pass_1 = sort_by_full_text(pc_images, rules_full, &quot;Pass 1 - Full Text&quot;)
+    remaining_images, sorted_pass_2 = sort_by_url(remaining_images, rules_url, &quot;Pass 2 - URL&quot;)</p>
+<p>    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot;Sorting Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Full Text): {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (URL)      : {sorted_pass_2} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)</p>
+<p>if <strong>name</strong> == &quot;<strong>main</strong>&quot;:
+    process_sort()</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260912_230211_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 124</h1>
+<p>Adding a third rules file for combined conditions (URL <strong>AND</strong> Full Text) is a very clean extension to your pipeline architecture.</p>
+<p>Here is a recommended approach for the file format, loading logic, and sorting execution:</p>
+<h3>1. Rule File Format (<code>rules_combo.txt</code>)</h3>
+<p>To keep the rules file plain-text and easy to maintain without complex parsers, use a two-pipe delimiter (<code>|</code>) per line:</p>
+<pre><code class="language-text">url_regex | full_text_regex | target_folder
+
+</code></pre>
+<h4>Example <code>rules_combo.txt</code>:</h4>
+<pre><code class="language-text"># Matches Instagram URLs AND &quot;nua&quot; in full text
+instagram\.com | nua | nua_bikes
+
+# Matches reddit URLs AND &quot;mechanical keyboard&quot; in full text
+reddit\.com | mechanical keyboard | keyboard_posts
+
+</code></pre>
+<hr />
+<h3>2. Updated Python Script</h3>
+<p>Below is the complete updated script containing:</p>
+<ol>
+<li><code>load_combo_rules()</code> to parse <code>url_pattern | full_text_pattern | target_folder</code>.</li>
+<li><code>sort_by_combo()</code> to evaluate both conditions on each image.</li>
+<li>Updated execution flow running <strong>Pass 1 (Combo)</strong> $\rightarrow$ <strong>Pass 2 (Full Text)</strong> $\rightarrow$ <strong>Pass 3 (URL)</strong>.</li>
+</ol>
+<pre><code class="language-python">#!/usr/bin/env python3
+import json
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r&quot;.*\.jpg$&quot;, re.IGNORECASE)
+
+
+def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a pipe-separated text file (pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        if &quot;|&quot; in line:
+            pattern_str, folder = line.rsplit(&quot;|&quot;, 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(
+                    f&quot;Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}&quot;
+                )
+    return rules
+
+
+def load_combo_rules(
+    file_path: Path,
+) -&gt; list[tuple[re.Pattern, re.Pattern, str]]:
+    &quot;&quot;&quot;Loads rules from a 2-pipe separated text file (url_pattern | full_pattern | folder_name).&quot;&quot;&quot;
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+
+        parts = [p.strip() for p in line.split(&quot;|&quot;)]
+        if len(parts) == 3:
+            url_str, full_str, folder = parts
+            try:
+                url_compiled = re.compile(url_str, re.IGNORECASE)
+                full_compiled = re.compile(full_str, re.IGNORECASE)
+                rules.append((url_compiled, full_compiled, folder))
+            except re.error as e:
+                print(f&quot;Warning: Invalid regex in {file_path.name}: {e}&quot;)
+    return rules
+
+
+def move_bundle(image_path: Path, target_folder_name: str):
+    &quot;&quot;&quot;Moves image along with its sidecar .url.txt, .url.json, and .full.txt files.&quot;&quot;&quot;
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    url_txt = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    url_json = WORK_DIR / f&quot;{image_path.name}.url.json&quot;
+    full_txt = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+
+    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if url_json.is_file():
+        shutil.move(str(url_json), str(target_dir / url_json.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))
+
+
+def read_sidecars(image_path: Path) -&gt; tuple[str, str]:
+    &quot;&quot;&quot;Helper to read and return both (url_text, full_text) for an image.&quot;&quot;&quot;
+    full_txt_path = WORK_DIR / f&quot;{image_path.name}.full.txt&quot;
+    full_text = (
+        full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+        if full_txt_path.is_file()
+        else &quot;&quot;
+    )
+
+    url_txt_path = WORK_DIR / f&quot;{image_path.name}.url.txt&quot;
+    url_json_path = WORK_DIR / f&quot;{image_path.name}.url.json&quot;
+    url_text = (
+        url_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+        if url_txt_path.is_file()
+        else &quot;&quot;
+    )
+
+    # Fall back to inspecting .url.json if .url.txt is missing/empty
+    if not url_text and url_json_path.is_file():
+        try:
+            data = json.loads(
+                url_json_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
+            )
+            url_text = data.get(&quot;best_url&quot;, &quot;&quot;)
+        except Exception:
+            pass
+
+    return url_text, full_text
+
+
+def sort_by_combo(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, re.Pattern, str]],
+    pass_label: str = &quot;Pass - Combo&quot;,
+) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images requiring matches on BOTH URL and full-text rules.&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_text, full_text = read_sidecars(image_path)
+
+        matched_folder = None
+        for url_pattern, full_pattern, folder in rules:
+            if url_pattern.search(url_text) and full_pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def sort_by_full_text(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, str]],
+    pass_label: str = &quot;Pass - Full Text&quot;,
+) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on full-text sidecars (.full.txt).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        _, full_text = read_sidecars(image_path)
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def sort_by_url(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, str]],
+    pass_label: str = &quot;Pass - URL&quot;,
+) -&gt; tuple[list[Path], int]:
+    &quot;&quot;&quot;Sorts images based on URL sidecars (.url.txt or .url.json).&quot;&quot;&quot;
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_text, _ = read_sidecars(image_path)
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f&quot;[{pass_label}] Moved '{image_path.name}' -&gt; {matched_folder}/&quot;)
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def process_sort():
+    pc_images = sorted(
+        [
+            f
+            for f in WORK_DIR.iterdir()
+            if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+        ]
+    )
+
+    if not pc_images:
+        print(f&quot;No PC screenshots found to sort in {WORK_DIR}&quot;)
+        return
+
+    rules_combo = load_combo_rules(WORK_DIR / &quot;rules_combo.txt&quot;)
+    rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)
+    rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
+
+    print(
+        f&quot;Loaded {len(rules_combo)} Combo rules, {len(rules_full)} Full-Text rules, and {len(rules_url)} URL rules.&quot;
+    )
+    print(f&quot;Sorting {len(pc_images)} screenshot(s)...\n&quot;)
+
+    # --- EXECUTE SORT PASSES ---
+    # Order: Most specific (Combo) -&gt; Moderately specific (Full Text) -&gt; General (URL)
+    remaining_images, sorted_pass_1 = sort_by_combo(
+        pc_images, rules_combo, &quot;Pass 1 - Combo&quot;
+    )
+    remaining_images, sorted_pass_2 = sort_by_full_text(
+        remaining_images, rules_full, &quot;Pass 2 - Full Text&quot;
+    )
+    remaining_images, sorted_pass_3 = sort_by_url(
+        remaining_images, rules_url, &quot;Pass 3 - URL&quot;
+    )
+
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(&quot;Sorting Complete:&quot;)
+    print(f&quot;  Total Screenshots : {len(pc_images)}&quot;)
+    print(f&quot;  Pass 1 (Combo)    : {sorted_pass_1} moved&quot;)
+    print(f&quot;  Pass 2 (Full Text): {sorted_pass_2} moved&quot;)
+    print(f&quot;  Pass 3 (URL)      : {sorted_pass_3} moved&quot;)
+    print(f&quot;  Unsorted Remaining: {len(remaining_images)}&quot;)
+    print(&quot;=&quot; * 50)
+
+
+if __name__ == &quot;__main__&quot;:
+    process_sort()
+
+</code></pre>
+<hr />
+<h3>Key Advantages of This Refactoring:</h3>
+<ol>
+<li><strong><code>read_sidecars()</code> Helper:</strong> Consolidated file reading into a single helper function, reducing duplicate boilerplate across sorting passes.</li>
+<li><strong>Proper Pass Hierarchy:</strong> <code>Pass 1 (Combo)</code> runs first to capture specific intersections, ensuring those files aren't prematurely snagged by general rules in <code>Pass 2</code> or <code>Pass 3</code>.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260912_230222_capture.md&quot;)</p>
+<hr />
