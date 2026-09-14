@@ -13,8 +13,9 @@ WORK_DIR = Path.cwd()
 TIMING_LOG = WORK_DIR / "ocr_timing.csv"
 
 # Pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
-RECT_MATE = (1836, 33, 230, 50)  # Rectangle 1: MATE layout
-RECT_I3 = (1621, 47, 284, 58)    # Rectangle 2: i3 layout
+# the names _MATE and _I3 are arbitrary
+RECT_MATE = (1536, 56, 447, 81)  # Rectangle 1: MATE layout
+RECT_I3 = (1531, 53, 447, 79)    # Rectangle 2: i3 layout
 
 RECTANGLES = [
     {"name": "mate", "coords": RECT_MATE},
