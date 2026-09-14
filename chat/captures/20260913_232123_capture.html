@@ -1,0 +1,27 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 128</h1>
+<p><strong><a href="20260913_231910_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260913_232131_capture.html">Next →</a></strong></p>
+<hr />
+<p>good, the imagej feature works.  But, I don't think I tested all the features that were recently added.  today I notice that pyright is flagging errors:</p>
+<p>   7   7 note  Pyright -                   &quot;sys&quot; is not accessed
+  74  36 note  Pyright -                   &quot;term_win_id&quot; is not accessed
+ 197  11 note  Pyright -                   The function &quot;system&quot; is deprecated
+ 310  14 error Pyright reportOperatorIssue Operator &quot;&lt;=&quot; not supported for types &quot;Literal[0]&quot; and &quot;int | str&quot;
+ 310  19 error Pyright reportOperatorIssue Operator &quot;&lt;&quot; not supported for types &quot;int | str&quot; and &quot;int&quot;
+ 311  67 error Pyright reportArgumentType  Argument of type &quot;int | str&quot; cannot be assigned to parameter &quot;s&quot; of type &quot;slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]&quot; in function &quot;<strong>getitem</strong>&quot;
+ 311  67 error Pyright reportCallIssue     No overloads for &quot;<strong>getitem</strong>&quot; match the provided arguments
+ 340  38 error Pyright reportOperatorIssue Operator &quot;+&quot; not supported for types &quot;int | str&quot; and &quot;Literal[1]&quot;
+ 350  53 error Pyright reportOperatorIssue Operator &quot;+&quot; not supported for types &quot;int | str&quot; and &quot;str | int&quot;
+ 352  57 error Pyright reportOperatorIssue Operator &quot;/&quot; not supported for types &quot;str | int&quot; and &quot;Literal[100]&quot;
+ 361  19 error Pyright reportOperatorIssue Operator &quot;&lt;&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;int&quot;
+ 362  20 error Pyright reportOperatorIssue Operator &quot;+=&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;Literal[1]&quot;
+ 367  19 error Pyright reportOperatorIssue Operator &quot;&gt;&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;Literal[0]&quot;
+ 368  20 error Pyright reportOperatorIssue Operator &quot;-=&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;Literal[1]&quot;
+ 410  30 error Pyright reportArgumentType  Argument of type &quot;int | Unknown | str&quot; cannot be assigned to parameter &quot;index&quot; of type &quot;SupportsIndex&quot; in function &quot;pop&quot;
+ 412  23 error Pyright reportOperatorIssue Operator &quot;&gt;=&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;int&quot;
+ 419  26 error Pyright reportArgumentType  Argument of type &quot;int | Unknown | str&quot; cannot be assigned to parameter &quot;index&quot; of type &quot;SupportsIndex&quot; in function &quot;pop&quot;
+ 420  19 error Pyright reportOperatorIssue Operator &quot;&gt;=&quot; not supported for types &quot;int | Unknown | str&quot; and &quot;int&quot;
+ 427  11 note  Pyright -                   The function &quot;system&quot; is deprecated</p>
+<hr />
+<p><strong><a href="20260913_231910_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260913_232131_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260913_232123_capture.md&quot;)</p>
