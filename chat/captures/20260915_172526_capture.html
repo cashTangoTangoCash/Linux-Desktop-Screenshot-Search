@@ -1,0 +1,101 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 131</h1>
+<p><strong><a href="20260915_172519_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172530_capture.html">Next →</a></strong></p>
+<hr />
+<p>The core issue here is a mismatch between what your code is looking for and what modern browsers actually use the address bar for.</p>
+<p>In modern browsers, the URL bar doubles as a search bar (an &quot;omnibox&quot;). When you perform a search, the visible text before hitting Enter—or the search query shown in the bar—isn't a URL at all; it's plain-language text like <code>instagram account creation email code not working</code>.</p>
+<p>Because your current <code>score_url_candidate()</code> only gives positive points for structural URL features (<code>+100</code> for TLDs, <code>+15</code> for slashes <code>/</code>), a perfectly readable, 7-word search query earns <strong>0 positive points</strong>. Then, its 5 spaces hit it with a whitespace penalty ($-5$), driving its score below the empty string (<code>0</code>).</p>
+<p>Adding dictionary checking directly addresses this by scoring <strong>human legibility</strong> when structural URL markers are absent.</p>
+<hr />
+<h3>Strategy: Two-Pass Scoring (URL vs. Readable Search Query)</h3>
+<p>Rather than letting an empty string win by default, evaluate candidate text in two modes:</p>
+<ol>
+<li><strong>Domain/URL Mode:</strong> Check for <code>.com</code>, <code>.org</code>, slashes <code>/</code>, etc.</li>
+<li><strong>Search Query / Natural Text Mode:</strong> Check if the text consists of valid dictionary words.</li>
+</ol>
+<p>Notice that your script already has a helper function defined for this: <code>is_readable_search_query(text)</code>. By hooking that (or Python's built-in dictionary capabilities) into your scoring function, you can grant search queries a massive legibility bonus.</p>
+<hr />
+<h3>Option 1: Integrate <code>is_readable_search_query()</code> into Scoring</h3>
+<p>If <code>is_readable_search_query()</code> evaluates to <code>True</code>, give the string a strong baseline score (e.g., <code>+50</code>).</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; tuple[int, list[str]]:
+    score = 0
+    report = []
+    
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, [&quot;Empty OCR output&quot;]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append(&quot;+100: Strong domain match&quot;)
+
+    # 2. Path &amp; Query Structure
+    if '/' in text:
+        score += 15
+        report.append(&quot;+15: Contains path slash '/'&quot;)
+
+    # 3. Search Query / Dictionary Legibility Check
+    if is_readable_search_query(text):
+        score += 50
+        report.append(&quot;+50: Recognized as readable search query / dictionary words&quot;)
+
+    # 4. Whitespace Handling (Soft Penalty if spaces exist)
+    if re.search(r'\s', text):
+        # Reduced penalty so spaces don't kill valid multi-word search queries
+        score -= 2
+        report.append(&quot;-2: Contains whitespace&quot;)
+
+    # 5. Symbol Noise (Capped penalty)
+    # Added common URL/query characters: % ( ) &quot; , +
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 5, 30)  # Cap penalty at -30
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains non-URL noise symbol(s)&quot;)
+
+    return score, report
+
+</code></pre>
+<hr />
+<h3>Option 2: Pure English Word Counting (<code>pyenchant</code> or System Words)</h3>
+<p>If you want a strict dictionary check to verify how many words in the query are real English words, you can check candidates against the standard Linux dictionary located at <code>/usr/share/dict/words</code>.</p>
+<pre><code class="language-python"># Load local system dictionary once at startup
+WORDS_FILE = Path(&quot;/usr/share/dict/words&quot;)
+if WORDS_FILE.is_file():
+    ENGLISH_WORDS = set(WORDS_FILE.read_text(encoding=&quot;utf-8&quot;).lower().splitlines())
+else:
+    ENGLISH_WORDS = set()
+
+def count_english_words(text: str) -&gt; int:
+    &quot;&quot;&quot;Returns how many words in the string are recognized English words.&quot;&quot;&quot;
+    # Remove leading browser search prefix artifacts like 'v '
+    cleaned = re.sub(r&quot;^[a-z]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    tokens = re.findall(r&quot;\b[a-z]{2,}\b&quot;, cleaned.lower())
+    
+    if not tokens or not ENGLISH_WORDS:
+        return 0
+        
+    valid_count = sum(1 for word in tokens if word in ENGLISH_WORDS)
+    return valid_count
+
+</code></pre>
+<p>You can then add a scoring rule based on dictionary word density:</p>
+<pre><code class="language-python">valid_words = count_english_words(text)
+if valid_words &gt;= 2:
+    points = valid_words * 15  # 6 recognized words = +90 points
+    score += points
+    report.append(f&quot;+{points}: Found {valid_words} recognized English words&quot;)
+
+</code></pre>
+<hr />
+<h3>Why This Solves the Edge Case</h3>
+<p>With either option:</p>
+<ul>
+<li><strong>Empty text (<code>&quot;&quot;</code>)</strong> earns <code>0</code> points.</li>
+<li><strong><code>v instagram account creation email code not working</code></strong> earns <strong><code>+50</code></strong> (or <strong><code>+90</code></strong> from dictionary words), minus <code>2</code> for spaces $\rightarrow$ <strong>Net Score: ~48 to 88</strong>.</li>
+</ul>
+<p>The search query easily wins over &quot;no text detected&quot;, while real URLs with domain names (<code>+100</code>) will still take priority when present.</p>
+<hr />
+<p><strong><a href="20260915_172519_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172530_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172526_capture.md&quot;)</p>

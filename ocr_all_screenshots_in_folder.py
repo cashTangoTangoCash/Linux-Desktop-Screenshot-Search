@@ -24,6 +24,24 @@ COMMON_DOMAINS = [
 PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
 DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2}-\d{2}:\d{2}-\d{2})")
 
+# Load local system dictionary once at startup
+WORDS_FILE = Path("/usr/share/dict/words")
+if WORDS_FILE.is_file():
+    ENGLISH_WORDS = set(WORDS_FILE.read_text(encoding="utf-8").lower().splitlines())
+else:
+    ENGLISH_WORDS = set()
+
+def count_english_words(text: str) -> int:
+    """Returns how many words in the string are recognized English words."""
+    # Remove leading browser search prefix artifacts like 'v '
+    cleaned = re.sub(r"^[a-z]\s+", "", text, flags=re.IGNORECASE).strip()
+    tokens = re.findall(r"\b[a-z]{2,}\b", cleaned.lower())
+    
+    if not tokens or not ENGLISH_WORDS:
+        return 0
+        
+    valid_count = sum(1 for word in tokens if word in ENGLISH_WORDS)
+    return valid_count
 
 def parse_timestamp_from_filename(filename: str) -> datetime | None:
     """Extracts timestamp from screenshot filenames (e.g. 2026-09-13-10:55-19_2528x1368.jpg)."""
@@ -34,7 +52,6 @@ def parse_timestamp_from_filename(filename: str) -> datetime | None:
         except ValueError:
             return None
     return None
-
 
 def get_dynamic_rectangle(image_path: Path) -> tuple[int, int, int, int]:
     """Finds rectangle coordinates from rectangles.csv that are newest,
@@ -131,23 +148,28 @@ def score_url_candidate(text: str) -> tuple[int, list[str]]:
 
     # 2. Path & Query Structure
     if '/' in text:
-        score += 15
-        report.append("+15: Contains path slash '/'")
+        score += 5
+        report.append("+5: Contains path slash '/'")
 
     # 3. Clean spaces penalty
     if re.search(r'\s', text):
-        score -= 10
-        report.append("-10: Contains whitespace")
+        score -= 5
+        report.append("-5: Contains whitespace")
 
     # 4. Symbol Noise
     bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-]', text)
     if bad_symbols:
-        penalty = len(bad_symbols) * 10
+        penalty = len(bad_symbols) * 2
         score -= penalty
         report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
 
+    valid_words = count_english_words(text)
+    if valid_words >= 2:
+        points = valid_words * 15  # 6 recognized words = +90 points
+        score += points
+        report.append(f"+{points}: Found {valid_words} recognized English words")
+        
     return score, report
-
 
 def process_url_candidates(image_path: Path) -> dict:
     candidates = []

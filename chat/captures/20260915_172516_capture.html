@@ -1,0 +1,41 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 130</h1>
+<p><strong><a href="20260915_172512_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172519_capture.html">Next →</a></strong></p>
+<hr />
+<p>It is the ultimate hobbyist trap: building a tiny tool, noticing an edge case, adding a rule, adding a counter-rule, and suddenly you are writing a compiler to parse garbage text instead of using the data.</p>
+<h3>What is a &quot;Non-URL Symbol&quot; Here?</h3>
+<p>In your <code>score_url_candidate</code> function, you defined bad symbols using this regex:</p>
+<pre><code class="language-python">bad_symbols = re.findall(r&quot;[^\w\s\.\/:\?&amp;=-]&quot;, text)
+
+</code></pre>
+<p>This regular expression flags <strong>anything that is not</strong> a word character (<code>a-z</code>, <code>0-9</code>, <code>_</code>), whitespace, period, slash, colon, question mark, ampersand, equals sign, or hyphen.</p>
+<p>In your Internet Archive search URL:
+<code>archive.org/search?query=((subject%3a&quot;medtner%2c nikolai&quot;...</code></p>
+<p>The function counted 12 characters that failed that check—specifically:</p>
+<ul>
+<li>Double quotes (<code>&quot;</code>)</li>
+<li>Percent signs (<code>%</code>)</li>
+<li>Parentheses (<code>(</code> and <code>)</code>)</li>
+</ul>
+<p>Because your penalty rule deducts 10 points per &quot;bad&quot; symbol ($12 \times 10 = 120$), the massive $-120$ penalty completely wiped out the $+100$ bonus for matching <code>archive.org</code>.</p>
+<h3>Why Did You Care About It Originally?</h3>
+<p>When OCR runs across a raw screenshot crop, non-URL noise usually comes from screen artifacts:</p>
+<ul>
+<li>Decorative window borders, UI icons, or font anti-aliasing glitches.</li>
+<li>Tesseract misinterpreting browser tab drop shadows as stray symbols like <code>~</code>, <code>|</code>, <code>\</code>, <code>^</code>, or <code>{}</code>.</li>
+</ul>
+<p>The penalty was intended to discard complete OCR garbage (like <code>|||:::___###</code>) in favor of clean strings.</p>
+<h3>Why It Fails Your Actual Goal</h3>
+<p>As you noted, your actual use case isn't validating pristine RFC-compliant URLs for a web browser—<strong>it is string-matching screenshots into folders based on domain names or keywords</strong> (like <code>archive.org</code> or <code>youtube.com</code>).</p>
+<p>Complex search queries, Internet Archive lookups, Wikipedia deep-links, and URL-encoded strings inherently contain percent signs (<code>%2c</code>), quotes (<code>%3a&quot;</code>), parentheses, and queries. A URL containing complex search query parameters is still a completely valid URL.</p>
+<h3>How to Fix the Trap</h3>
+<p>If your primary goal is categorizing screenshots by domain/keyword, <strong>the presence of a valid domain should almost always win</strong>, regardless of how messy the query parameters look behind it.</p>
+<p>You can fix this by adjusting your scoring strategy:</p>
+<ol>
+<li><strong>Cap or drastically reduce the noise penalty:</strong> Instead of an unbounded $-10$ per symbol, either cap the total penalty (e.g., max $-20$) or reduce it to $-1$ or $-2$ per character.</li>
+<li><strong>Expand the allowed character set:</strong> Add <code>%</code>, <code>&quot;</code>, <code>(</code>, <code>)</code>, <code>,</code>, and <code>+</code> to <code>bad_symbols</code> so legitimate query parameters aren't penalized.</li>
+<li><strong>Weight Domains Heavily:</strong> If a string matches a known TLD (<code>.org</code>, <code>.com</code>) or pass a domain regex, boost it by $+200$ so query parameters can never drag the net score below <code>0</code>.</li>
+</ol>
+<hr />
+<p><strong><a href="20260915_172512_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172519_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172516_capture.md&quot;)</p>

@@ -1,0 +1,107 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 132</h1>
+<p><strong><a href="20260915_172530_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172539_capture.html">Next →</a></strong></p>
+<hr />
+<p>That makes sense. On Arch-based distros (like EndeavourOS), the standard <code>/usr/share/dict/words</code> file isn't installed by default—<code>/usr/share/dict</code> usually just holds symlinks for system utilities like <code>cracklib</code>.</p>
+<p>You have two clean options to get a word list without compiling or installing heavy packages.</p>
+<hr />
+<h3>Option 1: Install the Standard <code>words</code> Package (Recommended)</h3>
+<p>You can grab the standard GNU wordlist directly via <code>pacman</code>:</p>
+<pre><code class="language-bash">sudo pacman -S words
+
+</code></pre>
+<p>This installs <code>/usr/share/dict/usa</code> and creates the standard <code>/usr/share/dict/words</code> symlink pointing to it. It gives you a clean list of ~100k English words in plain text.</p>
+<hr />
+<h3>Option 2: Fallback to Pure Python (<code>is_readable_search_query</code>)</h3>
+<p>If you don't want to install system packages or deal with file paths, your existing script actually already has a light heuristics engine in <code>is_readable_search_query()</code>.</p>
+<p>You can tweak <code>is_readable_search_query()</code> slightly so it doesn't need a dictionary file at all—it just checks if the text looks like space-separated alphabetic words without repeating OCR junk characters:</p>
+<pre><code class="language-python">def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Strip leading browser engine prefixes like &quot;v &quot; or &quot;g &quot;
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if len(words) &lt; 2:
+        return False
+        
+    valid_words = 0
+    for w in words:
+        # Reject obvious OCR gibberish (e.g. 3+ repeated letters or weird alphanumeric noise)
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w, re.I):
+            valid_words += 1
+            
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+</code></pre>
+<hr />
+<h3>Integrating Option 1 (System Dictionary) into <code>score_url_candidate</code></h3>
+<p>If you run <code>sudo pacman -S words</code>, you can drop this snippet into your script:</p>
+<pre><code class="language-python"># Load local system dictionary once at module import
+WORDS_FILE = Path(&quot;/usr/share/dict/words&quot;)
+if WORDS_FILE.is_file():
+    # Load set of lowercase words length 3 or greater
+    ENGLISH_WORDS = {
+        line.strip().lower() 
+        for line in WORDS_FILE.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).splitlines()
+        if len(line.strip()) &gt;= 3
+    }
+else:
+    ENGLISH_WORDS = set()
+
+
+def score_url_candidate(text: str) -&gt; tuple[int, list[str]]:
+    score = 0
+    report = []
+    
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, [&quot;Empty OCR output&quot;]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append(&quot;+100: Strong domain match&quot;)
+
+    # 2. Path &amp; Query Structure
+    if '/' in text:
+        score += 15
+        report.append(&quot;+15: Contains path slash '/'&quot;)
+
+    # 3. Dictionary Word Legibility Bonus
+    if ENGLISH_WORDS:
+        # Extract word tokens from OCR text
+        tokens = re.findall(r&quot;\b[a-z]{3,}\b&quot;, text.lower())
+        matched_words = [w for w in tokens if w in ENGLISH_WORDS]
+        
+        if len(matched_words) &gt;= 2:
+            # Reward +15 points per recognized word (e.g., 7 words = +105 pts)
+            word_bonus = min(len(matched_words) * 15, 90)
+            score += word_bonus
+            report.append(f&quot;+{word_bonus}: Found {len(matched_words)} valid English word(s)&quot;)
+
+    # 4. Whitespace Handling
+    if re.search(r'\s', text):
+        score -= 2  # Soft penalty (-2 instead of -10)
+        report.append(&quot;-2: Contains whitespace&quot;)
+
+    # 5. Capped Noise Penalty
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 5, 30)  # Capped at -30 max
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains non-URL noise symbol(s)&quot;)
+
+    return score, report
+
+</code></pre>
+<h3>The Result on Your Search Query</h3>
+<p>For <code>v instagram account creation email code not working</code>:</p>
+<ul>
+<li><code>instagram</code>, <code>account</code>, <code>creation</code>, <code>email</code>, <code>code</code>, <code>working</code> are matched in <code>/usr/share/dict/words</code>.</li>
+<li>Gives a <strong><code>+90</code></strong> English word bonus.</li>
+<li>Deducts <strong><code>-2</code></strong> for spaces.</li>
+<li>**Final Score: <code>88**</code> (beating <code>0</code> for empty string by a mile, while still sitting just below a direct domain match like <code>github.com</code> at <code>100</code>).</li>
+</ul>
+<hr />
+<p><strong><a href="20260915_172530_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260915_172539_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172537_capture.md&quot;)</p>

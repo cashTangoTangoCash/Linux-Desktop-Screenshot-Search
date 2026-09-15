@@ -18161,3 +18161,429 @@ if __name__ == &quot;__main__&quot;:
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260914_001032_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 130</h1>
+<p>I have created quite a little video game for myself to play here - this must be a 'classic' trap of the weaker software hobbyist.  the scoring function for this one is again choosing junk.  can we contemplate what we are using the urls for?  I kind of forgot already.  one use is sorting screenshots into folders according to matching a string that exists within the url.  so the -120 that the right url incurs here for having 'non-ulr symbols' seems at odds with my very simple rules for matching urls, where I might just pick out this url because it contains archive.org.  what is a non-url symbol and why would I care about it?</p>
+<p>{
+  &quot;best_url&quot;: &quot;&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1531,
+        &quot;h&quot;: 53,
+        &quot;x&quot;: 447,
+        &quot;y&quot;: 79
+      },
+      &quot;text&quot;: &quot;&quot;,
+      &quot;score&quot;: 0,
+      &quot;scoring_report&quot;: []
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate_dynamic&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1545,
+        &quot;h&quot;: 41,
+        &quot;x&quot;: 325,
+        &quot;y&quot;: 59
+      },
+      &quot;text&quot;: &quot;archive.org/search?query=((subject%3a&quot;medtner%2c nikolai&quot; or subject%3a&quot;nikolai medtner&quot; or creator%3a&quot;medtner%2c nikolz&quot;,
+      &quot;score&quot;: -15,
+      &quot;scoring_report&quot;: [
+        &quot;+100: Strong domain match&quot;,
+        &quot;+15: Contains path slash '/'&quot;,
+        &quot;-10: Contains whitespace&quot;,
+        &quot;-120: Contains 12 non-URL symbol(s)&quot;
+      ]
+    }
+  ]
+}</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172512_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 130</h1>
+<p>It is the ultimate hobbyist trap: building a tiny tool, noticing an edge case, adding a rule, adding a counter-rule, and suddenly you are writing a compiler to parse garbage text instead of using the data.</p>
+<h3>What is a &quot;Non-URL Symbol&quot; Here?</h3>
+<p>In your <code>score_url_candidate</code> function, you defined bad symbols using this regex:</p>
+<pre><code class="language-python">bad_symbols = re.findall(r&quot;[^\w\s\.\/:\?&amp;=-]&quot;, text)
+
+</code></pre>
+<p>This regular expression flags <strong>anything that is not</strong> a word character (<code>a-z</code>, <code>0-9</code>, <code>_</code>), whitespace, period, slash, colon, question mark, ampersand, equals sign, or hyphen.</p>
+<p>In your Internet Archive search URL:
+<code>archive.org/search?query=((subject%3a&quot;medtner%2c nikolai&quot;...</code></p>
+<p>The function counted 12 characters that failed that check—specifically:</p>
+<ul>
+<li>Double quotes (<code>&quot;</code>)</li>
+<li>Percent signs (<code>%</code>)</li>
+<li>Parentheses (<code>(</code> and <code>)</code>)</li>
+</ul>
+<p>Because your penalty rule deducts 10 points per &quot;bad&quot; symbol ($12 \times 10 = 120$), the massive $-120$ penalty completely wiped out the $+100$ bonus for matching <code>archive.org</code>.</p>
+<h3>Why Did You Care About It Originally?</h3>
+<p>When OCR runs across a raw screenshot crop, non-URL noise usually comes from screen artifacts:</p>
+<ul>
+<li>Decorative window borders, UI icons, or font anti-aliasing glitches.</li>
+<li>Tesseract misinterpreting browser tab drop shadows as stray symbols like <code>~</code>, <code>|</code>, <code>\</code>, <code>^</code>, or <code>{}</code>.</li>
+</ul>
+<p>The penalty was intended to discard complete OCR garbage (like <code>|||:::___###</code>) in favor of clean strings.</p>
+<h3>Why It Fails Your Actual Goal</h3>
+<p>As you noted, your actual use case isn't validating pristine RFC-compliant URLs for a web browser—<strong>it is string-matching screenshots into folders based on domain names or keywords</strong> (like <code>archive.org</code> or <code>youtube.com</code>).</p>
+<p>Complex search queries, Internet Archive lookups, Wikipedia deep-links, and URL-encoded strings inherently contain percent signs (<code>%2c</code>), quotes (<code>%3a&quot;</code>), parentheses, and queries. A URL containing complex search query parameters is still a completely valid URL.</p>
+<h3>How to Fix the Trap</h3>
+<p>If your primary goal is categorizing screenshots by domain/keyword, <strong>the presence of a valid domain should almost always win</strong>, regardless of how messy the query parameters look behind it.</p>
+<p>You can fix this by adjusting your scoring strategy:</p>
+<ol>
+<li><strong>Cap or drastically reduce the noise penalty:</strong> Instead of an unbounded $-10$ per symbol, either cap the total penalty (e.g., max $-20$) or reduce it to $-1$ or $-2$ per character.</li>
+<li><strong>Expand the allowed character set:</strong> Add <code>%</code>, <code>&quot;</code>, <code>(</code>, <code>)</code>, <code>,</code>, and <code>+</code> to <code>bad_symbols</code> so legitimate query parameters aren't penalized.</li>
+<li><strong>Weight Domains Heavily:</strong> If a string matches a known TLD (<code>.org</code>, <code>.com</code>) or pass a domain regex, boost it by $+200$ so query parameters can never drag the net score below <code>0</code>.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172516_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 131</h1>
+<p>I keep tweaking the url scoring parameters based on inspecting a set of 90 screenshots.  This one is making me draw a blank on how to tweak with the existing scoring system.  the right 'url' is a google search in this case, which loses to 'no text detected'</p>
+<p>{
+  &quot;best_url&quot;: &quot;&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1531,
+        &quot;h&quot;: 53,
+        &quot;x&quot;: 447,
+        &quot;y&quot;: 79
+      },
+      &quot;text&quot;: &quot;&quot;,
+      &quot;score&quot;: 0,
+      &quot;scoring_report&quot;: []
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate_dynamic&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1545,
+        &quot;h&quot;: 41,
+        &quot;x&quot;: 325,
+        &quot;y&quot;: 59
+      },
+      &quot;text&quot;: &quot;v instagram account creation email code not working&quot;,
+      &quot;score&quot;: -5,
+      &quot;scoring_report&quot;: [
+        &quot;-5: Contains whitespace&quot;
+      ]
+    }
+  ]
+}</p>
+<p>could we somehow have a spell checker or other utility detect that the 'url' in this case consists of a google search which consists of a handful of known English language dictionary words?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172519_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 131</h1>
+<p>The core issue here is a mismatch between what your code is looking for and what modern browsers actually use the address bar for.</p>
+<p>In modern browsers, the URL bar doubles as a search bar (an &quot;omnibox&quot;). When you perform a search, the visible text before hitting Enter—or the search query shown in the bar—isn't a URL at all; it's plain-language text like <code>instagram account creation email code not working</code>.</p>
+<p>Because your current <code>score_url_candidate()</code> only gives positive points for structural URL features (<code>+100</code> for TLDs, <code>+15</code> for slashes <code>/</code>), a perfectly readable, 7-word search query earns <strong>0 positive points</strong>. Then, its 5 spaces hit it with a whitespace penalty ($-5$), driving its score below the empty string (<code>0</code>).</p>
+<p>Adding dictionary checking directly addresses this by scoring <strong>human legibility</strong> when structural URL markers are absent.</p>
+<hr />
+<h3>Strategy: Two-Pass Scoring (URL vs. Readable Search Query)</h3>
+<p>Rather than letting an empty string win by default, evaluate candidate text in two modes:</p>
+<ol>
+<li><strong>Domain/URL Mode:</strong> Check for <code>.com</code>, <code>.org</code>, slashes <code>/</code>, etc.</li>
+<li><strong>Search Query / Natural Text Mode:</strong> Check if the text consists of valid dictionary words.</li>
+</ol>
+<p>Notice that your script already has a helper function defined for this: <code>is_readable_search_query(text)</code>. By hooking that (or Python's built-in dictionary capabilities) into your scoring function, you can grant search queries a massive legibility bonus.</p>
+<hr />
+<h3>Option 1: Integrate <code>is_readable_search_query()</code> into Scoring</h3>
+<p>If <code>is_readable_search_query()</code> evaluates to <code>True</code>, give the string a strong baseline score (e.g., <code>+50</code>).</p>
+<pre><code class="language-python">def score_url_candidate(text: str) -&gt; tuple[int, list[str]]:
+    score = 0
+    report = []
+    
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, [&quot;Empty OCR output&quot;]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append(&quot;+100: Strong domain match&quot;)
+
+    # 2. Path &amp; Query Structure
+    if '/' in text:
+        score += 15
+        report.append(&quot;+15: Contains path slash '/'&quot;)
+
+    # 3. Search Query / Dictionary Legibility Check
+    if is_readable_search_query(text):
+        score += 50
+        report.append(&quot;+50: Recognized as readable search query / dictionary words&quot;)
+
+    # 4. Whitespace Handling (Soft Penalty if spaces exist)
+    if re.search(r'\s', text):
+        # Reduced penalty so spaces don't kill valid multi-word search queries
+        score -= 2
+        report.append(&quot;-2: Contains whitespace&quot;)
+
+    # 5. Symbol Noise (Capped penalty)
+    # Added common URL/query characters: % ( ) &quot; , +
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 5, 30)  # Cap penalty at -30
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains non-URL noise symbol(s)&quot;)
+
+    return score, report
+
+</code></pre>
+<hr />
+<h3>Option 2: Pure English Word Counting (<code>pyenchant</code> or System Words)</h3>
+<p>If you want a strict dictionary check to verify how many words in the query are real English words, you can check candidates against the standard Linux dictionary located at <code>/usr/share/dict/words</code>.</p>
+<pre><code class="language-python"># Load local system dictionary once at startup
+WORDS_FILE = Path(&quot;/usr/share/dict/words&quot;)
+if WORDS_FILE.is_file():
+    ENGLISH_WORDS = set(WORDS_FILE.read_text(encoding=&quot;utf-8&quot;).lower().splitlines())
+else:
+    ENGLISH_WORDS = set()
+
+def count_english_words(text: str) -&gt; int:
+    &quot;&quot;&quot;Returns how many words in the string are recognized English words.&quot;&quot;&quot;
+    # Remove leading browser search prefix artifacts like 'v '
+    cleaned = re.sub(r&quot;^[a-z]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    tokens = re.findall(r&quot;\b[a-z]{2,}\b&quot;, cleaned.lower())
+    
+    if not tokens or not ENGLISH_WORDS:
+        return 0
+        
+    valid_count = sum(1 for word in tokens if word in ENGLISH_WORDS)
+    return valid_count
+
+</code></pre>
+<p>You can then add a scoring rule based on dictionary word density:</p>
+<pre><code class="language-python">valid_words = count_english_words(text)
+if valid_words &gt;= 2:
+    points = valid_words * 15  # 6 recognized words = +90 points
+    score += points
+    report.append(f&quot;+{points}: Found {valid_words} recognized English words&quot;)
+
+</code></pre>
+<hr />
+<h3>Why This Solves the Edge Case</h3>
+<p>With either option:</p>
+<ul>
+<li><strong>Empty text (<code>&quot;&quot;</code>)</strong> earns <code>0</code> points.</li>
+<li><strong><code>v instagram account creation email code not working</code></strong> earns <strong><code>+50</code></strong> (or <strong><code>+90</code></strong> from dictionary words), minus <code>2</code> for spaces $\rightarrow$ <strong>Net Score: ~48 to 88</strong>.</li>
+</ul>
+<p>The search query easily wins over &quot;no text detected&quot;, while real URLs with domain names (<code>+100</code>) will still take priority when present.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172526_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 132</h1>
+<p>this is what I find for a dictionary AFAIK:</p>
+<p>  /usr/share/dict:
+  drwxr-xr-x   2 4.0K Dec  3  2025 .
+  drwxr-xr-x 332  12K Sep 13 13:48 ..
+  lrwxrwxrwx   1   34 Dec 27  2024 cracklib-small -&gt; /usr/share/cracklib/cracklib-small</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172530_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 132</h1>
+<p>That makes sense. On Arch-based distros (like EndeavourOS), the standard <code>/usr/share/dict/words</code> file isn't installed by default—<code>/usr/share/dict</code> usually just holds symlinks for system utilities like <code>cracklib</code>.</p>
+<p>You have two clean options to get a word list without compiling or installing heavy packages.</p>
+<hr />
+<h3>Option 1: Install the Standard <code>words</code> Package (Recommended)</h3>
+<p>You can grab the standard GNU wordlist directly via <code>pacman</code>:</p>
+<pre><code class="language-bash">sudo pacman -S words
+
+</code></pre>
+<p>This installs <code>/usr/share/dict/usa</code> and creates the standard <code>/usr/share/dict/words</code> symlink pointing to it. It gives you a clean list of ~100k English words in plain text.</p>
+<hr />
+<h3>Option 2: Fallback to Pure Python (<code>is_readable_search_query</code>)</h3>
+<p>If you don't want to install system packages or deal with file paths, your existing script actually already has a light heuristics engine in <code>is_readable_search_query()</code>.</p>
+<p>You can tweak <code>is_readable_search_query()</code> slightly so it doesn't need a dictionary file at all—it just checks if the text looks like space-separated alphabetic words without repeating OCR junk characters:</p>
+<pre><code class="language-python">def is_readable_search_query(text: str) -&gt; bool:
+    &quot;&quot;&quot;Checks if a string looks like a clean, human-typed search query.&quot;&quot;&quot;
+    # Strip leading browser engine prefixes like &quot;v &quot; or &quot;g &quot;
+    cleaned = re.sub(r&quot;^[a-z]\s+[v&gt;]\s+&quot;, &quot;&quot;, text, flags=re.IGNORECASE).strip()
+    
+    words = [w for w in re.split(r&quot;\s+&quot;, cleaned) if len(w) &gt; 1]
+    if len(words) &lt; 2:
+        return False
+        
+    valid_words = 0
+    for w in words:
+        # Reject obvious OCR gibberish (e.g. 3+ repeated letters or weird alphanumeric noise)
+        if not re.search(r&quot;(.)\1\1&quot;, w) and not re.search(r&quot;[a-z]{3,}\d+[a-z]+&quot;, w, re.I):
+            valid_words += 1
+            
+    return (valid_words &gt;= 2) and (valid_words / len(words) &gt;= 0.7)
+
+</code></pre>
+<hr />
+<h3>Integrating Option 1 (System Dictionary) into <code>score_url_candidate</code></h3>
+<p>If you run <code>sudo pacman -S words</code>, you can drop this snippet into your script:</p>
+<pre><code class="language-python"># Load local system dictionary once at module import
+WORDS_FILE = Path(&quot;/usr/share/dict/words&quot;)
+if WORDS_FILE.is_file():
+    # Load set of lowercase words length 3 or greater
+    ENGLISH_WORDS = {
+        line.strip().lower() 
+        for line in WORDS_FILE.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;).splitlines()
+        if len(line.strip()) &gt;= 3
+    }
+else:
+    ENGLISH_WORDS = set()
+
+
+def score_url_candidate(text: str) -&gt; tuple[int, list[str]]:
+    score = 0
+    report = []
+    
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, [&quot;Empty OCR output&quot;]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append(&quot;+100: Strong domain match&quot;)
+
+    # 2. Path &amp; Query Structure
+    if '/' in text:
+        score += 15
+        report.append(&quot;+15: Contains path slash '/'&quot;)
+
+    # 3. Dictionary Word Legibility Bonus
+    if ENGLISH_WORDS:
+        # Extract word tokens from OCR text
+        tokens = re.findall(r&quot;\b[a-z]{3,}\b&quot;, text.lower())
+        matched_words = [w for w in tokens if w in ENGLISH_WORDS]
+        
+        if len(matched_words) &gt;= 2:
+            # Reward +15 points per recognized word (e.g., 7 words = +105 pts)
+            word_bonus = min(len(matched_words) * 15, 90)
+            score += word_bonus
+            report.append(f&quot;+{word_bonus}: Found {len(matched_words)} valid English word(s)&quot;)
+
+    # 4. Whitespace Handling
+    if re.search(r'\s', text):
+        score -= 2  # Soft penalty (-2 instead of -10)
+        report.append(&quot;-2: Contains whitespace&quot;)
+
+    # 5. Capped Noise Penalty
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 5, 30)  # Capped at -30 max
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains non-URL noise symbol(s)&quot;)
+
+    return score, report
+
+</code></pre>
+<h3>The Result on Your Search Query</h3>
+<p>For <code>v instagram account creation email code not working</code>:</p>
+<ul>
+<li><code>instagram</code>, <code>account</code>, <code>creation</code>, <code>email</code>, <code>code</code>, <code>working</code> are matched in <code>/usr/share/dict/words</code>.</li>
+<li>Gives a <strong><code>+90</code></strong> English word bonus.</li>
+<li>Deducts <strong><code>-2</code></strong> for spaces.</li>
+<li>**Final Score: <code>88**</code> (beating <code>0</code> for empty string by a mile, while still sitting just below a direct domain match like <code>github.com</code> at <code>100</code>).</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172537_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 133</h1>
+<p>I am trying out count_english_words.  it doesn't appear to be working as intended:</p>
+<p>{
+  &quot;best_url&quot;: &quot;::nvf:l-ill tijup(\u201c[-\u201ci winathar meeacsiaze o caanmcla amaarme m eharnminesa wal imadia #ha frams arm m lilkhraricne m hivae m ehankbe m mr\\lin\f\u2018j} \u2122 mvraar&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;rect_name&quot;: &quot;i3&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1531,
+        &quot;h&quot;: 53,
+        &quot;x&quot;: 447,
+        &quot;y&quot;: 79
+      },
+      &quot;text&quot;: &quot;::nvf:l-ill tijup(\u201c[-\u201ci winathar meeacsiaze o caanmcla amaarme m eharnminesa wal imadia #ha frams arm m lilkhraricne m hivae m ehankbe m mr\\lin\f\u2018j} \u2122 mvraar&quot;,
+      &quot;score&quot;: 48,
+      &quot;scoring_report&quot;: [
+        &quot;-5: Contains whitespace&quot;,
+        &quot;-22: Contains 11 non-URL symbol(s)&quot;,
+        &quot;+75: Found 5 recognized English words&quot;
+      ]
+    },
+    {
+      &quot;rect_name&quot;: &quot;mate_dynamic&quot;,
+      &quot;crop_coords&quot;: {
+        &quot;w&quot;: 1500,
+        &quot;h&quot;: 39,
+        &quot;x&quot;: 325,
+        &quot;y&quot;: 62
+      },
+      &quot;text&quot;: &quot;v olympus vn-8100pc&quot;,
+      &quot;score&quot;: -5,
+      &quot;scoring_report&quot;: [
+        &quot;-5: Contains whitespace&quot;
+      ]
+    }
+  ]
+}</p>
+<p>Can you explain in detail how count_english_words is supposed to work, then perhaps explain how it appears to be failing in this instance?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172539_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 133</h1>
+<p>That JSON output highlights exactly where dictionary checking breaks down when applied to raw OCR output.</p>
+<p>Here is how <code>count_english_words</code> was intended to work, followed by the specific ways it failed on this screenshot crop.</p>
+<hr />
+<h3>How <code>count_english_words</code> Is Supposed to Work</h3>
+<p>The conceptual goal of <code>count_english_words</code> is simple: differentiate human-typed search queries from random OCR screen noise by measuring <strong>word density</strong>.</p>
+<ol>
+<li><strong>Tokenization:</strong> It scans the input string and extracts sequences of alphabetic characters (e.g., using <code>re.findall(r&quot;\b[a-z]{3,}\b&quot;, text.lower())</code>).</li>
+<li><strong>Dictionary Matching:</strong> It compares each extracted token against a known word list (like <code>/usr/share/dict/words</code>).</li>
+<li><strong>Scoring Bonus:</strong> If it finds multiple recognized words, it grants positive points under the assumption that a string full of real dictionary words is a legitimate human search query.</li>
+</ol>
+<hr />
+<h3>Why It Failed in This Instance</h3>
+<p>In your example, OCR garbage (<code>::nvf:l-ill...</code>) scored <strong>+75 points</strong> for &quot;finding 5 English words&quot;, while a clean, valid search query (<code>v olympus vn-8100pc</code>) got <strong>0 points</strong> and scored <strong>-5</strong>.</p>
+<h4>1. The False-Positive Trap (Garbage Matching the Dictionary)</h4>
+<p>The standard Linux dictionary (<code>/usr/share/dict/words</code>) contains around 100,000 entries. Crucially, it includes thousands of obscure terms, archaic words, single letters, short abbreviations, and proper names (e.g., <em>arm</em>, <em>win</em>, <em>ill</em>, <em>ala</em>, <em>cam</em>).</p>
+<p>In your garbage string:
+<code>...ill tijup(“[-“i winathar meeacsiaze... #ha frams arm m...</code></p>
+<p>The regex pulled out short letter clusters, and 5 of those random OCR noise fragments happened to match obscure or short entries in the 100,000-word dictionary file. Because the function treated all dictionary hits equally, it handed out a massive <strong>+75 bonus</strong> to literal gibberish.</p>
+<h4>2. The False-Negative Trap (Model Numbers and Proper Nouns)</h4>
+<p>In candidate 2 (<code>v olympus vn-8100pc</code>), the string fails for two reasons:</p>
+<ul>
+<li><code>olympus</code> is a proper noun/brand name (often omitted or capitalized in standard word lists).</li>
+<li><code>vn-8100pc</code> is a hardware model number containing digits and hyphens, which <code>\b[a-z]{3,}\b</code> completely strips out or ignores.</li>
+</ul>
+<p>Because neither token triggered a hit in a basic lowercase dictionary, the valid search query earned <strong>0 word points</strong>.</p>
+<hr />
+<h3>How to Fix It</h3>
+<p>To make dictionary checking effective against OCR noise, you need <strong>stricter validation rules</strong> before awarding points.</p>
+<h4>Rule Fix 1: Require High Word Ratio (Density)</h4>
+<p>Do not reward absolute word counts alone. Require that recognized words make up the <strong>majority of the total words</strong> in the string.</p>
+<pre><code class="language-python"># Bad: 5 real words out of 35 total noise tokens = 14% real text (PASSES currently)
+# Good: 3 real words out of 4 total tokens = 75% real text (ONLY THIS SHOULD PASS)
+
+</code></pre>
+<h4>Rule Fix 2: Ignore Short Common Dictionary Match Noise</h4>
+<p>Ignore 3-letter dictionary matches unless they appear in a sentence with longer, unambiguous words (5+ characters).</p>
+<h4>Refinement Code</h4>
+<p>Here is a robust version of <code>is_readable_search_query</code> that combines dictionary validation with string density checks:</p>
+<pre><code class="language-python">def score_search_query_legibility(text: str, word_set: set) -&gt; tuple[int, str]:
+    &quot;&quot;&quot;Scores a string based on whether it represents readable human text.
+    Requires high dictionary density and penalizes heavy noise ratio.
+    &quot;&quot;&quot;
+    # Clean leading browser prefixes ('v ', 'g ')
+    cleaned = re.sub(r&quot;^[a-z]\s+&quot;, &quot;&quot;, text.lower()).strip()
+    
+    # Extract all whitespace-separated tokens
+    tokens = [t.strip(&quot;,.?!\&quot;'()&quot;) for t in cleaned.split() if t.strip()]
+    if not tokens:
+        return 0, &quot;No tokens&quot;
+
+    # Count dictionary matches (filtering out 1-2 letter noise)
+    valid_words = [t for t in tokens if t in word_set and len(t) &gt;= 3]
+    
+    # Calculate ratio of valid dictionary words to total tokens
+    ratio = len(valid_words) / len(tokens)
+
+    # Require at least 2 valid words AND at least 50% dictionary density
+    if len(valid_words) &gt;= 2 and ratio &gt;= 0.5:
+        score = min(len(valid_words) * 15, 60)
+        return score, f&quot;+{score}: High dictionary density ({len(valid_words)}/{len(tokens)} words)&quot;
+        
+    return 0, &quot;Low dictionary density&quot;
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172546_capture.md&quot;)</p>
+<hr />
