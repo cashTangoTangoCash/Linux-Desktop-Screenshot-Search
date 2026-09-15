@@ -198,21 +198,26 @@ def log_timing(image_name: str, seconds: float):
             writer.writerow(["timestamp", "filename", "duration_seconds"])
         writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
 
-
 def parse_args():
-    parser = argparse.ArgumentParser(description="OCR indexing script for screenshot processing.")
-    parser.add_argument(
-        "-r", "--recurse",
-        action="store_true",
-        help="Recurse into subdirectories to find images."
+    parser = argparse.ArgumentParser(
+        prog="ocr_indexer",
+        description="Extract URLs and full-page text from desktop screenshots using ImageMagick and Tesseract OCR.",
+        epilog="Example: python3 ocr_script.py -r -f",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-f", "--force-urls",
+        "-r",
+        "--recurse",
         action="store_true",
-        help="Force overwrite of existing URL sidecar files."
+        help="recurse into subdirectories to discover and process image files",
+    )
+    parser.add_argument(
+        "-f",
+        "--force-urls",
+        action="store_true",
+        help="force re-processing and overwriting of existing .url.txt and .url.json sidecar files",
     )
     return parser.parse_args()
-
 
 def process_ocr():
     args = parse_args()
