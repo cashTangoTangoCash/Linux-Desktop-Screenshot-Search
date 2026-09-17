@@ -1,0 +1,193 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 139</h1>
+<p><strong><a href="20260917_171824_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here is a script that parses all <code>.url.json</code> sidecar files in your working directory, extracts the candidate metadata, writes a clean CSV summary, and prints terminal-based frequency distributions and text-based scatter plots using <code>ascii_graph</code> logic (or fallback ASCII bars).</p>
+<p>Since you are running in a terminal environment and already use CLI tools like <code>ripgrep</code> and <code>duckdb</code>, ASCII/terminal data summaries are often much quicker to scan than opening a browser or rendering GUI images.</p>
+<hr />
+<h3>Python Summary &amp; Visualization Script (<code>summarize_url_scores.py</code>)</h3>
+<p>Save this script in the directory containing your screenshots and run it directly:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import csv
+import json
+import re
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+OUTPUT_CSV = WORK_DIR / &quot;url_scores_summary.csv&quot;
+
+
+def gather_url_data() -&gt; list[dict]:
+    &quot;&quot;&quot;Reads all *.url.json files in WORK_DIR and flattens candidate scores.&quot;&quot;&quot;
+    json_files = sorted(WORK_DIR.glob(&quot;*.url.json&quot;))
+    records = []
+
+    for jf in json_files:
+        try:
+            data = json.loads(jf.read_text(encoding=&quot;utf-8&quot;))
+            best_url = data.get(&quot;best_url&quot;, &quot;&quot;)
+            candidates = data.get(&quot;candidates&quot;, [])
+
+            for rank, cand in enumerate(candidates, start=1):
+                records.append({
+                    &quot;image_file&quot;: jf.name.replace(&quot;.url.json&quot;, &quot;&quot;),
+                    &quot;best_url&quot;: best_url,
+                    &quot;is_winner&quot;: (cand.get(&quot;text&quot;) == best_url),
+                    &quot;rank&quot;: rank,
+                    &quot;rect_name&quot;: cand.get(&quot;rect_name&quot;, &quot;&quot;),
+                    &quot;score&quot;: cand.get(&quot;score&quot;, 0),
+                    &quot;candidate_text&quot;: cand.get(&quot;text&quot;, &quot;&quot;),
+                    &quot;report&quot;: &quot; | &quot;.join(cand.get(&quot;scoring_report&quot;, [])),
+                })
+        except Exception as e:
+            print(f&quot;Warning: Failed to parse {jf.name}: {e}&quot;)
+
+    return records
+
+
+def write_csv(records: list[dict]):
+    &quot;&quot;&quot;Exports flattened candidate records to CSV.&quot;&quot;&quot;
+    if not records:
+        print(&quot;No records found to write.&quot;)
+        return
+
+    fieldnames = [
+        &quot;image_file&quot;, &quot;is_winner&quot;, &quot;rank&quot;, &quot;rect_name&quot;, 
+        &quot;score&quot;, &quot;candidate_text&quot;, &quot;best_url&quot;, &quot;report&quot;
+    ]
+    
+    with open(OUTPUT_CSV, mode=&quot;w&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(records)
+
+    print(f&quot;Summary CSV written to: {OUTPUT_CSV} ({len(records)} candidate rows)&quot;)
+
+
+def render_ascii_histogram(scores: list[int], bins: int = 10):
+    &quot;&quot;&quot;Prints a terminal-based score distribution histogram.&quot;&quot;&quot;
+    if not scores:
+        return
+
+    min_s, max_s = min(scores), max(scores)
+    if min_s == max_s:
+        print(f&quot;All scores are identical: {min_s}&quot;)
+        return
+
+    step = (max_s - min_s) / bins
+    counts = [0] * bins
+
+    for s in scores:
+        idx = int((s - min_s) / step)
+        if idx &gt;= bins:
+            idx = bins - 1
+        counts[idx] += 1
+
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(&quot; SCORE DISTRIBUTION HISTOGRAM (All Candidates)&quot;)
+    print(&quot;=&quot; * 50)
+
+    max_count = max(counts) if max(counts) &gt; 0 else 1
+    max_bar_len = 30
+
+    for i in range(bins):
+        low = min_s + (i * step)
+        high = low + step
+        cnt = counts[i]
+        bar_len = int((cnt / max_count) * max_bar_len)
+        bar = &quot;#&quot; * bar_len
+        print(f&quot;[{low:6.1f} to {high:6.1f}] : {cnt:3d} | {bar}&quot;)
+
+
+def render_winning_rect_summary(records: list[dict]):
+    &quot;&quot;&quot;Prints how often each rectangle layout won best URL.&quot;&quot;&quot;
+    winners = [r for r in records if r[&quot;is_winner&quot;]]
+    counts = {}
+    for w in winners:
+        rect = w[&quot;rect_name&quot;]
+        counts[rect] = counts.get(rect, 0) + 1
+
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(&quot; WINNING RECTANGLE BREAKDOWN&quot;)
+    print(&quot;=&quot; * 50)
+    for rect, count in counts.items():
+        pct = (count / len(winners) * 100) if winners else 0
+        bar = &quot;=&quot; * int(pct / 2)
+        print(f&quot;{rect:15s} : {count:3d} ({pct:5.1f}%) | {bar}&quot;)
+
+
+def render_top_bottom_outliers(records: list[dict], n: int = 5):
+    &quot;&quot;&quot;Displays top 5 highest and lowest scoring candidate texts.&quot;&quot;&quot;
+    sorted_recs = sorted(records, key=lambda x: x[&quot;score&quot;], reverse=True)
+    
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot; TOP {n} HIGHEST SCORING CANDIDATES&quot;)
+    print(&quot;=&quot; * 50)
+    for r in sorted_recs[:n]:
+        print(f&quot;Score: {r['score']:4d} | Rect: {r['rect_name']:12s} | Text: '{r['candidate_text'][:60]}'&quot;)
+
+    print(&quot;\n&quot; + &quot;=&quot; * 50)
+    print(f&quot; BOTTOM {n} LOWEST SCORING CANDIDATES&quot;)
+    print(&quot;=&quot; * 50)
+    for r in sorted_recs[-n:]:
+        print(f&quot;Score: {r['score']:4d} | Rect: {r['rect_name']:12s} | Text: '{r['candidate_text'][:60]}'&quot;)
+
+
+def main():
+    records = gather_url_data()
+    if not records:
+        print(f&quot;No *.url.json sidecar files found in {WORK_DIR}&quot;)
+        return
+
+    # 1. Export CSV
+    write_csv(records)
+
+    # 2. Terminal Visualizations
+    scores = [r[&quot;score&quot;] for r in records]
+    render_ascii_histogram(scores)
+    render_winning_rect_summary(records)
+    render_top_bottom_outliers(records)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<hr />
+<h3>What This Gives You</h3>
+<ol>
+<li><strong>CSV Output (<code>url_scores_summary.csv</code>):</strong>
+A structured flat file ready for further querying or command-line analysis.</li>
+<li><strong>Terminal Score Histogram:</strong>
+Shows the clustering of scores across all 90 images (e.g., seeing if winning URLs cleanly separate into <code>+100</code> domain scores versus standard <code>+15</code>–<code>+45</code> search query ranges).</li>
+<li><strong>Layout Win Ratio:</strong>
+Compares <code>mate_dynamic</code> vs <code>i3</code> rect selection frequency to show which bounding box performs better across your screenshot archive.</li>
+<li><strong>Outlier Spotlight:</strong>
+Lists extreme scores so you can immediately find junk OCR strings that scored unexpectedly high or legitimate URLs that scored low.</li>
+</ol>
+<hr />
+<h3>Next-Level Querying with <code>duckdb</code></h3>
+<p>Once <code>url_scores_summary.csv</code> is generated, you can query it right in your terminal with <code>duckdb</code> without writing extra Python code:</p>
+<ul>
+<li><strong>Find close races where candidate scores were within 5 points of each other:</strong></li>
+</ul>
+<pre><code class="language-bash">duckdb -c &quot;
+SELECT image_file, candidate_text, score, rect_name 
+FROM 'url_scores_summary.csv' 
+WHERE image_file IN (
+  SELECT image_file FROM 'url_scores_summary.csv' 
+  GROUP BY image_file HAVING MAX(score) - MIN(score) &lt;= 5
+)
+ORDER BY image_file;
+&quot;
+
+</code></pre>
+<ul>
+<li><strong>See score averages by rectangle source:</strong></li>
+</ul>
+<pre><code class="language-bash">duckdb -c &quot;SELECT rect_name, AVG(score) as avg_score, COUNT(*) FROM 'url_scores_summary.csv' GROUP BY rect_name;&quot;
+
+</code></pre>
+<hr />
+<p><strong><a href="20260917_171824_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_171832_capture.md&quot;)</p>
