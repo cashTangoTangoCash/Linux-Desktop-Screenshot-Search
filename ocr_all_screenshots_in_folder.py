@@ -35,32 +35,47 @@ if WORDS_FILE.is_file():
 else:
     ENGLISH_WORDS = set()
 
-
 def score_search_query_legibility(text: str, word_set: set) -> tuple[int, str | None]:
     """Scores a candidate string based on whether it represents human-typed text.
     
-    Requires high word dictionary density and filters out short noise words to 
-    prevent OCR garbage from triggering huge word bonuses.
+    Ignores numbers/year identifiers (1980, 1980s, 560) when calculating density
+    and penalizes structural OCR junk (backslashes, repeated colons, bad char loops).
     """
-    # Remove browser search prefixes (e.g. 'v ', 'g ', 'y ')
+    # Reject extreme OCR artifacts early
+    if "\\" in text or "::" in text or re.search(r"(.)\1\1", text):
+        return -20, "-20: Contains severe OCR structural noise"
+
+    # Clean leading browser prefixes
     cleaned = re.sub(r"^[a-z]\s+", "", text.lower()).strip()
     
-    # Extract whitespace-separated word tokens (trimming punctuation)
+    # Extract whitespace-separated word tokens
     tokens = [t.strip(",.?!\"'()[]{}#:") for t in cleaned.split() if t.strip()]
     if not tokens:
         return 0, None
 
-    # Identify dictionary matches (minimum length of 3 to avoid matching 'ha', 'ma', 'in', etc.)
-    valid_words = [t for t in tokens if t in word_set and len(t) >= 3]
+    # Filter out pure numbers (1980, 560) and numeric-suffixed words (1980s, 8100pc)
+    # so model numbers and dates don't penalize search queries.
+    alpha_tokens = [
+        t for t in tokens 
+        if not t.isdigit() and not re.search(r"\d+[a-z]*$", t)
+    ]
     
-    ratio = len(valid_words) / len(tokens)
+    if not alpha_tokens:
+        # If the string is purely model numbers/digits and contains no pure words, yield neutral
+        return 0, None
 
-    # Require at least 2 valid words AND at least 50% dictionary density across all tokens
-    if len(valid_words) >= 2 and ratio >= 0.5:
+    # Identify valid dictionary matches (min length 3)
+    valid_words = [t for t in alpha_tokens if t in word_set and len(t) >= 3]
+    
+    ratio = len(valid_words) / len(alpha_tokens)
+
+    # Require high dictionary density across word-like tokens
+    if len(valid_words) >= 1 and ratio >= 0.5:
         score = min(len(valid_words) * 15, 60)
-        return score, f"+{score}: High dictionary density ({len(valid_words)}/{len(tokens)} words, {ratio:.0%})"
+        return score, f"+{score}: High dictionary density ({len(valid_words)}/{len(alpha_tokens)} words, {ratio:.0%})"
         
     return 0, None
+
 
 
 def parse_timestamp_from_filename(filename: str) -> datetime | None:
@@ -153,18 +168,20 @@ def score_url_candidate(text: str) -> tuple[int, list[str]]:
         score += 100
         report.append("+100: Strong domain match")
 
-    # 2. Path & Query Structure
-    if '/' in text:
-        score += 15
-        report.append("+15: Contains path slash '/'")
+    # 2. Strict Path & Query Structure Guard
+    # Only grant slash points if there are no spaces AND it fits a valid URL/path layout
+    if '/' in text and ' ' not in text:
+        if re.search(r'(?:[a-z0-9-]+\.[a-z]{2,}/|/[a-z0-9_.~-]+)', text, re.I):
+            score += 15
+            report.append("+15: Valid URL path structure containing '/'")
 
     # 3. Dictionary-Density Legibility Check
     legibility_bonus, legibility_msg = score_search_query_legibility(text, ENGLISH_WORDS)
-    if legibility_bonus > 0 and legibility_msg:
+    if legibility_msg:
         score += legibility_bonus
         report.append(legibility_msg)
 
-    # 4. Whitespace Handling (Soft penalty)
+    # 4. Whitespace Handling
     if re.search(r'\s', text):
         score -= 2
         report.append("-2: Contains whitespace")
@@ -281,8 +298,8 @@ def process_ocr():
         full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
 
         # --- ADD THIS DEBUG CONDITIONAL ---
-        if "2026-09-11-10:51-47" in image_path.name:
-            import pdb; pdb.set_trace()
+        # if "2026-09-11-10:51-47" in image_path.name:
+        #     import pdb; pdb.set_trace()
         # ----------------------------------
         
         if args.force_urls or not url_txt_path.is_file() or not url_json_path.is_file():

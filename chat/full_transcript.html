@@ -19421,3 +19421,118 @@ re.PatternError: bad character range =-% at position 14</p>
 </ol>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165408_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 138</h1>
+<p>pdb worked quite well.  I should graduate to it from pudb someday.</p>
+<p>let's try your quick fixes:</p>
+<p>Path Slash Penalty Guard: Don't award +15 for a slash / if the candidate string fails standard URL structural checks or has spaces (e.g., junk like of:/ p oy).</p>
+<p>Handle Digits/Model Numbers in Search Queries: Filter out purely numeric tokens (like 1980 or 560) when calculating dictionary density so numbers don't lower the density score.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_170714_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 138</h1>
+<p>Here is the updated logic for both functions.</p>
+<h3>What Changed</h3>
+<ol>
+<li><strong>Numeric &amp; Model Number Filtering in <code>score_search_query_legibility</code>:</strong></li>
+</ol>
+<ul>
+<li>Pure numbers (<code>1980</code>, <code>560</code>) and alphanumeric model identifiers ending in numbers (<code>1980s</code>, <code>vn-8100pc</code>) are excluded from the denominator so they don't drag down the dictionary density ratio.</li>
+<li>Words containing invalid OCR junk (like <code>\</code>, <code>::</code>, or triple repeating letters) immediately trigger a early-out penalty to kill candidates like <code>tlkji\lizk...</code>.</li>
+</ul>
+<ol start="2">
+<li><strong>Strict Guard for Path Slash <code>+15</code> Bonus in <code>score_url_candidate</code>:</strong></li>
+</ol>
+<ul>
+<li>A <code>/</code> only earns <code>+15</code> points if the candidate contains <strong>no spaces</strong> and looks like a valid URL path structure (e.g., <code>[domain.com/path](https://domain.com/path)</code> or <code>/relative/path</code>).</li>
+</ul>
+<hr />
+<h3>Updated Code Snippet</h3>
+<p>Replace <code>score_search_query_legibility</code> and <code>score_url_candidate</code> with these versions:</p>
+<pre><code class="language-python">def score_search_query_legibility(text: str, word_set: set) -&gt; tuple[int, str | None]:
+    &quot;&quot;&quot;Scores a candidate string based on whether it represents human-typed text.
+    
+    Ignores numbers/year identifiers (1980, 1980s, 560) when calculating density
+    and penalizes structural OCR junk (backslashes, repeated colons, bad char loops).
+    &quot;&quot;&quot;
+    # Reject extreme OCR artifacts early
+    if &quot;\\&quot; in text or &quot;::&quot; in text or re.search(r&quot;(.)\1\1&quot;, text):
+        return -20, &quot;-20: Contains severe OCR structural noise&quot;
+
+    # Clean leading browser prefixes
+    cleaned = re.sub(r&quot;^[a-z]\s+&quot;, &quot;&quot;, text.lower()).strip()
+    
+    # Extract whitespace-separated word tokens
+    tokens = [t.strip(&quot;,.?!\&quot;'()[]{}#:&quot;) for t in cleaned.split() if t.strip()]
+    if not tokens:
+        return 0, None
+
+    # Filter out pure numbers (1980, 560) and numeric-suffixed words (1980s, 8100pc)
+    # so model numbers and dates don't penalize search queries.
+    alpha_tokens = [
+        t for t in tokens 
+        if not t.isdigit() and not re.search(r&quot;\d+[a-z]*$&quot;, t)
+    ]
+    
+    if not alpha_tokens:
+        # If the string is purely model numbers/digits and contains no pure words, yield neutral
+        return 0, None
+
+    # Identify valid dictionary matches (min length 3)
+    valid_words = [t for t in alpha_tokens if t in word_set and len(t) &gt;= 3]
+    
+    ratio = len(valid_words) / len(alpha_tokens)
+
+    # Require high dictionary density across word-like tokens
+    if len(valid_words) &gt;= 1 and ratio &gt;= 0.5:
+        score = min(len(valid_words) * 15, 60)
+        return score, f&quot;+{score}: High dictionary density ({len(valid_words)}/{len(alpha_tokens)} words, {ratio:.0%})&quot;
+        
+    return 0, None
+
+
+def score_url_candidate(text: str) -&gt; tuple[int, list[str]]:
+    score = 0
+    report = []
+
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, [&quot;Empty OCR output&quot;]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append(&quot;+100: Strong domain match&quot;)
+
+    # 2. Strict Path &amp; Query Structure Guard
+    # Only grant slash points if there are no spaces AND it fits a valid URL/path layout
+    if '/' in text and ' ' not in text:
+        if re.search(r'(?:[a-z0-9-]+\.[a-z]{2,}/|/[a-z0-9_.~-]+)', text, re.I):
+            score += 15
+            report.append(&quot;+15: Valid URL path structure containing '/'&quot;)
+
+    # 3. Dictionary-Density Legibility Check
+    legibility_bonus, legibility_msg = score_search_query_legibility(text, ENGLISH_WORDS)
+    if legibility_msg:
+        score += legibility_bonus
+        report.append(legibility_msg)
+
+    # 4. Whitespace Handling
+    if re.search(r'\s', text):
+        score -= 2
+        report.append(&quot;-2: Contains whitespace&quot;)
+
+    # 5. Capped Symbol Noise Penalty
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;\=\-\%\(\)&quot;,\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 3, 30)  # Cap penalty at -30 max
+        score -= penalty
+        report.append(f&quot;-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)&quot;)
+
+    return score, report
+
+</code></pre>
+<hr />
+<h3>Why <code>pudb</code> vs <code>pdb</code> Makes Sense Here</h3>
+<p><code>pudb</code> is awesome for visually sweeping through stack frames, but jumping straight into Python's native <code>pdb</code> via terminal script execution is much faster for headless script runs or automated loop conditionals (<code>if &quot;2026-09-11&quot; in image_path.name: import pdb; pdb.set_trace()</code>).</p>
+<p>Give <code>ocr_all_screenshots_in_folder.py --force-urls</code> another spin on that batch!</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_170720_capture.md&quot;)</p>
+<hr />
