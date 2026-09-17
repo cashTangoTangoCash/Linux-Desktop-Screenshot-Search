@@ -1,0 +1,40 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 135</h1>
+<p><strong><a href="20260917_155436_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165337_capture.html">Next →</a></strong></p>
+<hr />
+<p>[dad84@dad84-2013PC 202609]$ ocr_all_screenshots_in_folder.py --force-urls
+Directory traversal: NON-RECURSIVE (searching top-level directory only)
+Starting OCR indexing for 90 screenshot(s)...
+--&gt; Overwriting existing URL sidecars with new scoring logic.</p>
+<p>Traceback (most recent call last):
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 301, in <module>
+    process_ocr()
+    ~~~~~~~~~~~^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 284, in process_ocr
+    url_data = process_url_candidates(image_path)
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 190, in process_url_candidates
+    score, report = score_url_candidate(extracted_text)
+                    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File &quot;/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py&quot;, line 173, in score_url_candidate
+    bad_symbols = re.findall(r'[^\w\s./:?&amp;=-%()&quot;,+]', text)
+  File &quot;/usr/lib/python3.14/re/<strong>init</strong>.py&quot;, line 278, in findall
+    return _compile(pattern, flags).findall(string)
+           ~~~~~~~~^^^^^^^^^^^^^^^^
+  File &quot;/usr/lib/python3.14/re/<strong>init</strong>.py&quot;, line 350, in _compile
+    p = _compiler.compile(pattern, flags)
+  File &quot;/usr/lib/python3.14/re/_compiler.py&quot;, line 762, in compile
+    p = _parser.parse(p, flags)
+  File &quot;/usr/lib/python3.14/re/_parser.py&quot;, line 973, in parse
+    p = _parse_sub(source, state, flags &amp; SRE_FLAG_VERBOSE, 0)
+  File &quot;/usr/lib/python3.14/re/_parser.py&quot;, line 460, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+                ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                       not nested and not items))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File &quot;/usr/lib/python3.14/re/_parser.py&quot;, line 617, in _parse
+    raise source.error(msg, len(this) + 1 + len(that))
+re.PatternError: bad character range =-% at position 14</p>
+<p>Flymake is not catching any problems for some reason - maybe it doesn't attempt to check regexes?</p>
+<hr />
+<p><strong><a href="20260917_155436_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165337_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165334_capture.md&quot;)</p>

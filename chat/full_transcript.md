@@ -21410,3 +21410,1000 @@ def score_search_query_legibility(text: str, word_set: set) -> tuple[int, str]:
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260915_172546_capture.md")
 
 ---
+
+# PROMPT 134
+let's implement this potential solution into the current code.  I have attempted to learn a bit of pdb so maybe I can try to catch on better to what you are doing - we had gotten to a point where me just scanning your code for 'looks plausible' might be running aground.  existing code:
+
+#!/usr/bin/env python3
+import argparse
+import csv
+import json
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / "ocr_timing.csv"
+RECTANGLES_CSV = Path("/home/dad84/Documents/2026/screenshots/rectangles.csv")
+
+# Fallback / Static pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
+FALLBACK_RECT_MATE = (1536, 56, 447, 81)  # Fallback Rectangle 1: MATE layout
+RECT_I3 = (1531, 53, 447, 79)            # Rectangle 2: i3 layout
+
+COMMON_DOMAINS = [
+    "google.com", "github.com", "reddit.com", "wikipedia.org", 
+    "youtube.com", "amazon.com", "stackoverflow.com"
+]
+
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2}-\d{2}:\d{2}-\d{2})")
+
+# Load local system dictionary once at startup
+WORDS_FILE = Path("/usr/share/dict/words")
+if WORDS_FILE.is_file():
+    ENGLISH_WORDS = set(WORDS_FILE.read_text(encoding="utf-8").lower().splitlines())
+else:
+    ENGLISH_WORDS = set()
+
+def count_english_words(text: str) -> int:
+    """Returns how many words in the string are recognized English words."""
+    # Remove leading browser search prefix artifacts like 'v '
+    cleaned = re.sub(r"^[a-z]\s+", "", text, flags=re.IGNORECASE).strip()
+    tokens = re.findall(r"\b[a-z]{2,}\b", cleaned.lower())
+    
+    if not tokens or not ENGLISH_WORDS:
+        return 0
+        
+    valid_count = sum(1 for word in tokens if word in ENGLISH_WORDS)
+    return valid_count
+
+def parse_timestamp_from_filename(filename: str) -> datetime | None:
+    """Extracts timestamp from screenshot filenames (e.g. 2026-09-13-10:55-19_2528x1368.jpg)."""
+    match = DATE_PATTERN.search(filename)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y-%m-%d-%H:%M-%S")
+        except ValueError:
+            return None
+    return None
+
+def get_dynamic_rectangle(image_path: Path) -> tuple[int, int, int, int]:
+    """Finds rectangle coordinates from rectangles.csv that are newest,
+
+    but not newer than the given screenshot timestamp.
+    Falls back to FALLBACK_RECT_MATE if no matching or valid row exists.
+    """
+    target_dt = parse_timestamp_from_filename(image_path.name)
+    if not target_dt or not RECTANGLES_CSV.is_file():
+        return FALLBACK_RECT_MATE
+
+    best_coords: tuple[int, int, int, int] | None = None
+    best_dt: datetime | None = None
+
+    try:
+        with open(RECTANGLES_CSV, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                filepath_str = row.get("filename", "")
+                row_dt = parse_timestamp_from_filename(Path(filepath_str).name)
+                if not row_dt:
+                    continue
+
+                # Must be <= target timestamp (newest, but not newer)
+                if row_dt <= target_dt:
+                    if best_dt is None or row_dt > best_dt:
+                        try:
+                            x = int(row["x"])
+                            y = int(row["y"])
+                            w = int(row["w"])
+                            h = int(row["h"])
+                            best_coords = (w, h, x, y)
+                            best_dt = row_dt
+                        except (KeyError, ValueError):
+                            continue
+    except Exception as e:
+        print(f"Warning: Failed to read {RECTANGLES_CSV}: {e}")
+
+    return best_coords if best_coords is not None else FALLBACK_RECT_MATE
+
+
+def get_rectangles_for_image(image_path: Path) -> list[dict]:
+    """Returns candidate rectangles combining the CSV-driven rectangle and canned i3 rectangle."""
+    dynamic_mate = get_dynamic_rectangle(image_path)
+    return [
+        {"name": "mate_dynamic", "coords": dynamic_mate},
+        {"name": "i3", "coords": RECT_I3},
+    ]
+
+
+def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]) -> str:
+    """Cropped URL bar OCR using ImageMagick + Tesseract for a specific rectangle."""
+    w, h, x, y = crop_coords
+    cmd = (
+        f'magick "{image_path}" '
+        f'-crop {w}x{h}+{x}+{y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}")
+        return ""
+
+
+def is_readable_search_query(text: str) -> bool:
+    """Checks if a string looks like a clean, human-typed search query."""
+    cleaned = re.sub(r"^[a-z]\s+[v>]\s+", "", text, flags=re.IGNORECASE).strip()
+    
+    words = [w for w in re.split(r"\s+", cleaned) if len(w) > 1]
+    if not words:
+        return False
+        
+    valid_words = 0
+    for w in words:
+        if not re.search(r"(.)\1\1", w) and not re.search(r"[a-z]{3,}\d+[a-z]+", w):
+            valid_words += 1
+            
+    return (valid_words >= 2) and (valid_words / len(words) >= 0.7)
+
+
+def score_url_candidate(text: str) -> tuple[int, list[str]]:
+    score = 0
+    report = []
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append("+100: Strong domain match")
+
+    # 2. Path & Query Structure
+    if '/' in text:
+        score += 5
+        report.append("+5: Contains path slash '/'")
+
+    # 3. Clean spaces penalty
+    if re.search(r'\s', text):
+        score -= 5
+        report.append("-5: Contains whitespace")
+
+    # 4. Symbol Noise
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-]', text)
+    if bad_symbols:
+        penalty = len(bad_symbols) * 2
+        score -= penalty
+        report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
+
+    valid_words = count_english_words(text)
+    if valid_words >= 2:
+        points = valid_words * 15  # 6 recognized words = +90 points
+        score += points
+        report.append(f"+{points}: Found {valid_words} recognized English words")
+        
+    return score, report
+
+def process_url_candidates(image_path: Path) -> dict:
+    candidates = []
+    rectangles = get_rectangles_for_image(image_path)
+
+    for rect_info in rectangles:
+        coords = rect_info["coords"]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        score, report = score_url_candidate(extracted_text)
+
+        candidates.append({
+            "rect_name": rect_info["name"],
+            "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
+            "text": extracted_text,
+            "score": score,
+            "scoring_report": report
+        })
+
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+
+    return {
+        "best_url": candidates[0]["text"],
+        "candidates": candidates
+    }
+
+
+def run_full_image_ocr(image_path: Path) -> tuple[str, float]:
+    """Runs Tesseract on the entire screenshot and measures execution time in seconds."""
+    cmd = ["tesseract", str(image_path), "stdout"]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f"Warning: Full OCR failed for {image_path.name}: {e}")
+        return "", elapsed
+
+
+def log_timing(image_name: str, seconds: float):
+    """Appends full image Tesseract timing data to CSV."""
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode="a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(["timestamp", "filename", "duration_seconds"])
+        writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="ocr_indexer",
+        description="Extract URLs and full-page text from desktop screenshots using ImageMagick and Tesseract OCR.",
+        epilog="Example: python3 ocr_script.py -r -f",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-r",
+        "--recurse",
+        action="store_true",
+        help="recurse into subdirectories to discover and process image files",
+    )
+    parser.add_argument(
+        "-f",
+        "--force-urls",
+        action="store_true",
+        help="force re-processing and overwriting of existing .url.txt and .url.json sidecar files",
+    )
+    return parser.parse_args()
+
+def process_ocr():
+    args = parse_args()
+
+    # Inform the user about directory search mode
+    if args.recurse:
+        print("Directory traversal: RECURSIVE (searching working directory and subdirectories)")
+        file_list = WORK_DIR.rglob("*")
+    else:
+        print("Directory traversal: NON-RECURSIVE (searching top-level directory only)")
+        file_list = WORK_DIR.glob("*")
+
+    pc_images = sorted([
+        f for f in file_list
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f"No PC screenshots found to index in {WORK_DIR}")
+        return
+
+    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...")
+    if args.force_urls:
+        print("--> Overwriting existing URL sidecars with new scoring logic.\n")
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+        url_json_path = image_path.parent / f"{image_path.name}.url.json"
+        full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
+
+        if args.force_urls or not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+            url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+            print(f"Updated URL sidecars for: {image_path.relative_to(WORK_DIR)}")
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding="utf-8")
+            log_timing(image_path.name, duration)
+            print(f"Indexed full image '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
+            indexed_count += 1
+
+    print("\nOCR Indexing Complete.")
+
+
+if __name__ == "__main__":
+    process_ocr()
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_155428_capture.md")
+
+---
+
+# RESPONSE 134
+Below is a clean, complete refactoring of your script that integrates dictionary-density scoring, replaces the fragile standalone word count with a structured legibility scorer, and caps penalty noise.
+
+---
+
+### Updated Code
+
+```python
+#!/usr/bin/env python3
+import argparse
+import csv
+import json
+import re
+import subprocess
+import time
+from datetime import datetime
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+TIMING_LOG = WORK_DIR / "ocr_timing.csv"
+RECTANGLES_CSV = Path("/home/dad84/Documents/2026/screenshots/rectangles.csv")
+
+# Fallback / Static pre-defined rectangles: (WIDTH, HEIGHT, X, Y)
+FALLBACK_RECT_MATE = (1536, 56, 447, 81)  # Fallback Rectangle 1: MATE layout
+RECT_I3 = (1531, 53, 447, 79)             # Rectangle 2: i3 layout
+
+COMMON_DOMAINS = [
+    "google.com", "github.com", "reddit.com", "wikipedia.org", 
+    "youtube.com", "amazon.com", "stackoverflow.com"
+]
+
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+DATE_PATTERN = re.compile(r"(\d{4}-\d{2}-\d{2}-\d{2}:\d{2}-\d{2})")
+
+# Load local system dictionary once at startup
+WORDS_FILE = Path("/usr/share/dict/words")
+if WORDS_FILE.is_file():
+    ENGLISH_WORDS = {
+        line.strip().lower()
+        for line in WORDS_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if len(line.strip()) >= 3
+    }
+else:
+    ENGLISH_WORDS = set()
+
+
+def score_search_query_legibility(text: str, word_set: set) -> tuple[int, str | None]:
+    """Scores a candidate string based on whether it represents human-typed text.
+    
+    Requires high word dictionary density and filters out short noise words to 
+    prevent OCR garbage from triggering huge word bonuses.
+    """
+    # Remove browser search prefixes (e.g. 'v ', 'g ', 'y ')
+    cleaned = re.sub(r"^[a-z]\s+", "", text.lower()).strip()
+    
+    # Extract whitespace-separated word tokens (trimming punctuation)
+    tokens = [t.strip(",.?!\"'()[]{}#:") for t in cleaned.split() if t.strip()]
+    if not tokens:
+        return 0, None
+
+    # Identify dictionary matches (minimum length of 3 to avoid matching 'ha', 'ma', 'in', etc.)
+    valid_words = [t for t in tokens if t in word_set and len(t) >= 3]
+    
+    ratio = len(valid_words) / len(tokens)
+
+    # Require at least 2 valid words AND at least 50% dictionary density across all tokens
+    if len(valid_words) >= 2 and ratio >= 0.5:
+        score = min(len(valid_words) * 15, 60)
+        return score, f"+{score}: High dictionary density ({len(valid_words)}/{len(tokens)} words, {ratio:.0%})"
+        
+    return 0, None
+
+
+def parse_timestamp_from_filename(filename: str) -> datetime | None:
+    """Extracts timestamp from screenshot filenames (e.g. 2026-09-13-10:55-19_2528x1368.jpg)."""
+    match = DATE_PATTERN.search(filename)
+    if match:
+        try:
+            return datetime.strptime(match.group(1), "%Y-%m-%d-%H:%M-%S")
+        except ValueError:
+            return None
+    return None
+
+
+def get_dynamic_rectangle(image_path: Path) -> tuple[int, int, int, int]:
+    """Finds rectangle coordinates from rectangles.csv that are newest,
+    but not newer than the given screenshot timestamp.
+    Falls back to FALLBACK_RECT_MATE if no matching or valid row exists.
+    """
+    target_dt = parse_timestamp_from_filename(image_path.name)
+    if not target_dt or not RECTANGLES_CSV.is_file():
+        return FALLBACK_RECT_MATE
+
+    best_coords: tuple[int, int, int, int] | None = None
+    best_dt: datetime | None = None
+
+    try:
+        with open(RECTANGLES_CSV, mode="r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                filepath_str = row.get("filename", "")
+                row_dt = parse_timestamp_from_filename(Path(filepath_str).name)
+                if not row_dt:
+                    continue
+
+                if row_dt <= target_dt:
+                    if best_dt is None or row_dt > best_dt:
+                        try:
+                            x = int(row["x"])
+                            y = int(row["y"])
+                            w = int(row["w"])
+                            h = int(row["h"])
+                            best_coords = (w, h, x, y)
+                            best_dt = row_dt
+                        except (KeyError, ValueError):
+                            continue
+    except Exception as e:
+        print(f"Warning: Failed to read {RECTANGLES_CSV}: {e}")
+
+    return best_coords if best_coords is not None else FALLBACK_RECT_MATE
+
+
+def get_rectangles_for_image(image_path: Path) -> list[dict]:
+    """Returns candidate rectangles combining the CSV-driven rectangle and canned i3 rectangle."""
+    dynamic_mate = get_dynamic_rectangle(image_path)
+    return [
+        {"name": "mate_dynamic", "coords": dynamic_mate},
+        {"name": "i3", "coords": RECT_I3},
+    ]
+
+
+def run_single_crop_ocr(image_path: Path, crop_coords: tuple[int, int, int, int]) -> str:
+    """Cropped URL bar OCR using ImageMagick + Tesseract for a specific rectangle."""
+    w, h, x, y = crop_coords
+    cmd = (
+        f'magick "{image_path}" '
+        f'-crop {w}x{h}+{x}+{y} +repage '
+        f'-colorspace Gray -resize 200% tif:- | '
+        f'tesseract stdin stdout --dpi 300 --psm 7'
+    )
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip().lower()
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: URL OCR failed for {image_path.name} with crop {crop_coords}: {e}")
+        return ""
+
+
+def score_url_candidate(text: str) -> tuple[int, list[str]]:
+    score = 0
+    report = []
+
+    text_stripped = text.strip()
+    if not text_stripped:
+        return 0, ["Empty OCR output"]
+
+    # 1. High-value Domain Check
+    if re.search(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:gov|com|org|net|edu|io|php)\b', text, re.I):
+        score += 100
+        report.append("+100: Strong domain match")
+
+    # 2. Path & Query Structure
+    if '/' in text:
+        score += 15
+        report.append("+15: Contains path slash '/'")
+
+    # 3. Dictionary-Density Legibility Check
+    legibility_bonus, legibility_msg = score_search_query_legibility(text, ENGLISH_WORDS)
+    if legibility_bonus > 0 and legibility_msg:
+        score += legibility_bonus
+        report.append(legibility_msg)
+
+    # 4. Whitespace Handling (Soft penalty)
+    if re.search(r'\s', text):
+        score -= 2
+        report.append("-2: Contains whitespace")
+
+    # 5. Capped Symbol Noise Penalty
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-%\(\)",\+]', text)
+    if bad_symbols:
+        penalty = min(len(bad_symbols) * 3, 30)  # Cap penalty at -30 max
+        score -= penalty
+        report.append(f"-{penalty}: Contains {len(bad_symbols)} non-URL symbol(s)")
+
+    return score, report
+
+
+def process_url_candidates(image_path: Path) -> dict:
+    candidates = []
+    rectangles = get_rectangles_for_image(image_path)
+
+    for rect_info in rectangles:
+        coords = rect_info["coords"]
+        extracted_text = run_single_crop_ocr(image_path, coords)
+        
+        score, report = score_url_candidate(extracted_text)
+
+        candidates.append({
+            "rect_name": rect_info["name"],
+            "crop_coords": {"w": coords[0], "h": coords[1], "x": coords[2], "y": coords[3]},
+            "text": extracted_text,
+            "score": score,
+            "scoring_report": report
+        })
+
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+
+    return {
+        "best_url": candidates[0]["text"],
+        "candidates": candidates
+    }
+
+
+def run_full_image_ocr(image_path: Path) -> tuple[str, float]:
+    """Runs Tesseract on the entire screenshot and measures execution time in seconds."""
+    cmd = ["tesseract", str(image_path), "stdout"]
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        elapsed = time.perf_counter() - start_time
+        return result.stdout.strip(), elapsed
+    except subprocess.CalledProcessError as e:
+        elapsed = time.perf_counter() - start_time
+        print(f"Warning: Full OCR failed for {image_path.name}: {e}")
+        return "", elapsed
+
+
+def log_timing(image_name: str, seconds: float):
+    """Appends full image Tesseract timing data to CSV."""
+    file_exists = TIMING_LOG.is_file()
+    with open(TIMING_LOG, mode="a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(["timestamp", "filename", "duration_seconds"])
+        writer.writerow([datetime.now().isoformat(timespec="seconds"), image_name, f"{seconds:.4f}"])
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog="ocr_indexer",
+        description="Extract URLs and full-page text from desktop screenshots using ImageMagick and Tesseract OCR.",
+        epilog="Example: python3 ocr_script.py -r -f",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "-r",
+        "--recurse",
+        action="store_true",
+        help="recurse into subdirectories to discover and process image files",
+    )
+    parser.add_argument(
+        "-f",
+        "--force-urls",
+        action="store_true",
+        help="force re-processing and overwriting of existing .url.txt and .url.json sidecar files",
+    )
+    return parser.parse_args()
+
+
+def process_ocr():
+    args = parse_args()
+
+    if args.recurse:
+        print("Directory traversal: RECURSIVE (searching working directory and subdirectories)")
+        file_list = WORK_DIR.rglob("*")
+    else:
+        print("Directory traversal: NON-RECURSIVE (searching top-level directory only)")
+        file_list = WORK_DIR.glob("*")
+
+    pc_images = sorted([
+        f for f in file_list
+        if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+    ])
+
+    if not pc_images:
+        print(f"No PC screenshots found to index in {WORK_DIR}")
+        return
+
+    print(f"Starting OCR indexing for {len(pc_images)} screenshot(s)...")
+    if args.force_urls:
+        print("--> Overwriting existing URL sidecars with new scoring logic.\n")
+
+    indexed_count = 0
+    for image_path in pc_images:
+        url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+        url_json_path = image_path.parent / f"{image_path.name}.url.json"
+        full_txt_path = image_path.parent / f"{image_path.name}.full.txt"
+
+        if args.force_urls or not url_txt_path.is_file() or not url_json_path.is_file():
+            url_data = process_url_candidates(image_path)
+            
+            url_json_path.write_text(json.dumps(url_data, indent=2), encoding="utf-8")
+            url_txt_path.write_text(url_data["best_url"], encoding="utf-8")
+            print(f"Updated URL sidecars for: {image_path.relative_to(WORK_DIR)}")
+
+        if not full_txt_path.is_file():
+            full_text, duration = run_full_image_ocr(image_path)
+            full_txt_path.write_text(full_text, encoding="utf-8")
+            log_timing(image_path.name, duration)
+            print(f"Indexed full image '{image_path.relative_to(WORK_DIR)}' ({duration:.2f}s)")
+            indexed_count += 1
+
+    print("\nOCR Indexing Complete.")
+
+
+if __name__ == "__main__":
+    process_ocr()
+
+```
+
+---
+
+### Key Changes Made
+
+1. **`score_search_query_legibility()` Replacement:**
+Replaced `count_english_words()` with a density-aware checker. It requires at least **50% of the candidate's tokens** to be valid 3+ letter words before awarding any bonus points.
+2. **Capped Noise Penalty:**
+`bad_symbols` penalty is now capped at `-30`. OCR junk string `::nvf:l-ill...` will no longer scale to infinitely low negative numbers while accidentally grabbing word bonuses.
+3. **Softened Space Penalty:**
+Whitespace deduction reduced from `-5` to `-2` so multi-word search queries are not overly penalized.
+
+---
+
+### Step-by-Step `pdb` Interactive Debugging Guide
+
+Since you mentioned exploring `pdb`, here is a 2-minute walkthrough to watch the candidate scoring happen live in your terminal:
+
+1. **Insert a Breakpoint:**
+Place `breakpoint()` inside `score_url_candidate`:
+```python
+def score_url_candidate(text: str) -> tuple[int, list[str]]:
+    breakpoint()  # Drops you into the interactive debugger here
+    score = 0
+    report = []
+
+```
+
+
+2. **Run Your Script:**
+Execute the script directly in your terminal:
+```bash
+python3 ocr_script.py -f
+
+```
+
+
+3. **Useful `pdb` Commands:**
+When execution hits `breakpoint()`, your prompt will change to `(Pdb)`:
+* **`p text`** — Prints the candidate text currently being evaluated.
+* **`n`** (next) — Executes the current line and steps to the next line in the function.
+* **`s`** (step) — Steps *into* a function call (e.g., when sitting on `score_search_query_legibility(text, ENGLISH_WORDS)`, type `s` to step inside it).
+* **`p ENGLISH_WORDS`** or **`p valid_words`** — Inspect variables inside the function.
+* **`c`** (continue) — Continues execution until the next breakpoint or next candidate string.
+* **`q`** (quit) — Exits the script immediately.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_155436_capture.md")
+
+---
+
+# PROMPT 135
+[dad84@dad84-2013PC 202609]$ ocr_all_screenshots_in_folder.py --force-urls
+Directory traversal: NON-RECURSIVE (searching top-level directory only)
+Starting OCR indexing for 90 screenshot(s)...
+--> Overwriting existing URL sidecars with new scoring logic.
+
+Traceback (most recent call last):
+  File "/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py", line 301, in <module>
+    process_ocr()
+    ~~~~~~~~~~~^^
+  File "/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py", line 284, in process_ocr
+    url_data = process_url_candidates(image_path)
+  File "/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py", line 190, in process_url_candidates
+    score, report = score_url_candidate(extracted_text)
+                    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/home/dad84/.local/bin/ocr_all_screenshots_in_folder.py", line 173, in score_url_candidate
+    bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-%\(\)",\+]', text)
+  File "/usr/lib/python3.14/re/__init__.py", line 278, in findall
+    return _compile(pattern, flags).findall(string)
+           ~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/re/__init__.py", line 350, in _compile
+    p = _compiler.compile(pattern, flags)
+  File "/usr/lib/python3.14/re/_compiler.py", line 762, in compile
+    p = _parser.parse(p, flags)
+  File "/usr/lib/python3.14/re/_parser.py", line 973, in parse
+    p = _parse_sub(source, state, flags & SRE_FLAG_VERBOSE, 0)
+  File "/usr/lib/python3.14/re/_parser.py", line 460, in _parse_sub
+    itemsappend(_parse(source, state, verbose, nested + 1,
+                ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                       not nested and not items))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/re/_parser.py", line 617, in _parse
+    raise source.error(msg, len(this) + 1 + len(that))
+re.PatternError: bad character range =-% at position 14
+
+
+Flymake is not catching any problems for some reason - maybe it doesn't attempt to check regexes?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165334_capture.md")
+
+---
+
+# RESPONSE 135
+The crash is caused by an unescaped hyphen (`-`) inside the character class `[...]` in your regex.
+
+### The Bug Explained
+
+Inside a regular expression character set (`[...]`), an unescaped hyphen placed between two characters defines a **character range** (like `a-z` or `0-9`).
+
+In your pattern:
+
+```python
+r'[^\w\s\.\/:\?&=-%\(\)",\+]'
+
+```
+
+Python interprets `=-%` as a range spanning from ASCII `=` (`0x3D`) to ASCII `%` (`0x25`). Because `%` comes *before* `=` in the ASCII table, Python 3.14 raises:
+`re.PatternError: bad character range =-%`
+
+---
+
+### The Fix
+
+To treat the hyphen as a literal dash inside `[...]`, either **escape it with a backslash (`\-`)** or **place it at the very beginning or end** of the character set.
+
+Change line 173 from this:
+
+```python
+bad_symbols = re.findall(r'[^\w\s\.\/:\?&=-%\(\)",\+]', text)
+
+```
+
+To this (with `\-` escaped):
+
+```python
+bad_symbols = re.findall(r'[^\w\s\.\/:\?&\=\-\%\(\)",\+]', text)
+
+```
+
+Or move the hyphen to the end:
+
+```python
+bad_symbols = re.findall(r'[^\w\s\.\/:\?&=%\(\)",\+-]', text)
+
+```
+
+---
+
+### Why Flymake Didn't Catch It
+
+Flymake relies on static analysis tools like `flake8`, `pyflakes`, or Language Server Protocol (LSP) diagnostics (`pylsp`, `pyright`).
+
+* **Static Syntax vs. Runtime Evaluation:** As far as Python's grammar parser is concerned, `r'[^\w\s\.\/:\?&=-%\(\)",\+]'` is a completely valid string literal.
+* **No Dynamic Regex Analysis:** standard linters do not evaluate the internal semantics of arguments passed into `re.findall()` dynamically at lint time. They only check Python syntax, unused variables, and type annotations—not string contents destined for C-level dynamic parsers.
+
+If you want Flymake or your editor to catch invalid regexes automatically during editing, you can use specialized linters like **`ruff`** (which includes dynamic regex string inspection rules via `flake8-trio`/`flake8-bugbear` plugins) or an LSP with enhanced string pattern checking.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165337_capture.md")
+
+---
+
+# PROMPT 136
+ok, with the latest code, we have another misfire in url scoring:
+
+{
+  "best_url": "tlkji\\lizk\ufb01::of:/ p oy al t b p ar l | | g ety a t e y s b pr o o bl @ fpeg o p sty s lsrrgv b a ihiimemrmanrd caaneala 1 admws b diivinlne e w ll e sk e",
+  "candidates": [
+    {
+      "rect_name": "i3",
+      "crop_coords": {
+        "w": 1531,
+        "h": 53,
+        "x": 447,
+        "y": 79
+      },
+      "text": "tlkji\\lizk\ufb01::of:/ p oy al t b p ar l | | g ety a t e y s b pr o o bl @ fpeg o p sty s lsrrgv b a ihiimemrmanrd caaneala 1 admws b diivinlne e w ll e sk e",
+      "score": 1,
+      "scoring_report": [
+        "+15: Contains path slash '/'",
+        "-2: Contains whitespace",
+        "-12: Contains 4 non-URL symbol(s)"
+      ]
+    },
+    {
+      "rect_name": "mate_dynamic",
+      "crop_coords": {
+        "w": 1545,
+        "h": 41,
+        "x": 325,
+        "y": 59
+      },
+      "text": "g v 1980s trek 560",
+      "score": -2,
+      "scoring_report": [
+        "-2: Contains whitespace"
+      ]
+    }
+  ]
+}
+
+this is 2026-09-11-10:51-47_2528x1368.jpg.url.json.  now let's try for the magic of the gemini system.  I did a single pdb tutorial and got some high level concepts, but to use pdb to zero in on this problem screenshot, I would have to go 'hit the books' again and probably work up to constructing a conditional breakpoint.  but the magic is that with gemini, I think I only need to learn those words / high-level concepts, and then I can ask for a custom pdb tutorial step by step for doing this pdb task, and probably get an actionable tutorial.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165347_capture.md")
+
+---
+
+# RESPONSE 136
+You have hit on the exact strength of using an AI partner alongside traditional terminal tools. Knowing *what* `pdb` can do conceptually (like conditional breakpoints) is all you need—you don't need to memorize the exact syntax.
+
+Here is a step-by-step tutorial using `pdb` to debug `score_url_candidate` specifically for **`2026-09-11-10:51-47_2528x1368.jpg`**.
+
+---
+
+### Why the Scoring Failed
+
+Looking at your JSON, the search query candidate `g v 1980s trek 560` lost to garbage because:
+
+* `trek` is 4 letters and in the dictionary, but `1980s` and `560` aren't recognized as dictionary words.
+* That gave it 1 valid word out of 4 tokens (25% density), missing the 50% density threshold.
+* The garbage candidate scored **+15** simply because it contained a `/` character.
+
+---
+
+### Step 1: Set a Conditional Breakpoint in Your Code
+
+To stop execution **only** when processing `2026-09-11-10:51-47_2528x1368.jpg`, add `import pdb` and a condition right inside the loop in `process_ocr()`:
+
+```python
+for image_path in pc_images:
+    # --- ADD THIS DEBUG CONDITIONAL ---
+    if "2026-09-11-10:51-47" in image_path.name:
+        import pdb; pdb.set_trace()
+    # ----------------------------------
+    
+    url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+
+```
+
+---
+
+### Step 2: Run the Script in Terminal
+
+Run the script with `--force-urls` to force it to run the logic on that image:
+
+```bash
+python3 ocr_all_screenshots_in_folder.py --force-urls
+
+```
+
+The script will run normally until it hits that specific screenshot, then pause and drop you into the debugger prompt:
+
+```text
+> /home/dad84/.local/bin/ocr_all_screenshots_in_folder.py(280)process_ocr()
+-> url_txt_path = image_path.parent / f"{image_path.name}.url.txt"
+(Pdb) 
+
+```
+
+---
+
+### Step 3: Walk Through the Debugger
+
+Copy and paste these commands into the `(Pdb)` prompt to inspect what is happening line-by-line:
+
+#### 1. Set a breakpoint inside `score_url_candidate`
+
+```text
+(Pdb) b score_url_candidate
+
+```
+
+#### 2. Continue execution to hit that function
+
+```text
+(Pdb) c
+
+```
+
+Execution will pause at the top of `score_url_candidate`.
+
+#### 3. Inspect the input string
+
+```text
+(Pdb) p text
+
+```
+
+*Output will show the text candidate currently being evaluated (e.g., `'g v 1980s trek 560'`).*
+
+#### 4. Step over lines using `n` (Next)
+
+Type `n` and press **Enter** to execute lines one by one:
+
+```text
+(Pdb) n
+
+```
+
+*(Tip: In `pdb`, pressing **Enter** without typing anything repeats the last command).*
+
+#### 5. Step INTO `score_search_query_legibility`
+
+When your execution line lands on `score_search_query_legibility`, type `s` (Step In):
+
+```text
+(Pdb) s
+
+```
+
+Now you are inside the dictionary density checker. You can inspect how tokens are being parsed:
+
+```text
+(Pdb) p tokens
+(Pdb) p valid_words
+(Pdb) p ratio
+
+```
+
+#### 6. Exit the Debugger
+
+To stop debugging and return to your terminal shell:
+
+```text
+(Pdb) q
+
+```
+
+---
+
+### Quick Fix for the Scoring Logic
+
+While debugging, you'll see two quick logic tweaks needed in `score_url_candidate`:
+
+1. **Path Slash Penalty Guard:** Don't award `+15` for a slash `/` if the candidate string fails standard URL structural checks or has spaces (e.g., junk like `of:/ p oy`).
+2. **Handle Digits/Model Numbers in Search Queries:** Filter out purely numeric tokens (like `1980` or `560`) when calculating dictionary density so numbers don't lower the density score.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165357_capture.md")
+
+---
+
+# PROMPT 137
+is using using p in pdb good practice to avoid side effects from executing code (maybe p prevents side effects?)?  if not that, why should I use p?  I have not seen p yet in my very limited study of pdb.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165403_capture.md")
+
+---
+
+# RESPONSE 137
+No, `p` does **not** prevent side effects or guard against code execution.
+
+When you use `p <expression>` in `pdb`, Python evaluates the expression in the exact same runtime environment as your program. If you evaluate an expression that mutates state (such as `p my_list.pop()` or `p func_with_side_effects()`), **it will execute and modify your program's state**.
+
+---
+
+### Why Use `p` (Print) at All?
+
+In `pdb`, command names take precedence over variable names.
+
+If you have a variable or function named `n`, `c`, `s`, `b`, `q`, or `l`, typing that name at the `(Pdb)` prompt will **not** print the variable—it will execute the `pdb` command instead!
+
+* Typing `n` runs the `next` command.
+* Typing `c` runs the `continue` command.
+* Typing `s` runs the `step` command.
+
+To print the value of a variable named `n` (or any expression), you must prefix it with `p`:
+
+```text
+(Pdb) n
+> advances to the next line of code
+
+(Pdb) p n
+> prints the value of variable 'n' (e.g., 42)
+
+```
+
+---
+
+### `p` vs. `pp`
+
+* **`p <expr>`** (Print): Formats and prints the value of an expression.
+* **`pp <expr>`** (Pretty Print): Formats complex dictionaries, lists, or large structures with indentation and line breaks, making large JSON-like data much easier to read in the terminal.
+
+---
+
+### How to Safely Inspect Code Without Side Effects in `pdb`
+
+If you are worried about triggering side effects while debugging:
+
+1. **Stick to Variable Inspection:** Inspect existing variables directly (e.g., `p tokens`, `p ratio`) rather than calling methods that modify data.
+2. **Avoid Method Calls in `p`:** Avoid running state-changing operations like `p dict.pop()` or calling functions inside `p`.
+3. **Use Safe Standard Commands:** Stick to navigation commands (`n` for next line, `s` for step in, `r` for return out) to observe how your code naturally runs step by step.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165408_capture.md")
+
+---

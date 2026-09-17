@@ -1,0 +1,87 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 136</h1>
+<p><strong><a href="20260917_165347_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165403_capture.html">Next →</a></strong></p>
+<hr />
+<p>You have hit on the exact strength of using an AI partner alongside traditional terminal tools. Knowing <em>what</em> <code>pdb</code> can do conceptually (like conditional breakpoints) is all you need—you don't need to memorize the exact syntax.</p>
+<p>Here is a step-by-step tutorial using <code>pdb</code> to debug <code>score_url_candidate</code> specifically for <strong><code>2026-09-11-10:51-47_2528x1368.jpg</code></strong>.</p>
+<hr />
+<h3>Why the Scoring Failed</h3>
+<p>Looking at your JSON, the search query candidate <code>g v 1980s trek 560</code> lost to garbage because:</p>
+<ul>
+<li><code>trek</code> is 4 letters and in the dictionary, but <code>1980s</code> and <code>560</code> aren't recognized as dictionary words.</li>
+<li>That gave it 1 valid word out of 4 tokens (25% density), missing the 50% density threshold.</li>
+<li>The garbage candidate scored <strong>+15</strong> simply because it contained a <code>/</code> character.</li>
+</ul>
+<hr />
+<h3>Step 1: Set a Conditional Breakpoint in Your Code</h3>
+<p>To stop execution <strong>only</strong> when processing <code>2026-09-11-10:51-47_2528x1368.jpg</code>, add <code>import pdb</code> and a condition right inside the loop in <code>process_ocr()</code>:</p>
+<pre><code class="language-python">for image_path in pc_images:
+    # --- ADD THIS DEBUG CONDITIONAL ---
+    if &quot;2026-09-11-10:51-47&quot; in image_path.name:
+        import pdb; pdb.set_trace()
+    # ----------------------------------
+    
+    url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+
+</code></pre>
+<hr />
+<h3>Step 2: Run the Script in Terminal</h3>
+<p>Run the script with <code>--force-urls</code> to force it to run the logic on that image:</p>
+<pre><code class="language-bash">python3 ocr_all_screenshots_in_folder.py --force-urls
+
+</code></pre>
+<p>The script will run normally until it hits that specific screenshot, then pause and drop you into the debugger prompt:</p>
+<pre><code class="language-text">&gt; /home/dad84/.local/bin/ocr_all_screenshots_in_folder.py(280)process_ocr()
+-&gt; url_txt_path = image_path.parent / f&quot;{image_path.name}.url.txt&quot;
+(Pdb) 
+
+</code></pre>
+<hr />
+<h3>Step 3: Walk Through the Debugger</h3>
+<p>Copy and paste these commands into the <code>(Pdb)</code> prompt to inspect what is happening line-by-line:</p>
+<h4>1. Set a breakpoint inside <code>score_url_candidate</code></h4>
+<pre><code class="language-text">(Pdb) b score_url_candidate
+
+</code></pre>
+<h4>2. Continue execution to hit that function</h4>
+<pre><code class="language-text">(Pdb) c
+
+</code></pre>
+<p>Execution will pause at the top of <code>score_url_candidate</code>.</p>
+<h4>3. Inspect the input string</h4>
+<pre><code class="language-text">(Pdb) p text
+
+</code></pre>
+<p><em>Output will show the text candidate currently being evaluated (e.g., <code>'g v 1980s trek 560'</code>).</em></p>
+<h4>4. Step over lines using <code>n</code> (Next)</h4>
+<p>Type <code>n</code> and press <strong>Enter</strong> to execute lines one by one:</p>
+<pre><code class="language-text">(Pdb) n
+
+</code></pre>
+<p><em>(Tip: In <code>pdb</code>, pressing <strong>Enter</strong> without typing anything repeats the last command).</em></p>
+<h4>5. Step INTO <code>score_search_query_legibility</code></h4>
+<p>When your execution line lands on <code>score_search_query_legibility</code>, type <code>s</code> (Step In):</p>
+<pre><code class="language-text">(Pdb) s
+
+</code></pre>
+<p>Now you are inside the dictionary density checker. You can inspect how tokens are being parsed:</p>
+<pre><code class="language-text">(Pdb) p tokens
+(Pdb) p valid_words
+(Pdb) p ratio
+
+</code></pre>
+<h4>6. Exit the Debugger</h4>
+<p>To stop debugging and return to your terminal shell:</p>
+<pre><code class="language-text">(Pdb) q
+
+</code></pre>
+<hr />
+<h3>Quick Fix for the Scoring Logic</h3>
+<p>While debugging, you'll see two quick logic tweaks needed in <code>score_url_candidate</code>:</p>
+<ol>
+<li><strong>Path Slash Penalty Guard:</strong> Don't award <code>+15</code> for a slash <code>/</code> if the candidate string fails standard URL structural checks or has spaces (e.g., junk like <code>of:/ p oy</code>).</li>
+<li><strong>Handle Digits/Model Numbers in Search Queries:</strong> Filter out purely numeric tokens (like <code>1980</code> or <code>560</code>) when calculating dictionary density so numbers don't lower the density score.</li>
+</ol>
+<hr />
+<p><strong><a href="20260917_165347_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165403_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165357_capture.md&quot;)</p>

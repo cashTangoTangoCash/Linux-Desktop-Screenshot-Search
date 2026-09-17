@@ -1,0 +1,39 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 135</h1>
+<p><strong><a href="20260917_165334_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165347_capture.html">Next →</a></strong></p>
+<hr />
+<p>The crash is caused by an unescaped hyphen (<code>-</code>) inside the character class <code>[...]</code> in your regex.</p>
+<h3>The Bug Explained</h3>
+<p>Inside a regular expression character set (<code>[...]</code>), an unescaped hyphen placed between two characters defines a <strong>character range</strong> (like <code>a-z</code> or <code>0-9</code>).</p>
+<p>In your pattern:</p>
+<pre><code class="language-python">r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]'
+
+</code></pre>
+<p>Python interprets <code>=-%</code> as a range spanning from ASCII <code>=</code> (<code>0x3D</code>) to ASCII <code>%</code> (<code>0x25</code>). Because <code>%</code> comes <em>before</em> <code>=</code> in the ASCII table, Python 3.14 raises:
+<code>re.PatternError: bad character range =-%</code></p>
+<hr />
+<h3>The Fix</h3>
+<p>To treat the hyphen as a literal dash inside <code>[...]</code>, either <strong>escape it with a backslash (<code>\-</code>)</strong> or <strong>place it at the very beginning or end</strong> of the character set.</p>
+<p>Change line 173 from this:</p>
+<pre><code class="language-python">bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]', text)
+
+</code></pre>
+<p>To this (with <code>\-</code> escaped):</p>
+<pre><code class="language-python">bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;\=\-\%\(\)&quot;,\+]', text)
+
+</code></pre>
+<p>Or move the hyphen to the end:</p>
+<pre><code class="language-python">bad_symbols = re.findall(r'[^\w\s\.\/:\?&amp;=%\(\)&quot;,\+-]', text)
+
+</code></pre>
+<hr />
+<h3>Why Flymake Didn't Catch It</h3>
+<p>Flymake relies on static analysis tools like <code>flake8</code>, <code>pyflakes</code>, or Language Server Protocol (LSP) diagnostics (<code>pylsp</code>, <code>pyright</code>).</p>
+<ul>
+<li><strong>Static Syntax vs. Runtime Evaluation:</strong> As far as Python's grammar parser is concerned, <code>r'[^\w\s\.\/:\?&amp;=-%\(\)&quot;,\+]'</code> is a completely valid string literal.</li>
+<li><strong>No Dynamic Regex Analysis:</strong> standard linters do not evaluate the internal semantics of arguments passed into <code>re.findall()</code> dynamically at lint time. They only check Python syntax, unused variables, and type annotations—not string contents destined for C-level dynamic parsers.</li>
+</ul>
+<p>If you want Flymake or your editor to catch invalid regexes automatically during editing, you can use specialized linters like <strong><code>ruff</code></strong> (which includes dynamic regex string inspection rules via <code>flake8-trio</code>/<code>flake8-bugbear</code> plugins) or an LSP with enhanced string pattern checking.</p>
+<hr />
+<p><strong><a href="20260917_165334_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260917_165347_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165337_capture.md&quot;)</p>

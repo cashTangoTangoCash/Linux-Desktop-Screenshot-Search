@@ -1,0 +1,40 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 137</h1>
+<p><strong><a href="20260917_165403_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>No, <code>p</code> does <strong>not</strong> prevent side effects or guard against code execution.</p>
+<p>When you use <code>p &lt;expression&gt;</code> in <code>pdb</code>, Python evaluates the expression in the exact same runtime environment as your program. If you evaluate an expression that mutates state (such as <code>p my_list.pop()</code> or <code>p func_with_side_effects()</code>), <strong>it will execute and modify your program's state</strong>.</p>
+<hr />
+<h3>Why Use <code>p</code> (Print) at All?</h3>
+<p>In <code>pdb</code>, command names take precedence over variable names.</p>
+<p>If you have a variable or function named <code>n</code>, <code>c</code>, <code>s</code>, <code>b</code>, <code>q</code>, or <code>l</code>, typing that name at the <code>(Pdb)</code> prompt will <strong>not</strong> print the variable—it will execute the <code>pdb</code> command instead!</p>
+<ul>
+<li>Typing <code>n</code> runs the <code>next</code> command.</li>
+<li>Typing <code>c</code> runs the <code>continue</code> command.</li>
+<li>Typing <code>s</code> runs the <code>step</code> command.</li>
+</ul>
+<p>To print the value of a variable named <code>n</code> (or any expression), you must prefix it with <code>p</code>:</p>
+<pre><code class="language-text">(Pdb) n
+&gt; advances to the next line of code
+
+(Pdb) p n
+&gt; prints the value of variable 'n' (e.g., 42)
+
+</code></pre>
+<hr />
+<h3><code>p</code> vs. <code>pp</code></h3>
+<ul>
+<li><strong><code>p &lt;expr&gt;</code></strong> (Print): Formats and prints the value of an expression.</li>
+<li><strong><code>pp &lt;expr&gt;</code></strong> (Pretty Print): Formats complex dictionaries, lists, or large structures with indentation and line breaks, making large JSON-like data much easier to read in the terminal.</li>
+</ul>
+<hr />
+<h3>How to Safely Inspect Code Without Side Effects in <code>pdb</code></h3>
+<p>If you are worried about triggering side effects while debugging:</p>
+<ol>
+<li><strong>Stick to Variable Inspection:</strong> Inspect existing variables directly (e.g., <code>p tokens</code>, <code>p ratio</code>) rather than calling methods that modify data.</li>
+<li><strong>Avoid Method Calls in <code>p</code>:</strong> Avoid running state-changing operations like <code>p dict.pop()</code> or calling functions inside <code>p</code>.</li>
+<li><strong>Use Safe Standard Commands:</strong> Stick to navigation commands (<code>n</code> for next line, <code>s</code> for step in, <code>r</code> for return out) to observe how your code naturally runs step by step.</li>
+</ol>
+<hr />
+<p><strong><a href="20260917_165403_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260917_165408_capture.md&quot;)</p>
