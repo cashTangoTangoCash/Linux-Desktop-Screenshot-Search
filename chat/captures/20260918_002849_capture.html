@@ -1,0 +1,60 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 142</h1>
+<p><strong><a href="20260918_002843_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002851_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is the updated DuckDB query. It uses a conditional <code>MAX()</code> over the <code>PARTITION BY</code> window to grab candidate text where <code>rank = 2</code>, giving you the runner-up's text alongside the winning candidate:</p>
+<pre><code class="language-bash">duckdb -c &quot;
+WITH ranked AS (
+  SELECT 
+    image_index,
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT 
+  image_index,
+  diff, 
+  score AS winner_score, 
+  candidate_text AS winner_text,
+  loser_text
+FROM ranked
+WHERE rank = 1 AND diff IS NOT NULL
+ORDER BY diff DESC
+LIMIT 10;
+&quot;
+
+</code></pre>
+<hr />
+<h3>Tips for Viewing Wide Terminal Output</h3>
+<p>Since the runner-up text can cause lines to wrap and mess up the table alignment in your terminal:</p>
+<ol>
+<li><strong>Disable Wrapping Temporarily in <code>less</code>:</strong>
+Pipe the output into <code>less -S</code> so you can scroll horizontally with the arrow keys:</li>
+</ol>
+<pre><code class="language-bash">duckdb -c &quot;...&quot; | less -S
+
+</code></pre>
+<ol start="2">
+<li><strong>Use Line Mode (<code>\x</code> or <code>cli</code> expanded mode):</strong>
+If you run <code>duckdb</code> interactively or pass <code>-noheader -line</code>, it will print each record vertically as key-value pairs rather than a wide table:</li>
+</ol>
+<pre><code class="language-bash">duckdb -line -c &quot;
+WITH ranked AS (
+  SELECT 
+    image_index, image_file, score, candidate_text, rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT image_index, diff, score AS winner_score, candidate_text AS winner_text, loser_text
+FROM ranked WHERE rank = 1 AND diff IS NOT NULL ORDER BY diff DESC LIMIT 5;
+&quot;
+
+</code></pre>
+<hr />
+<p><strong><a href="20260918_002843_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002851_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002849_capture.md&quot;)</p>

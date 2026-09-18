@@ -7,15 +7,16 @@ WORK_DIR = Path.cwd()
 OUTPUT_CSV = WORK_DIR / "url_scores_summary.csv"
 
 
-def gather_url_data() -> list[dict]:
-    """Reads all *.url.json files in WORK_DIR and flattens candidate scores.
-    
-    Strictly assigns ONE winner per screenshot based on candidate order (rank 1).
+def gather_url_data() -> tuple[list[dict], int]:
+    """Reads all *.url.json files in WORK_DIR, assigns 1-based image indices,
+
+    and flattens candidate scores.
     """
     json_files = sorted(WORK_DIR.glob("*.url.json"))
+    total_images = len(json_files)
     records = []
 
-    for jf in json_files:
+    for img_idx, jf in enumerate(json_files, start=1):
         try:
             data = json.loads(jf.read_text(encoding="utf-8"))
             best_url = data.get("best_url", "")
@@ -23,9 +24,10 @@ def gather_url_data() -> list[dict]:
 
             for rank, cand in enumerate(candidates, start=1):
                 records.append({
+                    "image_index": img_idx,
+                    "total_images": total_images,
                     "image_file": jf.name.replace(".url.json", ""),
                     "best_url": best_url,
-                    # First candidate in sorted list is strictly the sole winner
                     "is_winner": (rank == 1),
                     "rank": rank,
                     "rect_name": cand.get("rect_name", ""),
@@ -36,21 +38,20 @@ def gather_url_data() -> list[dict]:
         except Exception as e:
             print(f"Warning: Failed to parse {jf.name}: {e}")
 
-    return records
+    return records, total_images
 
 
 def write_csv(records: list[dict]):
-    """Exports candidate records to CSV with proper field quoting for commas/symbols."""
+    """Exports candidate records to CSV with proper field quoting and image index."""
     if not records:
         print("No records found to write.")
         return
 
     fieldnames = [
-        "image_file", "is_winner", "rank", "rect_name", 
-        "score", "candidate_text", "best_url", "report"
+        "image_index", "total_images", "image_file", "is_winner", 
+        "rank", "rect_name", "score", "candidate_text", "best_url", "report"
     ]
     
-    # csv.QUOTE_MINIMAL automatically quotes fields containing commas, quotes, or newlines
     with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_MINIMAL)
         writer.writeheader()
@@ -165,32 +166,33 @@ def render_score_diff_histogram(records: list[dict], bins: int = 10):
         print(f"[{low:6.1f} to {high:6.1f}] diff : {cnt:3d} | {bar}")
 
 
-def render_low_scoring_winners(records: list[dict], threshold: int = 10):
-    """Spotlights winning candidates with low scores that are vulnerable to being low quality."""
+def render_low_scoring_winners(records: list[dict], threshold: int = 15):
+    """Spotlights winning candidates with low scores along with their inspector index."""
     winners = [r for r in records if r["is_winner"]]
     low_winners = sorted([w for w in winners if w["score"] <= threshold], key=lambda x: x["score"])
 
-    print("\n" + "=" * 65)
+    print("\n" + "=" * 70)
     print(f" SUSPECT / LOW-QUALITY WINNERS (Score <= {threshold})")
-    print("=" * 65)
+    print("=" * 70)
     if not low_winners:
         print(f"None! All winning URLs scored above {threshold}.")
         return
 
     for w in low_winners:
-        print(f"Score: {w['score']:4d} | Img: {w['image_file']} | Text: '{w['candidate_text'][:60]}'")
-
+        idx_str = f"[{w['image_index']}/{w['total_images']}]"
+        print(f"Idx: {idx_str:10s} | Score: {w['score']:4d} | Text: '{w['candidate_text'][:55]}'")
+        
 
 def main():
-    records = gather_url_data()
+    records, total_images = gather_url_data()
     if not records:
         print(f"No *.url.json sidecar files found in {WORK_DIR}")
         return
 
-    # 1. Export CSV with proper escaping
+    # 1. Export CSV
     write_csv(records)
 
-    # 2. Render Histograms
+    # 2. Render Reports
     render_split_candidate_histogram(records)
     render_score_diff_histogram(records)
     render_low_scoring_winners(records, threshold=15)

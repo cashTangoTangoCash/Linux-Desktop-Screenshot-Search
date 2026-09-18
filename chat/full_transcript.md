@@ -22980,3 +22980,375 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_000734_capture.md")
 
 ---
+
+# PROMPT 141
+I like the candidate score histogram although the periods as data symbols/ markers are a bit hard to see at first, until I 'get it.'
+
+The score difference histogram is surprising me - do we really have differences above 121.5?  time to confirm with duckdb.  I didn't try the duckdb from a turn or two ago yet, because I was thinking the csv had comma problems
+
+I opened the csv in libreoffice and I think it looks right, but I didn't really dig into what each column contains in full detail.  comma problems I think must be solved or else I would find some rows having more columns than other rows (not observed)
+
+I like the suspect / low-quality winners output.  Now, to circle back to the inspect code, we should see the number/position listed where we find that screenshot in the inspect script (i.e. it is number 41 of 90, so we can use the controls in the inspect script to move right to the screenshot in question via it's 'number').
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002832_capture.md")
+
+---
+
+# RESPONSE 141
+It sounds like the CSV escaping with `csv.QUOTE_MINIMAL` did its job properly—LibreOffice would have thrown misaligned columns or extra fields instantly if commas in the candidate text were breaking the boundaries.
+
+---
+
+### Verifying High Score Differences in DuckDB
+
+That `> 121.5` gap happens when one candidate triggers a **+100 Domain Match** while the runner-up scores near `0` or negative.
+
+You can run this directly in your terminal to see the top score gaps and verify why they are so high:
+
+```bash
+duckdb -c "
+WITH ranked AS (
+  SELECT 
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff
+  FROM 'url_scores_summary.csv'
+)
+SELECT image_file, diff, score AS winner_score, candidate_text AS winner_text
+FROM ranked
+WHERE rank = 1 AND diff IS NOT NULL
+ORDER BY diff DESC
+LIMIT 5;
+"
+
+```
+
+---
+
+### Adding Index Numbers for Your Inspection Script
+
+To jump directly to a target screenshot in your inspector by its **1-based index (e.g., 41 of 90)**, we can update `summarize_url_scores.py` to:
+
+1. Map each screenshot's filename to its sorted index position out of the total set.
+2. Include the index in the CSV output.
+3. Print the index `[Index XX/90]` in the **Suspect / Low-Quality Winners** report.
+
+#### Updated Script Functions
+
+Replace `gather_url_data`, `write_csv`, and `render_low_scoring_winners` in `summarize_url_scores.py` with these updated versions:
+
+```python
+def gather_url_data() -> tuple[list[dict], int]:
+    """Reads all *.url.json files in WORK_DIR, assigns 1-based image indices,
+
+    and flattens candidate scores.
+    """
+    json_files = sorted(WORK_DIR.glob("*.url.json"))
+    total_images = len(json_files)
+    records = []
+
+    for img_idx, jf in enumerate(json_files, start=1):
+        try:
+            data = json.loads(jf.read_text(encoding="utf-8"))
+            best_url = data.get("best_url", "")
+            candidates = data.get("candidates", [])
+
+            for rank, cand in enumerate(candidates, start=1):
+                records.append({
+                    "image_index": img_idx,
+                    "total_images": total_images,
+                    "image_file": jf.name.replace(".url.json", ""),
+                    "best_url": best_url,
+                    "is_winner": (rank == 1),
+                    "rank": rank,
+                    "rect_name": cand.get("rect_name", ""),
+                    "score": cand.get("score", 0),
+                    "candidate_text": cand.get("text", ""),
+                    "report": " | ".join(cand.get("scoring_report", [])),
+                })
+        except Exception as e:
+            print(f"Warning: Failed to parse {jf.name}: {e}")
+
+    return records, total_images
+
+
+def write_csv(records: list[dict]):
+    """Exports candidate records to CSV with proper field quoting and image index."""
+    if not records:
+        print("No records found to write.")
+        return
+
+    fieldnames = [
+        "image_index", "total_images", "image_file", "is_winner", 
+        "rank", "rect_name", "score", "candidate_text", "best_url", "report"
+    ]
+    
+    with open(OUTPUT_CSV, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_MINIMAL)
+        writer.writeheader()
+        writer.writerows(records)
+
+    print(f"Summary CSV written to: {OUTPUT_CSV} ({len(records)} candidate rows)")
+
+
+def render_low_scoring_winners(records: list[dict], threshold: int = 15):
+    """Spotlights winning candidates with low scores along with their inspector index."""
+    winners = [r for r in records if r["is_winner"]]
+    low_winners = sorted([w for w in winners if w["score"] <= threshold], key=lambda x: x["score"])
+
+    print("\n" + "=" * 70)
+    print(f" SUSPECT / LOW-QUALITY WINNERS (Score <= {threshold})")
+    print("=" * 70)
+    if not low_winners:
+        print(f"None! All winning URLs scored above {threshold}.")
+        return
+
+    for w in low_winners:
+        idx_str = f"[{w['image_index']}/{w['total_images']}]"
+        print(f"Idx: {idx_str:10s} | Score: {w['score']:4d} | Text: '{w['candidate_text'][:55]}'")
+
+
+def main():
+    records, total_images = gather_url_data()
+    if not records:
+        print(f"No *.url.json sidecar files found in {WORK_DIR}")
+        return
+
+    # 1. Export CSV
+    write_csv(records)
+
+    # 2. Render Reports
+    render_split_candidate_histogram(records)
+    render_score_diff_histogram(records)
+    render_low_scoring_winners(records, threshold=15)
+
+```
+
+To make the histogram markers clearer at a glance, you can also change the loser character in `render_split_candidate_histogram` from `.` to `x` or `-`:
+
+```python
+bar = ("#" * w_bar_len) + ("x" * l_bar_len)
+
+```
+
+Now, when a suspect winner pops up in the terminal report (e.g., `Idx: [41/90]`), you can immediately hit `41` in your screenshot viewer and inspect the bounding box output visually.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002841_capture.md")
+
+---
+
+# PROMPT 142
+in the duckdb code that shows high score difference entries first, I would like an additional output column that shows the loser url text, even though it might not fit in the terminal.  the existing duckdb output fits nicely but I want to see that loser url text too.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002843_capture.md")
+
+---
+
+# RESPONSE 142
+Here is the updated DuckDB query. It uses a conditional `MAX()` over the `PARTITION BY` window to grab candidate text where `rank = 2`, giving you the runner-up's text alongside the winning candidate:
+
+```bash
+duckdb -c "
+WITH ranked AS (
+  SELECT 
+    image_index,
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT 
+  image_index,
+  diff, 
+  score AS winner_score, 
+  candidate_text AS winner_text,
+  loser_text
+FROM ranked
+WHERE rank = 1 AND diff IS NOT NULL
+ORDER BY diff DESC
+LIMIT 10;
+"
+
+```
+
+---
+
+### Tips for Viewing Wide Terminal Output
+
+Since the runner-up text can cause lines to wrap and mess up the table alignment in your terminal:
+
+1. **Disable Wrapping Temporarily in `less`:**
+Pipe the output into `less -S` so you can scroll horizontally with the arrow keys:
+```bash
+duckdb -c "..." | less -S
+
+```
+
+
+2. **Use Line Mode (`\x` or `cli` expanded mode):**
+If you run `duckdb` interactively or pass `-noheader -line`, it will print each record vertically as key-value pairs rather than a wide table:
+```bash
+duckdb -line -c "
+WITH ranked AS (
+  SELECT 
+    image_index, image_file, score, candidate_text, rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT image_index, diff, score AS winner_score, candidate_text AS winner_text, loser_text
+FROM ranked WHERE rank = 1 AND diff IS NOT NULL ORDER BY diff DESC LIMIT 5;
+"
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002849_capture.md")
+
+---
+
+# PROMPT 143
+ok, that gave a great result on my 27" 1440p monitor with no tricks required.  let's make a similar duckdb query that shows the low quality winners, where we see both the winning url and the losing url.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002851_capture.md")
+
+---
+
+# RESPONSE 143
+Here is the DuckDB query configured to spotlight **low-scoring winners** (winners with a score of 15 or less).
+
+It displays the image index, the winning score, the score difference gap, the winning URL text, and the losing runner-up text side-by-side:
+
+```bash
+duckdb -c "
+WITH ranked AS (
+  SELECT 
+    image_index,
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT 
+  image_index,
+  score AS winner_score, 
+  diff AS score_diff,
+  candidate_text AS winner_text,
+  loser_text
+FROM ranked
+WHERE rank = 1 AND score <= 15
+ORDER BY score ASC, diff ASC;
+"
+
+```
+
+---
+
+### What to Look for in This Output
+
+* **Negative or Zero Score Differences (`score_diff <= 0`):** Indicates a tie-breaker win where candidate 1 won purely on order, or where a runner-up had an identical score.
+* **Junk vs. Junk Matches:** When both `winner_text` and `loser_text` are noisy OCR fragments, it shows images where neither bounding box captured a real URL or search query string.
+* **Index Navigation:** Use the `image_index` directly in your inspector script to jump straight to low-confidence screenshots and verify what the OCR saw.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002856_capture.md")
+
+---
+
+# PROMPT 144
+here's an output of the script to give you an idea what the data looks like
+
+[dad84@dad84-2013PC 202609]$ summarize_url_scores.py 
+Summary CSV written to: /home/dad84/Documents/2026/screenshots/202609/url_scores_summary.csv (180 candidate rows)
+
+=================================================================
+ CANDIDATE SCORE HISTOGRAM (Legend: # = Winner [Rank 1], . = Loser)
+=================================================================
+[ -52.0 to  -35.3] :  25 (W: 0 L:25) | ...............
+[ -35.3 to  -18.6] :  10 (W: 0 L:10) | ......
+[ -18.6 to   -1.9] :  19 (W: 5 L:14) | ###........
+[  -1.9 to   14.8] :  48 (W:11 L:37) | ######.......................
+[  14.8 to   31.5] :   2 (W: 2 L: 0) | #
+[  31.5 to   48.2] :   0 (W: 0 L: 0) | 
+[  48.2 to   64.9] :   9 (W: 7 L: 2) | ####.
+[  64.9 to   81.6] :  29 (W:29 L: 0) | ##################
+[  81.6 to   98.3] :  33 (W:31 L: 2) | ###################.
+[  98.3 to  115.0] :   5 (W: 5 L: 0) | ###
+
+=================================================================
+ SCORE DIFFERENCE HISTOGRAM (Winner Score - Runner-Up Score)
+ High diff = Clear win | Low diff (near 0) = Fragile win / Tie
+=================================================================
+[   0.0 to   13.5] diff :   8 | ==========
+[  13.5 to   27.0] diff :   2 | ==
+[  27.0 to   40.5] diff :   1 | =
+[  40.5 to   54.0] diff :   3 | ===
+[  54.0 to   67.5] diff :   7 | =========
+[  67.5 to   81.0] diff :  23 | ==============================
+[  81.0 to   94.5] diff :   2 | ==
+[  94.5 to  108.0] diff :  22 | ============================
+[ 108.0 to  121.5] diff :   6 | =======
+[ 121.5 to  135.0] diff :  16 | ====================
+
+======================================================================
+ SUSPECT / LOW-QUALITY WINNERS (Score <= 15)
+======================================================================
+Idx: [7/90]     | Score:   -5 | Text: '© claude.ai/new'
+Idx: [66/90]    | Score:   -5 | Text: 'ere shoulc wwesstali ¢'
+Idx: [25/90]    | Score:   -2 | Text: 'v fenix bc45r'
+Idx: [35/90]    | Score:   -2 | Text: 'geometrygeeks.bike/bike/bianchi-eros-2006/ 110%'
+Idx: [64/90]    | Score:   -2 | Text: 'g v ride1up cf racer1'
+Idx: [39/90]    | Score:    0 | Text: ''
+Idx: [40/90]    | Score:    0 | Text: ''
+Idx: [63/90]    | Score:    0 | Text: ''
+Idx: [90/90]    | Score:    0 | Text: 'b'
+Idx: [15/90]    | Score:   13 | Text: 'v olympus vn-8100pc'
+Idx: [41/90]    | Score:   13 | Text: 'v olympus vn-541pc'
+Idx: [42/90]    | Score:   13 | Text: 'v olympus vn-541pc'
+Idx: [65/90]    | Score:   13 | Text: 'g v 1980s trek 560'
+Idx: [69/90]    | Score:   13 | Text: 'v olympus ws-853'
+Idx: [70/90]    | Score:   13 | Text: 'v olympus ws-853'
+Idx: [71/90]    | Score:   13 | Text: 'v olympus ws-853'
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002900_capture.md")
+
+---
+
+# RESPONSE 144
+This output reveals several distinct patterns in your OCR pipeline's scoring behavior.
+
+### Key Takeaways from Your Data
+
+1. **The Bimodal Distribution Works:**
+The top half of the Candidate Score Histogram (`64.9` to `115.0`) represents clean wins where domain matching (`+100`) kicked in. The large clusters in the `67.5–81.0` and `94.5–135.0` ranges on the Score Difference Histogram confirm that when the pipeline finds a true URL, it wins by a massive margin over OCR noise.
+2. **Negative Score Winners (Indices 7, 66, 25, 35, 64):**
+* **Index 7 (`© claude.ai/new`):** The leading copyright symbol (`©`) triggered symbol penalties, pulling a valid URL down to `-5`.
+* **Index 35 (`geometrygeeks.bike/...`):** The trailing `110%` (zoom indicator) or slashes hit symbol/whitespace penalties despite containing a real domain path.
+* **Index 66 (`ere shoulc wwesstali ¢`):** Pure OCR hallucination winning by default because both candidate crops failed to find real text.
+
+
+3. **Leading Single-Letter Prefixes (Score 13 Cluster):**
+The candidates scoring `13` (Indices 15, 41, 42, 65, 69, 70, 71) almost all start with leading artifact characters like `v ` or `g v ` (e.g., `v olympus vn-8100pc`, `g v 1980s trek 560`).
+* Our prefix cleaner `re.sub(r"^[a-z]\s+", "", ...)` in `score_search_query_legibility` strips a single leading letter, but double prefixes like `g v ` leave an extra token behind, slightly lowering density or preventing an even cleaner match.
+
+
+
+---
+
+### Suggested Scoring Refinements
+
+Based directly on those suspect winners:
+
+* **Strip Multi-Letter Search Engine Prefixes:** Expand the prefix regex to strip multi-token browser bar noise like `g `, `v `, `g v `, or `b ` at the start of strings.
+* **Ignore Copyright Symbol `©` on URLs:** Filter out benign UI overlay symbols like `©` or `http://`/`https://` before running symbol penalty checks.
+* **Clean Trailing Zoom Percentages:** Strip trailing `100%` / `110%` zoom tags that browsers append to location bar OCR crops.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002905_capture.md")
+
+---

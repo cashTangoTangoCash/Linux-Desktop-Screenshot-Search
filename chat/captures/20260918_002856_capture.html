@@ -1,0 +1,40 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 143</h1>
+<p><strong><a href="20260918_002851_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002900_capture.html">Next →</a></strong></p>
+<hr />
+<p>Here is the DuckDB query configured to spotlight <strong>low-scoring winners</strong> (winners with a score of 15 or less).</p>
+<p>It displays the image index, the winning score, the score difference gap, the winning URL text, and the losing runner-up text side-by-side:</p>
+<pre><code class="language-bash">duckdb -c &quot;
+WITH ranked AS (
+  SELECT 
+    image_index,
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff,
+    MAX(CASE WHEN rank = 2 THEN candidate_text END) OVER (PARTITION BY image_file) AS loser_text
+  FROM 'url_scores_summary.csv'
+)
+SELECT 
+  image_index,
+  score AS winner_score, 
+  diff AS score_diff,
+  candidate_text AS winner_text,
+  loser_text
+FROM ranked
+WHERE rank = 1 AND score &lt;= 15
+ORDER BY score ASC, diff ASC;
+&quot;
+
+</code></pre>
+<hr />
+<h3>What to Look for in This Output</h3>
+<ul>
+<li><strong>Negative or Zero Score Differences (<code>score_diff &lt;= 0</code>):</strong> Indicates a tie-breaker win where candidate 1 won purely on order, or where a runner-up had an identical score.</li>
+<li><strong>Junk vs. Junk Matches:</strong> When both <code>winner_text</code> and <code>loser_text</code> are noisy OCR fragments, it shows images where neither bounding box captured a real URL or search query string.</li>
+<li><strong>Index Navigation:</strong> Use the <code>image_index</code> directly in your inspector script to jump straight to low-confidence screenshots and verify what the OCR saw.</li>
+</ul>
+<hr />
+<p><strong><a href="20260918_002851_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002900_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002856_capture.md&quot;)</p>

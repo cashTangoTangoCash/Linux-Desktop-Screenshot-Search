@@ -1,0 +1,130 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 141</h1>
+<p><strong><a href="20260918_002832_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002843_capture.html">Next →</a></strong></p>
+<hr />
+<p>It sounds like the CSV escaping with <code>csv.QUOTE_MINIMAL</code> did its job properly—LibreOffice would have thrown misaligned columns or extra fields instantly if commas in the candidate text were breaking the boundaries.</p>
+<hr />
+<h3>Verifying High Score Differences in DuckDB</h3>
+<p>That <code>&gt; 121.5</code> gap happens when one candidate triggers a <strong>+100 Domain Match</strong> while the runner-up scores near <code>0</code> or negative.</p>
+<p>You can run this directly in your terminal to see the top score gaps and verify why they are so high:</p>
+<pre><code class="language-bash">duckdb -c &quot;
+WITH ranked AS (
+  SELECT 
+    image_file,
+    score,
+    candidate_text,
+    rank,
+    score - LEAD(score) OVER (PARTITION BY image_file ORDER BY rank) AS diff
+  FROM 'url_scores_summary.csv'
+)
+SELECT image_file, diff, score AS winner_score, candidate_text AS winner_text
+FROM ranked
+WHERE rank = 1 AND diff IS NOT NULL
+ORDER BY diff DESC
+LIMIT 5;
+&quot;
+
+</code></pre>
+<hr />
+<h3>Adding Index Numbers for Your Inspection Script</h3>
+<p>To jump directly to a target screenshot in your inspector by its <strong>1-based index (e.g., 41 of 90)</strong>, we can update <code>summarize_url_scores.py</code> to:</p>
+<ol>
+<li>Map each screenshot's filename to its sorted index position out of the total set.</li>
+<li>Include the index in the CSV output.</li>
+<li>Print the index <code>[Index XX/90]</code> in the <strong>Suspect / Low-Quality Winners</strong> report.</li>
+</ol>
+<h4>Updated Script Functions</h4>
+<p>Replace <code>gather_url_data</code>, <code>write_csv</code>, and <code>render_low_scoring_winners</code> in <code>summarize_url_scores.py</code> with these updated versions:</p>
+<pre><code class="language-python">def gather_url_data() -&gt; tuple[list[dict], int]:
+    &quot;&quot;&quot;Reads all *.url.json files in WORK_DIR, assigns 1-based image indices,
+
+    and flattens candidate scores.
+    &quot;&quot;&quot;
+    json_files = sorted(WORK_DIR.glob(&quot;*.url.json&quot;))
+    total_images = len(json_files)
+    records = []
+
+    for img_idx, jf in enumerate(json_files, start=1):
+        try:
+            data = json.loads(jf.read_text(encoding=&quot;utf-8&quot;))
+            best_url = data.get(&quot;best_url&quot;, &quot;&quot;)
+            candidates = data.get(&quot;candidates&quot;, [])
+
+            for rank, cand in enumerate(candidates, start=1):
+                records.append({
+                    &quot;image_index&quot;: img_idx,
+                    &quot;total_images&quot;: total_images,
+                    &quot;image_file&quot;: jf.name.replace(&quot;.url.json&quot;, &quot;&quot;),
+                    &quot;best_url&quot;: best_url,
+                    &quot;is_winner&quot;: (rank == 1),
+                    &quot;rank&quot;: rank,
+                    &quot;rect_name&quot;: cand.get(&quot;rect_name&quot;, &quot;&quot;),
+                    &quot;score&quot;: cand.get(&quot;score&quot;, 0),
+                    &quot;candidate_text&quot;: cand.get(&quot;text&quot;, &quot;&quot;),
+                    &quot;report&quot;: &quot; | &quot;.join(cand.get(&quot;scoring_report&quot;, [])),
+                })
+        except Exception as e:
+            print(f&quot;Warning: Failed to parse {jf.name}: {e}&quot;)
+
+    return records, total_images
+
+
+def write_csv(records: list[dict]):
+    &quot;&quot;&quot;Exports candidate records to CSV with proper field quoting and image index.&quot;&quot;&quot;
+    if not records:
+        print(&quot;No records found to write.&quot;)
+        return
+
+    fieldnames = [
+        &quot;image_index&quot;, &quot;total_images&quot;, &quot;image_file&quot;, &quot;is_winner&quot;, 
+        &quot;rank&quot;, &quot;rect_name&quot;, &quot;score&quot;, &quot;candidate_text&quot;, &quot;best_url&quot;, &quot;report&quot;
+    ]
+    
+    with open(OUTPUT_CSV, mode=&quot;w&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_MINIMAL)
+        writer.writeheader()
+        writer.writerows(records)
+
+    print(f&quot;Summary CSV written to: {OUTPUT_CSV} ({len(records)} candidate rows)&quot;)
+
+
+def render_low_scoring_winners(records: list[dict], threshold: int = 15):
+    &quot;&quot;&quot;Spotlights winning candidates with low scores along with their inspector index.&quot;&quot;&quot;
+    winners = [r for r in records if r[&quot;is_winner&quot;]]
+    low_winners = sorted([w for w in winners if w[&quot;score&quot;] &lt;= threshold], key=lambda x: x[&quot;score&quot;])
+
+    print(&quot;\n&quot; + &quot;=&quot; * 70)
+    print(f&quot; SUSPECT / LOW-QUALITY WINNERS (Score &lt;= {threshold})&quot;)
+    print(&quot;=&quot; * 70)
+    if not low_winners:
+        print(f&quot;None! All winning URLs scored above {threshold}.&quot;)
+        return
+
+    for w in low_winners:
+        idx_str = f&quot;[{w['image_index']}/{w['total_images']}]&quot;
+        print(f&quot;Idx: {idx_str:10s} | Score: {w['score']:4d} | Text: '{w['candidate_text'][:55]}'&quot;)
+
+
+def main():
+    records, total_images = gather_url_data()
+    if not records:
+        print(f&quot;No *.url.json sidecar files found in {WORK_DIR}&quot;)
+        return
+
+    # 1. Export CSV
+    write_csv(records)
+
+    # 2. Render Reports
+    render_split_candidate_histogram(records)
+    render_score_diff_histogram(records)
+    render_low_scoring_winners(records, threshold=15)
+
+</code></pre>
+<p>To make the histogram markers clearer at a glance, you can also change the loser character in <code>render_split_candidate_histogram</code> from <code>.</code> to <code>x</code> or <code>-</code>:</p>
+<pre><code class="language-python">bar = (&quot;#&quot; * w_bar_len) + (&quot;x&quot; * l_bar_len)
+
+</code></pre>
+<p>Now, when a suspect winner pops up in the terminal report (e.g., <code>Idx: [41/90]</code>), you can immediately hit <code>41</code> in your screenshot viewer and inspect the bounding box output visually.</p>
+<hr />
+<p><strong><a href="20260918_002832_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_002843_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_002841_capture.md&quot;)</p>
