@@ -227,7 +227,8 @@ def review_searchResults(search_term: str, search_folder: Path):
 
             # 2. Spawn new feh process
             feh_proc = subprocess.Popen(
-                ["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                #["feh", "--title", "feh_flashcard_review", "-F", "--auto-zoom", str(img_path.resolve())],
+                ["feh", "--title", "feh_flashcard_review", str(img_path.resolve())],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
