@@ -1,0 +1,30 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 148</h1>
+<p><strong><a href="20260918_164307_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_164312_capture.html">Next →</a></strong></p>
+<hr />
+<p>Yes, absolutely. Pointing <code>DOCS_DIR</code> directly to <code>Path.home() / &quot;Documents&quot; / &quot;2026&quot;</code> is a great way to run a fast test batch on a smaller dataset.</p>
+<p>To make that change work seamlessly with the directory scanner, you just need to adjust <strong>one line</strong> in the <code>crawl_and_index()</code> function where it looks for the screenshot folders.</p>
+<h3>The Single Line Adjustment</h3>
+<p>Change this line in <code>crawl_and_index()</code>:</p>
+<pre><code class="language-python"># OLD (Looks for all ~/Documents/*/screenshots folders):
+screenshot_dirs = list(DOCS_DIR.glob(&quot;*/screenshots&quot;))
+
+</code></pre>
+<p>To this:</p>
+<pre><code class="language-python"># NEW (Points directly to ~/Documents/2026/screenshots or subfolders):
+screenshot_dirs = [DOCS_DIR / &quot;screenshots&quot;] if (DOCS_DIR / &quot;screenshots&quot;).exists() else [DOCS_DIR]
+
+</code></pre>
+<hr />
+<h3>Why This Works Well</h3>
+<ul>
+<li><strong>Targets 2026 Immediately:</strong> It limits <code>rglob</code> to crawl only <code>/home/dad84/Documents/2026/screenshots</code> (and all subfolders like <code>202601/artworks</code>).</li>
+<li><strong>Maintains Full Schema Support:</strong> It writes to the exact same <code>screenshots.db</code> schema. When you are ready to index <code>2025</code> or <code>2024</code> later, you can either:</li>
+</ul>
+<ol>
+<li>Point <code>DOCS_DIR</code> to a different year, or</li>
+<li>Revert <code>DOCS_DIR</code> back to <code>Path.home() / &quot;Documents&quot;</code> and restore <code>DOCS_DIR.glob(&quot;*/screenshots&quot;)</code>. Because the script uses <code>abs_path</code> as a <code>UNIQUE</code> key, it will simply append the older years into the existing database without duplicating 2026!</li>
+</ol>
+<hr />
+<p><strong><a href="20260918_164307_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_164312_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164311_capture.md&quot;)</p>

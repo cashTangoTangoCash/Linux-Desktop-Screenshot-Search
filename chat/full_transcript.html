@@ -20595,3 +20595,600 @@ GROUP BY year_folder;
 </code></pre>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_162425_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 147</h1>
+<p>oh wait, I had done a bunch of ocr-ing before arriving at the more recent url.json scheme, e.g.:</p>
+<p>  /home/dad84/Documents/2026/screenshots/202601/artworks:
+  drwxr-xr-x  2 4.0K Aug 25 16:08 .
+  drwxr-xr-x 31  64K Sep 18 14:00 ..
+  -rw-r--r--  1 352K Jan 24  2026 Etty_–<em>Musidora-<em>The_Bather</em>'At_the_Doubtful_Breeze_Alarmed'.jpg
+  -rw-r--r--  1    0 Aug 25 16:08 Etty</em>–<em>Musidora-<em>The_Bather</em>'At_the_Doubtful_Breeze_Alarmed'.jpg.full.txt
+  -rw-r--r--  1    0 Aug 25 16:08 Etty</em>–_Musidora-<em>The_Bather</em>'At_the_Doubtful_Breeze_Alarmed'.jpg.url.txt</p>
+<p>so, let's have a fallback to get the url from url.txt if the json is absent.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164257_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 147</h1>
+<p>Here is the updated <code>index_screenshots.py</code> script. It includes a fallback ladder for URL extraction: it first checks for <code>.url.json</code>, and if that isn't present, it seamlessly falls back to reading the raw text inside <code>.url.txt</code> (or <code>.jpg.url.txt</code>). It also handles <code>.full.txt</code> files for full OCR text in addition to <code>.ocr.txt</code>.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import json
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path.home() / &quot;Documents&quot; / &quot;screenshots.db&quot;
+DOCS_DIR = Path.home() / &quot;Documents&quot;
+
+
+def init_db(conn: sqlite3.Connection):
+    &quot;&quot;&quot;Creates the main metadata table and FTS5 full-text index.&quot;&quot;&quot;
+    with conn:
+        conn.execute(&quot;&quot;&quot;
+            CREATE TABLE IF NOT EXISTS screenshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                abs_path TEXT UNIQUE NOT NULL,
+                filename TEXT NOT NULL,
+                folder_path TEXT NOT NULL,
+                year_folder TEXT,
+                month_folder TEXT,
+                mtime REAL NOT NULL,
+                best_url TEXT,
+                url_score INTEGER,
+                has_ocr INTEGER DEFAULT 0
+            );
+        &quot;&quot;&quot;)
+
+        conn.execute(&quot;&quot;&quot;
+            CREATE VIRTUAL TABLE IF NOT EXISTS ocr_fts USING fts5(
+                screenshot_id UNINDEXED,
+                abs_path,
+                ocr_text
+            );
+        &quot;&quot;&quot;)
+
+
+def extract_url(img_path: Path) -&gt; tuple[str | None, int | None]:
+    &quot;&quot;&quot;Retrieves URL data with fallback: .url.json -&gt; .url.txt / .jpg.url.txt.&quot;&quot;&quot;
+    # 1. Try .url.json sidecar (preferred)
+    json_path = img_path.with_name(f&quot;{img_path.name}.url.json&quot;)
+    if json_path.is_file():
+        try:
+            url_data = json.loads(json_path.read_text(encoding=&quot;utf-8&quot;))
+            best_url = url_data.get(&quot;best_url&quot;)
+            url_score = None
+            for cand in url_data.get(&quot;candidates&quot;, []):
+                if cand.get(&quot;text&quot;) == best_url:
+                    url_score = cand.get(&quot;score&quot;)
+                    break
+            if best_url:
+                return best_url.strip(), url_score
+        except Exception:
+            pass
+
+    # 2. Fallback to .url.txt sidecars (&lt;file&gt;.url.txt or &lt;file&gt;.jpg.url.txt)
+    txt_candidates = [
+        img_path.with_suffix(img_path.suffix + &quot;.url.txt&quot;),
+        img_path.with_name(f&quot;{img_path.stem}.url.txt&quot;),
+    ]
+
+    for txt_path in txt_candidates:
+        if txt_path.is_file():
+            try:
+                content = txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if content:
+                    # Legacy plain .url.txt files don't have a computed score
+                    return content.splitlines()[0].strip(), None
+            except Exception:
+                pass
+
+    return None, None
+
+
+def extract_ocr_text(img_path: Path) -&gt; str:
+    &quot;&quot;&quot;Retrieves OCR text from .ocr.txt, .full.txt, or .jpg.full.txt sidecars.&quot;&quot;&quot;
+    ocr_candidates = [
+        img_path.with_suffix(img_path.suffix + &quot;.full.txt&quot;),
+        img_path.with_name(f&quot;{img_path.stem}.full.txt&quot;),
+        img_path.with_suffix(img_path.suffix + &quot;.ocr.txt&quot;),
+        img_path.with_name(f&quot;{img_path.stem}.ocr.txt&quot;),
+    ]
+
+    for ocr_path in ocr_candidates:
+        if ocr_path.is_file():
+            try:
+                text = ocr_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if text:
+                    return text
+            except Exception:
+                pass
+
+    return &quot;&quot;
+
+
+def sync_screenshot(conn: sqlite3.Connection, img_path: Path):
+    &quot;&quot;&quot;Upserts screenshot metadata and indexing data into SQLite.&quot;&quot;&quot;
+    mtime = img_path.stat().st_mtime
+    abs_path = str(img_path.resolve())
+
+    cur = conn.cursor()
+    cur.execute(&quot;SELECT id, mtime FROM screenshots WHERE abs_path = ?&quot;, (abs_path,))
+    row = cur.fetchone()
+
+    # Skip if file is already up to date
+    if row and row[1] == mtime:
+        return
+
+    screenshot_id = row[0] if row else None
+
+    # Derive year / month subfolder names
+    year_folder = &quot;&quot;
+    month_folder = &quot;&quot;
+    for p in img_path.parts:
+        if p.isdigit() and len(p) == 4:
+            year_folder = p
+        elif len(p) == 6 and p.isdigit():
+            month_folder = p
+
+    best_url, url_score = extract_url(img_path)
+    ocr_text = extract_ocr_text(img_path)
+    has_ocr = 1 if ocr_text else 0
+
+    with conn:
+        if screenshot_id:
+            conn.execute(&quot;&quot;&quot;
+                UPDATE screenshots
+                SET filename=?, folder_path=?, year_folder=?, month_folder=?, 
+                    mtime=?, best_url=?, url_score=?, has_ocr=?
+                WHERE id=?
+            &quot;&quot;&quot;, (img_path.name, str(img_path.parent), year_folder, month_folder,
+                  mtime, best_url, url_score, has_ocr, screenshot_id))
+        else:
+            cur = conn.execute(&quot;&quot;&quot;
+                INSERT INTO screenshots (abs_path, filename, folder_path, year_folder, 
+                                        month_folder, mtime, best_url, url_score, has_ocr)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            &quot;&quot;&quot;, (abs_path, img_path.name, str(img_path.parent), year_folder,
+                  month_folder, mtime, best_url, url_score, has_ocr))
+            screenshot_id = cur.lastrowid
+
+        conn.execute(&quot;DELETE FROM ocr_fts WHERE screenshot_id = ?&quot;, (screenshot_id,))
+        conn.execute(&quot;&quot;&quot;
+            INSERT INTO ocr_fts (screenshot_id, abs_path, ocr_text)
+            VALUES (?, ?, ?)
+        &quot;&quot;&quot;, (screenshot_id, abs_path, ocr_text))
+
+
+def crawl_and_index():
+    print(f&quot;Connecting to database: {DB_PATH}&quot;)
+    conn = sqlite3.connect(DB_PATH)
+    init_db(conn)
+
+    screenshot_dirs = list(DOCS_DIR.glob(&quot;*/screenshots&quot;))
+    if not screenshot_dirs:
+        print(&quot;No screenshot directories found in ~/Documents/*/screenshots&quot;)
+        return
+
+    scanned_count = 0
+    print(f&quot;Found {len(screenshot_dirs)} root screenshot directories. Crawling...&quot;)
+
+    for root_dir in screenshot_dirs:
+        for ext in (&quot;*.jpg&quot;, &quot;*.jpeg&quot;, &quot;*.png&quot;):
+            for img_path in root_dir.rglob(ext):
+                sync_screenshot(conn, img_path)
+                scanned_count += 1
+                if scanned_count % 1000 == 0:
+                    print(f&quot;Processed {scanned_count} images...&quot;)
+
+    conn.close()
+    print(f&quot;Finished indexing! Total images processed: {scanned_count}&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    crawl_and_index()
+
+</code></pre>
+<hr />
+<h3>Fallback Order Summary</h3>
+<ol>
+<li><strong>URLs:</strong> Reads <code>.url.json</code> first (picks <code>best_url</code> and <code>score</code>). If missing/empty, reads the first non-empty line of <code>.url.txt</code> or <code>.jpg.url.txt</code> (sets <code>url_score</code> to <code>NULL</code>).</li>
+<li><strong>OCR Text:</strong> Checks for <code>.full.txt</code>, <code>.jpg.full.txt</code>, <code>.ocr.txt</code>, or <code>.jpg.ocr.txt</code>. If the text file is empty (like the 0-byte files in your listing), <code>has_ocr</code> is safely marked as <code>0</code> without breaking the database sync.</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164303_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 148</h1>
+<p>if I wish to start smaller, I think I can do (?):</p>
+<p>DB_PATH = Path.home() / &quot;Documents&quot; / &quot;screenshots.db&quot;
+DOCS_DIR = Path.home() / &quot;Documents&quot; / &quot;2026&quot;</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164307_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 148</h1>
+<p>Yes, absolutely. Pointing <code>DOCS_DIR</code> directly to <code>Path.home() / &quot;Documents&quot; / &quot;2026&quot;</code> is a great way to run a fast test batch on a smaller dataset.</p>
+<p>To make that change work seamlessly with the directory scanner, you just need to adjust <strong>one line</strong> in the <code>crawl_and_index()</code> function where it looks for the screenshot folders.</p>
+<h3>The Single Line Adjustment</h3>
+<p>Change this line in <code>crawl_and_index()</code>:</p>
+<pre><code class="language-python"># OLD (Looks for all ~/Documents/*/screenshots folders):
+screenshot_dirs = list(DOCS_DIR.glob(&quot;*/screenshots&quot;))
+
+</code></pre>
+<p>To this:</p>
+<pre><code class="language-python"># NEW (Points directly to ~/Documents/2026/screenshots or subfolders):
+screenshot_dirs = [DOCS_DIR / &quot;screenshots&quot;] if (DOCS_DIR / &quot;screenshots&quot;).exists() else [DOCS_DIR]
+
+</code></pre>
+<hr />
+<h3>Why This Works Well</h3>
+<ul>
+<li><strong>Targets 2026 Immediately:</strong> It limits <code>rglob</code> to crawl only <code>/home/dad84/Documents/2026/screenshots</code> (and all subfolders like <code>202601/artworks</code>).</li>
+<li><strong>Maintains Full Schema Support:</strong> It writes to the exact same <code>screenshots.db</code> schema. When you are ready to index <code>2025</code> or <code>2024</code> later, you can either:</li>
+</ul>
+<ol>
+<li>Point <code>DOCS_DIR</code> to a different year, or</li>
+<li>Revert <code>DOCS_DIR</code> back to <code>Path.home() / &quot;Documents&quot;</code> and restore <code>DOCS_DIR.glob(&quot;*/screenshots&quot;)</code>. Because the script uses <code>abs_path</code> as a <code>UNIQUE</code> key, it will simply append the older years into the existing database without duplicating 2026!</li>
+</ol>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164311_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 149</h1>
+<p>I am hesitant with adding command line flags because the usual unix tools like cat have tons of them and they get so confusing to me - I drag feet to avoid them</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164312_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 149</h1>
+<p>That is completely reasonable. The UNIX philosophy of &quot;do one thing well&quot; often gets lost when tools add dozens of obscure flags over time (<code>cat -A</code>, <code>cat -v</code>, <code>cat -e</code>...). You do not need to deal with <code>argparse</code> or extra flags if you prefer to keep your scripts simple and predictable.</p>
+<p>If you want a lightweight way to target specific directories without modifying python code every time or memorizing flag names, you can rely on standard Bash path expansion and positional arguments (<code>sys.argv</code>).</p>
+<hr />
+<h3>Minimal Option: Positional Argument (No Flags)</h3>
+<p>Instead of <code>--year 2026</code> or <code>--dir ~/Documents/2026</code>, you just pass the path directly as the first parameter after the script name:</p>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2026/screenshots
+
+</code></pre>
+<p>Or for everything at once:</p>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/*/screenshots
+
+</code></pre>
+<hr />
+<h3>How to Update the Script</h3>
+<p>Replace <code>crawl_and_index()</code> with this compact version that checks <code>sys.argv[1]</code>:</p>
+<pre><code class="language-python">import sys
+
+def crawl_and_index():
+    print(f&quot;Connecting to database: {DB_PATH}&quot;)
+    conn = sqlite3.connect(DB_PATH)
+    init_db(conn)
+
+    # If you pass a path on the command line, use it. Otherwise, default to 2026.
+    if len(sys.argv) &gt; 1:
+        target_paths = [Path(p) for p in sys.argv[1:]]
+    else:
+        target_paths = [Path.home() / &quot;Documents&quot; / &quot;2026&quot; / &quot;screenshots&quot;]
+
+    scanned_count = 0
+    for target in target_paths:
+        if not target.exists():
+            print(f&quot;Directory not found: {target}&quot;)
+            continue
+
+        print(f&quot;Crawling: {target}&quot;)
+        for ext in (&quot;*.jpg&quot;, &quot;*.jpeg&quot;, &quot;*.png&quot;):
+            for img_path in target.rglob(ext):
+                sync_screenshot(conn, img_path)
+                scanned_count += 1
+                if scanned_count % 1000 == 0:
+                    print(f&quot;Processed {scanned_count} images...&quot;)
+
+    conn.close()
+    print(f&quot;Finished indexing! Total images processed: {scanned_count}&quot;)
+
+</code></pre>
+<hr />
+<h3>Usage Patterns</h3>
+<ul>
+<li><strong>Default (no parameters):</strong> Runs just <code>2026</code>.</li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py
+
+</code></pre>
+<ul>
+<li><strong>Specific folder or month:</strong></li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2026/screenshots/202601
+
+</code></pre>
+<ul>
+<li><strong>Multiple years at once using standard shell globbing:</strong></li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2025/screenshots ~/Documents/2026/screenshots
+
+</code></pre>
+<p>No flags to memorize, no flags to document—just passing folder paths directly to the script.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164318_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 150</h1>
+<p>ok, this went quickly:</p>
+<p>[dad84@dad84-2013PC ~]$ index_screenshots.py 
+Connecting to database: /home/dad84/Documents/screenshots.db
+Crawling: /home/dad84/Documents/2026/screenshots
+Processed 1000 images...
+Processed 2000 images...
+Processed 3000 images...
+Processed 4000 images...
+Processed 5000 images...
+Processed 6000 images...
+Finished indexing! Total images processed: 6459</p>
+<p>let me try the example searches.  oops: looks like duckdb syntax is a bit different (although the output is so pretty with colors) so let's switch to sqlite3:</p>
+<p>[dad84@dad84-2013PC ~]$ duckdb Documents/screenshots.db 
+DuckDB v1.5.5 (Variegata)
+Enter &quot;.help&quot; for usage hints.
+screenshots D SELECT s.abs_path, s.best_url
+              FROM screenshots s
+              JOIN ocr_fts f ON s.id = f.screenshot_id
+              WHERE f.ocr_text MATCH 'nua'
+                AND s.abs_path LIKE '%geometry%';
+Parser Error:
+syntax error at or near &quot;MATCH&quot;</p>
+<p>LINE 4: WHERE f.ocr_text MATCH 'nua'
+                         ^
+screenshots D exit
+              
+screenshots D q
+              
+screenshots D 
+screenshots D 
+Interrupted, use Ctrl+D to exit
+screenshots D 
+Interrupted, use Ctrl+D to exit
+screenshots D </p>
+<p>[dad84@dad84-2013PC ~]$ sqlite3 Documents/screenshots.db 
+SQLite version 3.53.4 2026-07-24 19:02:57
+Enter &quot;.help&quot; for usage hints.
+sqlite&gt; SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'nua'
+  AND s.abs_path LIKE '%geometry%';
+sqlite&gt; SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'bike'
+  AND s.abs_path LIKE '%geometry%';
+╭───────────────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────╮
+│                                           abs_path                                            │                         best_url                         │
+╞═══════════════════════════════════════════════════════════════════════════════════════════════╪══════════════════════════════════════════════════════════╡
+│/home/dad84/Documents/2026/screenshots/202609/craigslist-nua-bike-geometry/2026-09-07-11:31-   │geometrygeeks.bike/bike/bianchi-eros-2006/ 110%           │
+│00_2528x1368.jpg                                                                               │                                                          │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:43-45_2528x1368.jpg  │© <a href="http://www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500%%C2%A0">www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500% </a>  │
+│                                                                                               │2csalsa-journeyer-2022-51 w                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:46-38_2528x1368.jpg  │© <a href="http://www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500%%C2%A0">www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500% </a>  │
+│                                                                                               │2ctrek-checkpoint+sl5-2023-52 w                           │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:45-40_2528x1368.jpg  │© <a href="http://www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500%%C2%A0">www.bikeapp.io/compare?bikes=bianchi-sprint-2022-500% </a>  │
+│                                                                                               │2csalsa-journeyer-2022-51 w                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:34-09_2528x1368.jpg  │g v comparing two different bikes by geometry ®           │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-06-11:02-05_2528x1368.jpg  │NULL                                                      │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-06-11:01-18_2528x1368.jpg  │NULL                                                      │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:35-34_2528x1368.jpg  │© <a href="http://www.bikegeocalc.com/#7unnameda0ob4c743.9802d270e600.%C2%A0">www.bikegeocalc.com/#7unnameda0ob4c743.9802d270e600. </a>   │
+│                                                                                               │64877f769.85608g971.72104h412.76493i340j340k13351813.     │
+│                                                                                               │03517m11                                                  │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:32-32_2528x1368.jpg  │g v comparing two different bikes by geometry ®           │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-06-11:02-59_2528x1368.jpg  │NULL                                                      │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:40-30_2528x1368.jpg  │© <a href="http://www.bikegeocalc.com/#7unnameda0ob4c743.9802d270e600.%C2%A0">www.bikegeocalc.com/#7unnameda0ob4c743.9802d270e600. </a>   │
+│                                                                                               │64877f769.85608g971.72104h412.76493i340j340k13351813.     │
+│                                                                                               │03517m11                                                  │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:42-22_2528x1368.jpg  │© <a href="http://www.bikeapp.io/tools/compare-geometries">www.bikeapp.io/tools/compare-geometries</a> 8               │
+├───────────────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-07-11:32-23_2528x1368.jpg  │g v comparing two different bikes by geometry ®           │
+╰───────────────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────╯
+sqlite&gt; SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE s.best_url IS NOT NULL 
+  AND s.best_url LIKE '%craigslist%'
+  AND f.ocr_text MATCH 'specialized';
+╭────────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────╮
+│                            abs_path                            │                                        best_url                                         │
+╞════════════════════════════════════════════════════════════════╪═════════════════════════════════════════════════════════════════════════════════════════╡
+│/home/dad84/Documents/2026/screenshots/202601/2026-01-29-11:09- │) 8 catskills.craigslist.org/bik/d/livingston-manor-2025-specialized/7911499125.html     │
+│12_2560x1440.jpg                                                │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202601/2026-01-29-11:09- │) 8 catskills.craigslist.org/bik/d/livingston-manor-2025-specialized/7911499125.html     │
+│28_2560x1440.jpg                                                │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202601/2026-01-29-11:08- │) 8 catskills.craigslist.org/bik/d/livingston-manor-2025-specialized/7911499125.html     │
+│59_2560x1440.jpg                                                │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202601/2026-01-29-11:09- │) 8 catskills.craigslist.org/bik/d/livingston-manor-2025-specialized/7911499125.html     │
+│03_2560x1440.jpg                                                │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202601/2026-01-29-11:08- │) 8 catskills.craigslist.org/bik/d/livingston-manor-2025-specialized/7911499125.html     │
+│43_2560x1440.jpg                                                │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-55_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8%C2%A0">www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8 </a>   │
+│-12-11:22-36_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-37_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-23_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-29_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-48_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-51_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-43_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8%C2%A0">www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8 </a>   │
+│-12-11:22-30_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-58_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8%C2%A0">www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8 </a>   │
+│-12-11:22-34_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-16_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8%C2%A0">www.craigslist.org/view/d/middletown-2026-specialized-levo-s/mx7wtmqf48dbmsifa7qpm8 </a>   │
+│-12-11:22-08_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202608/craigslist/2026-08│© <a href="http://www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra%C2%A0">www.craigslist.org/view/d/middletown-specialized-turbo-levo/4vrpw7gy203kts7hdau4ra </a>    │
+│-12-11:24-40_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:22-09_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:22-43_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:22-54_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:22-26_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:23-06_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:22-36_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202606/craigslist/2026-06│© rochester.craigslist.org/bik/d/bath-1989-specialized-rock-hopper/7941845580.htm|       │
+│-22-11:21-58_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202602/craigslist/2026-02│- o b newjersey.craigslist.org/bik/d/branchville-surly-ice-cream-truck/7916691258.html   │
+│-22-11:25-12_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202607/craigslist/2026-07│© <a href="http://www.craigslist.org/view/d/binghamton-specialized-stumpjumper/3paum37qyq6jhychg1q5fs%C2%A0">www.craigslist.org/view/d/binghamton-specialized-stumpjumper/3paum37qyq6jhychg1q5fs </a>   │
+│-11-11:19-52_2560x1380.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202607/craigslist/2026-07│© <a href="http://www.craigslist.org/view/d/binghamton-specialized-stumpjumper/3paum37qyq6jhychg1q5fs%C2%A0">www.craigslist.org/view/d/binghamton-specialized-stumpjumper/3paum37qyq6jhychg1q5fs </a>   │
+│-11-11:20-13_2560x1380.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202604/craigslist/2026-04│- @ rochester.craigslist.org/bik/d/farmington-2022-specialized-turbo-levo/7925823378.html│
+│-16-09:59-43_2560x1440.jpg                                      │                                                                                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────┤
+│/home/dad84/Documents/2026/screenshots/202604/craigslist/2026-04│- @ rochester.craigslist.org/bik/d/farmington-2022-specialized-turbo-levo/7925823378.html│
+│-06-11:26-28_2560x1440.jpg                                      │                                                                                         │
+╰────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────╯
+sqlite&gt; SELECT year_folder, 
+       COUNT(*) as total_images, 
+       SUM(has_ocr) as indexed_with_ocr,
+       COUNT(best_url) as has_url
+FROM screenshots
+GROUP BY year_folder;
+╭─────────────┬──────────────┬──────────────────┬─────────╮
+│ year_folder │ total_images │ indexed_with_ocr │ has_url │
+╞═════════════╪══════════════╪══════════════════╪═════════╡
+│ '2026'      │         6459 │             6152 │    5965 │
+╰─────────────┴──────────────┴──────────────────┴─────────╯</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_165238_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 150</h1>
+<p>6,459 screenshots indexed in seconds, with over 6,100 OCR'd and nearly 6,000 URLs matched—that is a solid index.</p>
+<p>DuckDB threw that syntax error because it doesn't natively support SQLite's <code>MATCH</code> operator or <code>fts5</code> virtual tables out of the box. DuckDB uses its own macro extensions (<code>fts_main_...</code>) for full-text indexing, whereas standard <code>sqlite3</code> natively manages the FTS5 tables built during indexing.</p>
+<hr />
+<h3>Clean Up URLs During Indexing</h3>
+<p>Looking closely at those query results, some older text sidecars picked up extra OCR junk characters at the very start of the string (e.g., <code>) 8 catskills.craigslist...</code>, <code>© www.bikeapp.io...</code>, <code>- @ rochester.craigslist...</code>).</p>
+<p>To clean those up automatically when indexing, update the <code>extract_url</code> function in <code>index_screenshots.py</code> with a simple regex sanitizer:</p>
+<pre><code class="language-python">import re
+
+def clean_url_string(raw_url: str) -&gt; str:
+    &quot;&quot;&quot;Strips OCR noise/symbols preceding standard web protocols or domains.&quot;&quot;&quot;
+    if not raw_url:
+        return &quot;&quot;
+    
+    # Strip leading non-alphanumeric junk (like ©, ), -, @, etc.)
+    cleaned = re.sub(r'^[^\w\s]+', '', raw_url).strip()
+    
+    # If it starts with http://, https://, or www., drop anything before it
+    match = re.search(r'(https?://|www\.)\S+', cleaned)
+    if match:
+        return match.group(0)
+        
+    return cleaned
+
+def extract_url(img_path: Path) -&gt; tuple[str | None, int | None]:
+    &quot;&quot;&quot;Retrieves URL data with fallback: .url.json -&gt; .url.txt / .jpg.url.txt.&quot;&quot;&quot;
+    json_path = img_path.with_name(f&quot;{img_path.name}.url.json&quot;)
+    if json_path.is_file():
+        try:
+            url_data = json.loads(json_path.read_text(encoding=&quot;utf-8&quot;))
+            best_url = url_data.get(&quot;best_url&quot;)
+            url_score = None
+            for cand in url_data.get(&quot;candidates&quot;, []):
+                if cand.get(&quot;text&quot;) == best_url:
+                    url_score = cand.get(&quot;score&quot;)
+                    break
+            if best_url:
+                return clean_url_string(best_url), url_score
+        except Exception:
+            pass
+
+    txt_candidates = [
+        img_path.with_suffix(img_path.suffix + &quot;.url.txt&quot;),
+        img_path.with_name(f&quot;{img_path.stem}.url.txt&quot;),
+    ]
+
+    for txt_path in txt_candidates:
+        if txt_path.is_file():
+            try:
+                content = txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if content:
+                    first_line = content.splitlines()[0].strip()
+                    return clean_url_string(first_line), None
+            except Exception:
+                pass
+
+    return None, None
+
+</code></pre>
+<p>Since the script checks modification times before updating, existing entries won't re-index automatically unless you force an update or touch the database. To refresh the existing 2026 data with clean URLs, delete <code>screenshots.db</code> and run <code>index_screenshots.py</code> again.</p>
+<hr />
+<h3>A Few Useful SQLite Queries for Exploration</h3>
+<p>Now that your SQLite FTS5 database is active, try these in <code>sqlite3</code>:</p>
+<ul>
+<li><strong>Boolean &amp; Prefix Searching in FTS5:</strong>
+<em>(Finds screenshots containing &quot;stumpjumper&quot; OR &quot;rockhopper&quot;, matching prefixes)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'stump* OR rock*';
+
+</code></pre>
+<ul>
+<li><strong>Phrase Matching:</strong>
+<em>(Finds exact string matches inside the OCR text)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH '&quot;bottom bracket&quot;';
+
+</code></pre>
+<ul>
+<li><strong>Find Unindexed / Missing OCR Screenshots:</strong>
+<em>(Quickly see which screenshots yielded empty <code>.ocr.txt</code> sidecars)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT abs_path 
+FROM screenshots 
+WHERE has_ocr = 0;
+
+</code></pre>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_165244_capture.md&quot;)</p>
+<hr />

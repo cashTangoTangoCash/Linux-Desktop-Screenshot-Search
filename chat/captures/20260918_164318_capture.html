@@ -1,0 +1,74 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 149</h1>
+<p><strong><a href="20260918_164312_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_165238_capture.html">Next →</a></strong></p>
+<hr />
+<p>That is completely reasonable. The UNIX philosophy of &quot;do one thing well&quot; often gets lost when tools add dozens of obscure flags over time (<code>cat -A</code>, <code>cat -v</code>, <code>cat -e</code>...). You do not need to deal with <code>argparse</code> or extra flags if you prefer to keep your scripts simple and predictable.</p>
+<p>If you want a lightweight way to target specific directories without modifying python code every time or memorizing flag names, you can rely on standard Bash path expansion and positional arguments (<code>sys.argv</code>).</p>
+<hr />
+<h3>Minimal Option: Positional Argument (No Flags)</h3>
+<p>Instead of <code>--year 2026</code> or <code>--dir ~/Documents/2026</code>, you just pass the path directly as the first parameter after the script name:</p>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2026/screenshots
+
+</code></pre>
+<p>Or for everything at once:</p>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/*/screenshots
+
+</code></pre>
+<hr />
+<h3>How to Update the Script</h3>
+<p>Replace <code>crawl_and_index()</code> with this compact version that checks <code>sys.argv[1]</code>:</p>
+<pre><code class="language-python">import sys
+
+def crawl_and_index():
+    print(f&quot;Connecting to database: {DB_PATH}&quot;)
+    conn = sqlite3.connect(DB_PATH)
+    init_db(conn)
+
+    # If you pass a path on the command line, use it. Otherwise, default to 2026.
+    if len(sys.argv) &gt; 1:
+        target_paths = [Path(p) for p in sys.argv[1:]]
+    else:
+        target_paths = [Path.home() / &quot;Documents&quot; / &quot;2026&quot; / &quot;screenshots&quot;]
+
+    scanned_count = 0
+    for target in target_paths:
+        if not target.exists():
+            print(f&quot;Directory not found: {target}&quot;)
+            continue
+
+        print(f&quot;Crawling: {target}&quot;)
+        for ext in (&quot;*.jpg&quot;, &quot;*.jpeg&quot;, &quot;*.png&quot;):
+            for img_path in target.rglob(ext):
+                sync_screenshot(conn, img_path)
+                scanned_count += 1
+                if scanned_count % 1000 == 0:
+                    print(f&quot;Processed {scanned_count} images...&quot;)
+
+    conn.close()
+    print(f&quot;Finished indexing! Total images processed: {scanned_count}&quot;)
+
+</code></pre>
+<hr />
+<h3>Usage Patterns</h3>
+<ul>
+<li><strong>Default (no parameters):</strong> Runs just <code>2026</code>.</li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py
+
+</code></pre>
+<ul>
+<li><strong>Specific folder or month:</strong></li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2026/screenshots/202601
+
+</code></pre>
+<ul>
+<li><strong>Multiple years at once using standard shell globbing:</strong></li>
+</ul>
+<pre><code class="language-bash">python3 index_screenshots.py ~/Documents/2025/screenshots ~/Documents/2026/screenshots
+
+</code></pre>
+<p>No flags to memorize, no flags to document—just passing folder paths directly to the script.</p>
+<hr />
+<p><strong><a href="20260918_164312_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260918_165238_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_164318_capture.md&quot;)</p>

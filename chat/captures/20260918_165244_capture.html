@@ -1,0 +1,98 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 150</h1>
+<p><strong><a href="20260918_165238_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>6,459 screenshots indexed in seconds, with over 6,100 OCR'd and nearly 6,000 URLs matched—that is a solid index.</p>
+<p>DuckDB threw that syntax error because it doesn't natively support SQLite's <code>MATCH</code> operator or <code>fts5</code> virtual tables out of the box. DuckDB uses its own macro extensions (<code>fts_main_...</code>) for full-text indexing, whereas standard <code>sqlite3</code> natively manages the FTS5 tables built during indexing.</p>
+<hr />
+<h3>Clean Up URLs During Indexing</h3>
+<p>Looking closely at those query results, some older text sidecars picked up extra OCR junk characters at the very start of the string (e.g., <code>) 8 catskills.craigslist...</code>, <code>© www.bikeapp.io...</code>, <code>- @ rochester.craigslist...</code>).</p>
+<p>To clean those up automatically when indexing, update the <code>extract_url</code> function in <code>index_screenshots.py</code> with a simple regex sanitizer:</p>
+<pre><code class="language-python">import re
+
+def clean_url_string(raw_url: str) -&gt; str:
+    &quot;&quot;&quot;Strips OCR noise/symbols preceding standard web protocols or domains.&quot;&quot;&quot;
+    if not raw_url:
+        return &quot;&quot;
+    
+    # Strip leading non-alphanumeric junk (like ©, ), -, @, etc.)
+    cleaned = re.sub(r'^[^\w\s]+', '', raw_url).strip()
+    
+    # If it starts with http://, https://, or www., drop anything before it
+    match = re.search(r'(https?://|www\.)\S+', cleaned)
+    if match:
+        return match.group(0)
+        
+    return cleaned
+
+def extract_url(img_path: Path) -&gt; tuple[str | None, int | None]:
+    &quot;&quot;&quot;Retrieves URL data with fallback: .url.json -&gt; .url.txt / .jpg.url.txt.&quot;&quot;&quot;
+    json_path = img_path.with_name(f&quot;{img_path.name}.url.json&quot;)
+    if json_path.is_file():
+        try:
+            url_data = json.loads(json_path.read_text(encoding=&quot;utf-8&quot;))
+            best_url = url_data.get(&quot;best_url&quot;)
+            url_score = None
+            for cand in url_data.get(&quot;candidates&quot;, []):
+                if cand.get(&quot;text&quot;) == best_url:
+                    url_score = cand.get(&quot;score&quot;)
+                    break
+            if best_url:
+                return clean_url_string(best_url), url_score
+        except Exception:
+            pass
+
+    txt_candidates = [
+        img_path.with_suffix(img_path.suffix + &quot;.url.txt&quot;),
+        img_path.with_name(f&quot;{img_path.stem}.url.txt&quot;),
+    ]
+
+    for txt_path in txt_candidates:
+        if txt_path.is_file():
+            try:
+                content = txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if content:
+                    first_line = content.splitlines()[0].strip()
+                    return clean_url_string(first_line), None
+            except Exception:
+                pass
+
+    return None, None
+
+</code></pre>
+<p>Since the script checks modification times before updating, existing entries won't re-index automatically unless you force an update or touch the database. To refresh the existing 2026 data with clean URLs, delete <code>screenshots.db</code> and run <code>index_screenshots.py</code> again.</p>
+<hr />
+<h3>A Few Useful SQLite Queries for Exploration</h3>
+<p>Now that your SQLite FTS5 database is active, try these in <code>sqlite3</code>:</p>
+<ul>
+<li><strong>Boolean &amp; Prefix Searching in FTS5:</strong>
+<em>(Finds screenshots containing &quot;stumpjumper&quot; OR &quot;rockhopper&quot;, matching prefixes)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'stump* OR rock*';
+
+</code></pre>
+<ul>
+<li><strong>Phrase Matching:</strong>
+<em>(Finds exact string matches inside the OCR text)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH '&quot;bottom bracket&quot;';
+
+</code></pre>
+<ul>
+<li><strong>Find Unindexed / Missing OCR Screenshots:</strong>
+<em>(Quickly see which screenshots yielded empty <code>.ocr.txt</code> sidecars)</em></li>
+</ul>
+<pre><code class="language-sql">SELECT abs_path 
+FROM screenshots 
+WHERE has_ocr = 0;
+
+</code></pre>
+<hr />
+<p><strong><a href="20260918_165238_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_165244_capture.md&quot;)</p>
