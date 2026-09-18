@@ -1,0 +1,217 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 140</h1>
+<p><strong><a href="20260918_000722_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<hr />
+<p>Here is the updated <code>summarize_url_scores.py</code> script. It resolves the CSV comma-escaping issue, strictly enforces a single winner per screenshot using rank order (<code>rank == 1</code>), split-renders Winners (<code>#</code>) vs. Losers (<code>.</code>) in the candidate score histogram, and adds the new <strong>Winner vs. Loser Score Difference Histogram</strong>.</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import csv
+import json
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+OUTPUT_CSV = WORK_DIR / &quot;url_scores_summary.csv&quot;
+
+
+def gather_url_data() -&gt; list[dict]:
+    &quot;&quot;&quot;Reads all *.url.json files in WORK_DIR and flattens candidate scores.
+    
+    Strictly assigns ONE winner per screenshot based on candidate order (rank 1).
+    &quot;&quot;&quot;
+    json_files = sorted(WORK_DIR.glob(&quot;*.url.json&quot;))
+    records = []
+
+    for jf in json_files:
+        try:
+            data = json.loads(jf.read_text(encoding=&quot;utf-8&quot;))
+            best_url = data.get(&quot;best_url&quot;, &quot;&quot;)
+            candidates = data.get(&quot;candidates&quot;, [])
+
+            for rank, cand in enumerate(candidates, start=1):
+                records.append({
+                    &quot;image_file&quot;: jf.name.replace(&quot;.url.json&quot;, &quot;&quot;),
+                    &quot;best_url&quot;: best_url,
+                    # First candidate in sorted list is strictly the sole winner
+                    &quot;is_winner&quot;: (rank == 1),
+                    &quot;rank&quot;: rank,
+                    &quot;rect_name&quot;: cand.get(&quot;rect_name&quot;, &quot;&quot;),
+                    &quot;score&quot;: cand.get(&quot;score&quot;, 0),
+                    &quot;candidate_text&quot;: cand.get(&quot;text&quot;, &quot;&quot;),
+                    &quot;report&quot;: &quot; | &quot;.join(cand.get(&quot;scoring_report&quot;, [])),
+                })
+        except Exception as e:
+            print(f&quot;Warning: Failed to parse {jf.name}: {e}&quot;)
+
+    return records
+
+
+def write_csv(records: list[dict]):
+    &quot;&quot;&quot;Exports candidate records to CSV with proper field quoting for commas/symbols.&quot;&quot;&quot;
+    if not records:
+        print(&quot;No records found to write.&quot;)
+        return
+
+    fieldnames = [
+        &quot;image_file&quot;, &quot;is_winner&quot;, &quot;rank&quot;, &quot;rect_name&quot;, 
+        &quot;score&quot;, &quot;candidate_text&quot;, &quot;best_url&quot;, &quot;report&quot;
+    ]
+    
+    # csv.QUOTE_MINIMAL automatically quotes fields containing commas, quotes, or newlines
+    with open(OUTPUT_CSV, mode=&quot;w&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_MINIMAL)
+        writer.writeheader()
+        writer.writerows(records)
+
+    print(f&quot;Summary CSV written to: {OUTPUT_CSV} ({len(records)} candidate rows)&quot;)
+
+
+def render_split_candidate_histogram(records: list[dict], bins: int = 10):
+    &quot;&quot;&quot;Histogram of all candidate scores showing Winners (#) vs Losers (.).&quot;&quot;&quot;
+    if not records:
+        return
+
+    scores = [r[&quot;score&quot;] for r in records]
+    min_s, max_s = min(scores), max(scores)
+    
+    if min_s == max_s:
+        print(f&quot;All scores are identical: {min_s}&quot;)
+        return
+
+    step = (max_s - min_s) / bins
+    
+    # Track counts separately
+    win_counts = [0] * bins
+    lose_counts = [0] * bins
+
+    for r in records:
+        s = r[&quot;score&quot;]
+        idx = int((s - min_s) / step)
+        if idx &gt;= bins:
+            idx = bins - 1
+            
+        if r[&quot;is_winner&quot;]:
+            win_counts[idx] += 1
+        else:
+            lose_counts[idx] += 1
+
+    print(&quot;\n&quot; + &quot;=&quot; * 65)
+    print(&quot; CANDIDATE SCORE HISTOGRAM (Legend: # = Winner [Rank 1], . = Loser)&quot;)
+    print(&quot;=&quot; * 65)
+
+    total_counts = [win_counts[i] + lose_counts[i] for i in range(bins)]
+    max_count = max(total_counts) if max(total_counts) &gt; 0 else 1
+    max_bar_len = 30
+
+    for i in range(bins):
+        low = min_s + (i * step)
+        high = low + step
+        
+        w_cnt = win_counts[i]
+        l_cnt = lose_counts[i]
+        tot = total_counts[i]
+
+        w_bar_len = int((w_cnt / max_count) * max_bar_len)
+        l_bar_len = int((l_cnt / max_count) * max_bar_len)
+
+        bar = (&quot;#&quot; * w_bar_len) + (&quot;.&quot; * l_bar_len)
+        print(f&quot;[{low:6.1f} to {high:6.1f}] : {tot:3d} (W:{w_cnt:2d} L:{l_cnt:2d}) | {bar}&quot;)
+
+
+def render_score_diff_histogram(records: list[dict], bins: int = 10):
+    &quot;&quot;&quot;Histogram of (Winner Score - Runner-Up Score) per screenshot.&quot;&quot;&quot;
+    # Group by screenshot
+    images = {}
+    for r in records:
+        img = r[&quot;image_file&quot;]
+        images.setdefault(img, []).append(r)
+
+    diffs = []
+    for img, cands in images.items():
+        # Sort candidates by rank
+        sorted_cands = sorted(cands, key=lambda x: x[&quot;rank&quot;])
+        if len(sorted_cands) &gt;= 2:
+            winner_score = sorted_cands[0][&quot;score&quot;]
+            runner_up_score = sorted_cands[1][&quot;score&quot;]
+            diffs.append(winner_score - runner_up_score)
+        elif len(sorted_cands) == 1:
+            diffs.append(sorted_cands[0][&quot;score&quot;])
+
+    if not diffs:
+        return
+
+    min_d, max_d = min(diffs), max(diffs)
+    
+    print(&quot;\n&quot; + &quot;=&quot; * 65)
+    print(&quot; SCORE DIFFERENCE HISTOGRAM (Winner Score - Runner-Up Score)&quot;)
+    print(&quot; High diff = Clear win | Low diff (near 0) = Fragile win / Tie&quot;)
+    print(&quot;=&quot; * 65)
+
+    if min_d == max_d:
+        print(f&quot;All score differences are identical: {min_d}&quot;)
+        return
+
+    step = (max_d - min_d) / bins
+    counts = [0] * bins
+
+    for d in diffs:
+        idx = int((d - min_d) / step)
+        if idx &gt;= bins:
+            idx = bins - 1
+        counts[idx] += 1
+
+    max_count = max(counts) if max(counts) &gt; 0 else 1
+    max_bar_len = 30
+
+    for i in range(bins):
+        low = min_d + (i * step)
+        high = low + step
+        cnt = counts[i]
+        bar_len = int((cnt / max_count) * max_bar_len)
+        bar = &quot;=&quot; * bar_len
+        print(f&quot;[{low:6.1f} to {high:6.1f}] diff : {cnt:3d} | {bar}&quot;)
+
+
+def render_low_scoring_winners(records: list[dict], threshold: int = 10):
+    &quot;&quot;&quot;Spotlights winning candidates with low scores that are vulnerable to being low quality.&quot;&quot;&quot;
+    winners = [r for r in records if r[&quot;is_winner&quot;]]
+    low_winners = sorted([w for w in winners if w[&quot;score&quot;] &lt;= threshold], key=lambda x: x[&quot;score&quot;])
+
+    print(&quot;\n&quot; + &quot;=&quot; * 65)
+    print(f&quot; SUSPECT / LOW-QUALITY WINNERS (Score &lt;= {threshold})&quot;)
+    print(&quot;=&quot; * 65)
+    if not low_winners:
+        print(f&quot;None! All winning URLs scored above {threshold}.&quot;)
+        return
+
+    for w in low_winners:
+        print(f&quot;Score: {w['score']:4d} | Img: {w['image_file']} | Text: '{w['candidate_text'][:60]}'&quot;)
+
+
+def main():
+    records = gather_url_data()
+    if not records:
+        print(f&quot;No *.url.json sidecar files found in {WORK_DIR}&quot;)
+        return
+
+    # 1. Export CSV with proper escaping
+    write_csv(records)
+
+    # 2. Render Histograms
+    render_split_candidate_histogram(records)
+    render_score_diff_histogram(records)
+    render_low_scoring_winners(records, threshold=15)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<hr />
+<h3>What to Look for in the New Output</h3>
+<ol>
+<li><strong>Split Score Histogram:</strong> Look for <code>.</code> (Losers) sitting to the right of <code>#</code> (Winners) or <code>#</code> sitting below <code>0</code>. <code>#</code> bars clustered below <code>0</code> mean OCR junk won over better candidates.</li>
+<li><strong>Score Difference Histogram:</strong> Columns clustered near <code>[0.0 to X.X] diff</code> show fragile wins where <code>mate_dynamic</code> and <code>i3</code> scored nearly identical points—often where OCR noise edged out a real URL by a single point deduction.</li>
+<li><strong>CSV Cleanliness:</strong> Opening <code>url_scores_summary.csv</code> in Python, <code>duckdb</code>, or LibreOffice Calc will now properly parse URLs containing commas, queries, or quotes without shifting columns.</li>
+</ol>
+<hr />
+<p><strong><a href="20260918_000722_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260918_000734_capture.md&quot;)</p>
