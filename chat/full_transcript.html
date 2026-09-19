@@ -23385,3 +23385,76 @@ if __name__ == &quot;__main__&quot;:
 <p>It prints out the full manual right in your terminal buffer without needing to remember any parameter combinations.</p>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_164934_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 162</h1>
+<p>I found one issue.  as we paste the full text of a screenshot into an org file, it can happen that there are lines that begin with asterisks followed by a space.  now we have unwanted org headlines that basically wreck the readability of the org output file.  a solution I think is to use some org mode markdown that includes EXAMPLE, before and after the full text of a screenshot.  I don't recall the exact org mode syntax or what the correct name for it is but I bet you can come up with it.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170235_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 162</h1>
+<p>That is a classic Org mode trap! When OCR text happens to contain bullet points, lists, or headers that start with <code>* </code>, Org mode interprets them as document headings and destroys the tree structure.</p>
+<p>In Org mode, the standard way to protect literal blocks of unformatted raw text is an <strong>Example Block</strong>:</p>
+<pre><code class="language-org">#+BEGIN_EXAMPLE
+* This star will NOT become an Org header
+** Neither will this
+#+END_EXAMPLE
+
+</code></pre>
+<p>Or, if you want a lighter alternative, an <strong>Example Line</strong> prefix (<code>: </code>) on every line also works, but the <code>#+BEGIN_EXAMPLE</code> / <code>#+END_EXAMPLE</code> block is cleanest and easiest to wrap programmatically.</p>
+<p>Here is the updated <code>write_log</code> function for your script that wraps all OCR text inside <code>#+BEGIN_EXAMPLE ... #+END_EXAMPLE</code> blocks:</p>
+<pre><code class="language-python">def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    &quot;&quot;&quot;Writes or overwrites README.org inside the effort directory with embedded OCR text.&quot;&quot;&quot;
+    log_path = effort_dir / &quot;README.org&quot;
+    now_str = datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    lines = [
+        f&quot;#+TITLE: Screenshot Search: {query_label}&quot;,
+        f&quot;#+DATE: [{now_str}]&quot;,
+        &quot;#+CATEGORY: effort&quot;,
+        &quot;&quot;,
+        &quot;* Search Metadata&quot;,
+        f&quot;- **Query / File:** ~{query_label}~&quot;,
+        f&quot;- **Executed At:** {now_str}&quot;,
+        f&quot;- **Matches Found:** {len(matches_data)}&quot;,
+        f&quot;- **Database Used:** ~{DB_PATH}~&quot;,
+        &quot;&quot;,
+        &quot;* SQL Executed&quot;,
+        &quot;#+BEGIN_SRC sql&quot;,
+        sql.strip(),
+        &quot;#+END_SRC&quot;,
+        &quot;&quot;,
+        &quot;* Matched Items&quot;,
+    ]
+
+    for item in matches_data:
+        idx = item[&quot;idx&quot;]
+        path_str = item[&quot;orig_path&quot;]
+        url = item[&quot;url&quot;]
+        ocr_text = item[&quot;ocr_text&quot;]
+        img_symlink = item[&quot;img_symlink&quot;]
+
+        lines.append(f&quot;** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]&quot;)
+        lines.append(f&quot;- **Original Path:** ~{path_str}~&quot;)
+        if url:
+            lines.append(f&quot;- **Source URL:** {url}&quot;)
+        
+        lines.append(&quot;&quot;)
+        lines.append(f&quot;*** OCR Text for Match {idx:03d}&quot;)
+        if ocr_text:
+            lines.append(&quot;#+BEGIN_EXAMPLE&quot;)
+            lines.append(ocr_text)
+            lines.append(&quot;#+END_EXAMPLE&quot;)
+        else:
+            lines.append(&quot;/[No OCR text recorded for this screenshot]/&quot;)
+            
+        lines.append(&quot;&quot;)
+
+    log_path.write_text(&quot;\n&quot;.join(lines), encoding=&quot;utf-8&quot;)
+
+</code></pre>
+<h3>Why this fixes it:</h3>
+<ul>
+<li>Anything inside <code>#+BEGIN_EXAMPLE ... #+END_EXAMPLE</code> is treated as literal verbatim text by Org mode.</li>
+<li>Leading <code>*</code>, <code>**</code>, or <code>-</code> characters inside the block will no longer trigger Org heading folding or bullet list parsing.</li>
+<li>Org mode displays the block in a fixed-width monospace font, which also makes scanned terminal/code OCR output much easier to read!</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170240_capture.md&quot;)</p>
+<hr />

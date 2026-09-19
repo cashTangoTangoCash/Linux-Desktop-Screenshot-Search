@@ -203,7 +203,9 @@ def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[d
         lines.append("")
         lines.append(f"*** OCR Text for Match {idx:03d}")
         if ocr_text:
+            lines.append("#+BEGIN_EXAMPLE")
             lines.append(ocr_text)
+            lines.append("#+END_EXAMPLE")
         else:
             lines.append("/[No OCR text recorded for this screenshot]/")
             

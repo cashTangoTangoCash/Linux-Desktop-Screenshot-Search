@@ -26817,3 +26817,89 @@ It prints out the full manual right in your terminal buffer without needing to r
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_164934_capture.md")
 
 ---
+
+# PROMPT 162
+I found one issue.  as we paste the full text of a screenshot into an org file, it can happen that there are lines that begin with asterisks followed by a space.  now we have unwanted org headlines that basically wreck the readability of the org output file.  a solution I think is to use some org mode markdown that includes EXAMPLE, before and after the full text of a screenshot.  I don't recall the exact org mode syntax or what the correct name for it is but I bet you can come up with it.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170235_capture.md")
+
+---
+
+# RESPONSE 162
+That is a classic Org mode trap! When OCR text happens to contain bullet points, lists, or headers that start with `* `, Org mode interprets them as document headings and destroys the tree structure.
+
+In Org mode, the standard way to protect literal blocks of unformatted raw text is an **Example Block**:
+
+```org
+#+BEGIN_EXAMPLE
+* This star will NOT become an Org header
+** Neither will this
+#+END_EXAMPLE
+
+```
+
+Or, if you want a lighter alternative, an **Example Line** prefix (`: `) on every line also works, but the `#+BEGIN_EXAMPLE` / `#+END_EXAMPLE` block is cleanest and easiest to wrap programmatically.
+
+Here is the updated `write_log` function for your script that wraps all OCR text inside `#+BEGIN_EXAMPLE ... #+END_EXAMPLE` blocks:
+
+```python
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    """Writes or overwrites README.org inside the effort directory with embedded OCR text."""
+    log_path = effort_dir / "README.org"
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    lines = [
+        f"#+TITLE: Screenshot Search: {query_label}",
+        f"#+DATE: [{now_str}]",
+        "#+CATEGORY: effort",
+        "",
+        "* Search Metadata",
+        f"- **Query / File:** ~{query_label}~",
+        f"- **Executed At:** {now_str}",
+        f"- **Matches Found:** {len(matches_data)}",
+        f"- **Database Used:** ~{DB_PATH}~",
+        "",
+        "* SQL Executed",
+        "#+BEGIN_SRC sql",
+        sql.strip(),
+        "#+END_SRC",
+        "",
+        "* Matched Items",
+    ]
+
+    for item in matches_data:
+        idx = item["idx"]
+        path_str = item["orig_path"]
+        url = item["url"]
+        ocr_text = item["ocr_text"]
+        img_symlink = item["img_symlink"]
+
+        lines.append(f"** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]")
+        lines.append(f"- **Original Path:** ~{path_str}~")
+        if url:
+            lines.append(f"- **Source URL:** {url}")
+        
+        lines.append("")
+        lines.append(f"*** OCR Text for Match {idx:03d}")
+        if ocr_text:
+            lines.append("#+BEGIN_EXAMPLE")
+            lines.append(ocr_text)
+            lines.append("#+END_EXAMPLE")
+        else:
+            lines.append("/[No OCR text recorded for this screenshot]/")
+            
+        lines.append("")
+
+    log_path.write_text("\n".join(lines), encoding="utf-8")
+
+```
+
+### Why this fixes it:
+
+* Anything inside `#+BEGIN_EXAMPLE ... #+END_EXAMPLE` is treated as literal verbatim text by Org mode.
+* Leading `*`, `**`, or `-` characters inside the block will no longer trigger Org heading folding or bullet list parsing.
+* Org mode displays the block in a fixed-width monospace font, which also makes scanned terminal/code OCR output much easier to read!
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170240_capture.md")
+
+---
