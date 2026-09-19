@@ -23458,3 +23458,78 @@ if __name__ == &quot;__main__&quot;:
 </ul>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170240_capture.md&quot;)</p>
 <hr />
+<h1>PROMPT 163</h1>
+<p>despite this fix being I think the correct one, for some reason my emacs setup is still rendering lines in full ocr text starting with * followed by space as headlines.  is this a bug in my org installation?  should we just convert any leading asterisks into *, (add a comma at the end of the asterisks) which is what I think I have seen other emacs utilities do?</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170551_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 163</h1>
+<p>That is actually an intentional safety mechanism in Org mode!</p>
+<p>In Org mode, any line starting with a literal <code>*</code> in column zero—even inside a <code>#+BEGIN_EXAMPLE</code> block—can still break Org parser structures, <code>org-element</code> queries, outline folding, or agenda indexing depending on your installed Org version and hooks.</p>
+<p>To prevent raw text from corrupting document structure, Org mode uses <strong>comma-escaping</strong>: any line beginning with a star <code>*</code> or hash <code>#</code> inside a block gets escaped by prepending a comma (<code>,*</code> or <code>,#</code>). When Org renders or exports the block, it automatically strips that leading comma, leaving the visual output intact while keeping the Org parser 100% happy.</p>
+<p>Replacing <code>* </code> with <code>*, </code> works, but it permanently modifies your OCR text. Prepending a comma (<code>,*</code>) follows native Org mode conventions.</p>
+<p>Here is the updated <code>write_log</code> function that automatically applies comma-escaping to any lines starting with <code>*</code> or <code>#</code> in the OCR text:</p>
+<pre><code class="language-python">def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    &quot;&quot;&quot;Writes or overwrites README.org inside the effort directory with embedded OCR text.&quot;&quot;&quot;
+    log_path = effort_dir / &quot;README.org&quot;
+    now_str = datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    lines = [
+        f&quot;#+TITLE: Screenshot Search: {query_label}&quot;,
+        f&quot;#+DATE: [{now_str}]&quot;,
+        &quot;#+CATEGORY: effort&quot;,
+        &quot;&quot;,
+        &quot;* Search Metadata&quot;,
+        f&quot;- **Query / File:** ~{query_label}~&quot;,
+        f&quot;- **Executed At:** {now_str}&quot;,
+        f&quot;- **Matches Found:** {len(matches_data)}&quot;,
+        f&quot;- **Database Used:** ~{DB_PATH}~&quot;,
+        &quot;&quot;,
+        &quot;* SQL Executed&quot;,
+        &quot;#+BEGIN_SRC sql&quot;,
+        sql.strip(),
+        &quot;#+END_SRC&quot;,
+        &quot;&quot;,
+        &quot;* Matched Items&quot;,
+    ]
+
+    for item in matches_data:
+        idx = item[&quot;idx&quot;]
+        path_str = item[&quot;orig_path&quot;]
+        url = item[&quot;url&quot;]
+        ocr_text = item[&quot;ocr_text&quot;]
+        img_symlink = item[&quot;img_symlink&quot;]
+
+        lines.append(f&quot;** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]&quot;)
+        lines.append(f&quot;- **Original Path:** ~{path_str}~&quot;)
+        if url:
+            lines.append(f&quot;- **Source URL:** {url}&quot;)
+        
+        lines.append(&quot;&quot;)
+        lines.append(f&quot;*** OCR Text for Match {idx:03d}&quot;)
+        if ocr_text:
+            lines.append(&quot;#+BEGIN_EXAMPLE&quot;)
+            # Comma-escape lines starting with '*' or '#' to protect Org parser
+            escaped_ocr = []
+            for line in ocr_text.splitlines():
+                if line.startswith(&quot;*&quot;) or line.startswith(&quot;#&quot;):
+                    escaped_ocr.append(f&quot;,{line}&quot;)
+                else:
+                    escaped_ocr.append(line)
+            lines.extend(escaped_ocr)
+            lines.append(&quot;#+END_EXAMPLE&quot;)
+        else:
+            lines.append(&quot;/[No OCR text recorded for this screenshot]/&quot;)
+            
+        lines.append(&quot;&quot;)
+
+    log_path.write_text(&quot;\n&quot;.join(lines), encoding=&quot;utf-8&quot;)
+
+</code></pre>
+<h3>How this solves it:</h3>
+<ul>
+<li>A line like <code>* Our Next Big Projects</code> becomes <code>, * Our Next Big Projects</code>.</li>
+<li>Org mode's font-lock and outline views will no longer recognize it as a level 1 headline.</li>
+<li>If you edit or copy out of the example block in Org, Org understands the <code>,</code> prefix as verbatim escaping.</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170556_capture.md&quot;)</p>
+<hr />

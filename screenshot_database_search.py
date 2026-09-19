@@ -204,7 +204,14 @@ def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[d
         lines.append(f"*** OCR Text for Match {idx:03d}")
         if ocr_text:
             lines.append("#+BEGIN_EXAMPLE")
-            lines.append(ocr_text)
+            # Comma-escape lines starting with '*' or '#' to protect Org parser
+            escaped_ocr = []
+            for line in ocr_text.splitlines():
+                if line.startswith("*") or line.startswith("#"):
+                    escaped_ocr.append(f",{line}")
+                else:
+                    escaped_ocr.append(line)
+            lines.extend(escaped_ocr)
             lines.append("#+END_EXAMPLE")
         else:
             lines.append("/[No OCR text recorded for this screenshot]/")
