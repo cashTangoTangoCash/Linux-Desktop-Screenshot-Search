@@ -1,0 +1,69 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 156</h1>
+<p><strong><a href="20260919_140043_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_141549_capture.html">Next →</a></strong></p>
+<hr />
+<p>I ran a first test of the latest script and we are missing the recent feature request of full ocr text to be included in the output org file</p>
+<p>[dad84@dad84-2013PC 20260806-gemini-sort-screenshots]$ python screenshot_database_search_02.py -e /home/dad84/Documents/2026/20260919-test-search-hledger-or-gnucash-in-screenshot/. -f /home/dad84/Documents/2026/20260919-test-search-hledger-or-gnucash-in-screenshot/test_search.sql
+Found 6 matching screenshot(s).</p>
+<p>#+TITLE: Screenshot Search: test_search.sql
+#+DATE: [2026-09-19 14:06:29]
+#+CATEGORY: effort</p>
+<ul>
+<li>Search Metadata</li>
+</ul>
+<ul>
+<li><strong>Query / File:</strong> <del>test_search.sql</del></li>
+<li><strong>Executed At:</strong> 2026-09-19 14:06:29</li>
+<li><strong>Matches Found:</strong> 6</li>
+<li><strong>Database Used:</strong> <del>/home/dad84/Documents/screenshots.db</del></li>
+</ul>
+<ul>
+<li>
+<p>SQL Executed
+#+BEGIN_SRC sql
+SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'hledger OR gnucash'
+  AND s.abs_path LIKE '%2026%'
+ORDER BY s.id DESC;
+#+END_SRC</p>
+</li>
+<li>
+<p>Matched Items
+** Match 001: [[file:001_2026-03-05-16:19-08_2560x1440.jpg][001_2026-03-05-16:19-08_2560x1440.jpg]]</p>
+</li>
+</ul>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:19-08_2560x1440.jpg</del></li>
+<li><strong>Source URL:</strong> . o 8 agemini.gooale.com/app</li>
+</ul>
+<p>** Match 002: [[file:002_2026-03-05-16:20-01_2560x1440.jpg][002_2026-03-05-16:20-01_2560x1440.jpg]]</p>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:20-01_2560x1440.jpg</del></li>
+<li><strong>Source URL:</strong> - o 8 agemini.qooale.com/app/2724a6917be67d41</li>
+</ul>
+<p>** Match 003: [[file:003_2026-01-09-00:32-56_909x174.jpg][003_2026-01-09-00:32-56_909x174.jpg]]</p>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:32-56_909x174.jpg</del></li>
+<li><strong>Source URL:</strong> l write/imbport vour transactions? - general</li>
+</ul>
+<p>** Match 004: [[file:004_2026-01-09-00:31-45_2560x1380.jpg][004_2026-01-09-00:31-45_2560x1380.jpg]]</p>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:31-45_2560x1380.jpg</del></li>
+<li><strong>Source URL:</strong> o 6 jmtd.net/log/hledger 1yr/</li>
+</ul>
+<p>** Match 005: [[file:005_2026-01-08-20:38-38_2560x1349.jpg][005_2026-01-08-20:38-38_2560x1349.jpg]]</p>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:38-38_2560x1349.jpg</del></li>
+<li><strong>Source URL:</strong> 210r4-7013pc ~1% td hledaer-tutorial</li>
+</ul>
+<p>** Match 006: [[file:006_2026-01-08-20:36-40_2560x1349.jpg][006_2026-01-08-20:36-40_2560x1349.jpg]]</p>
+<ul>
+<li><strong>Original Path:</strong> <del>/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:36-40_2560x1349.jpg</del></li>
+<li><strong>Source URL:</strong> 210r4-7013pc ~1% td hledaer-tutorial</li>
+</ul>
+<p>yes, these are older screenshots where I didn't yet put effort into url capture - that's ok for now.</p>
+<hr />
+<p><strong><a href="20260919_140043_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_141549_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_141541_capture.md&quot;)</p>

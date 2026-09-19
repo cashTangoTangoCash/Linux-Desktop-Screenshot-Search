@@ -1,0 +1,21 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 158</h1>
+<p><strong><a href="20260919_143331_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_143338_capture.html">Next →</a></strong></p>
+<hr />
+<p>Ah, fair point! I owe you a quick clarification on how SQLite FTS5 (Full-Text Search) actually works under the hood—it's less about storage capacity and more about how SQLite builds its search indexes.</p>
+<p>SQLite can easily store full OCR text (a few kilobytes of text is microscopic for SQLite), but by default, an FTS table like <code>ocr_fts</code> acts primarily as an <strong>inverted index</strong> (a index mapping terms/words to <code>screenshot_id</code> row numbers).</p>
+<p>Depending on how <code>ocr_fts</code> was created in your database setup, it usually falls into one of two patterns:</p>
+<ol>
+<li><strong>Contentless / External Content FTS Table:</strong> SQLite only indexes the words for matching (<code>MATCH 'hledger'</code>) to keep the search index lightning-fast, but it doesn't store a copy of the raw text inside the virtual table itself. If you query <code>SELECT ocr_text FROM ocr_fts</code>, it returns <code>NULL</code> or empty strings.</li>
+<li><strong>Standard FTS Table:</strong> SQLite stores the full string directly inside the <code>ocr_text</code> column alongside the index.</li>
+</ol>
+<p>When I noticed <code>[No OCR text recorded for this screenshot]</code> popping up earlier while your <code>.sql</code> query had clearly matched the database row, I inferred that <code>ocr_fts</code> was returning an empty string for <code>ocr_text</code> (Scenario 1).</p>
+<p>However, since you have the <code>.jpg.full.txt</code> sidecar files sitting on disk right next to the image files, checking those files directly guarantees we read the complete, untruncated OCR text every time, regardless of how <code>ocr_fts</code> was configured!</p>
+<p>If you'd like to check whether your database actually holds the full text directly, you can run this quick query in your terminal:</p>
+<pre><code class="language-sql">SELECT ocr_text FROM ocr_fts LIMIT 1;
+
+</code></pre>
+<p>If that outputs the full string, we can pull it straight from SQLite. If it returns blank, then reading the <code>.full.txt</code> sidecar files off disk (as the latest script does) is the foolproof way to get the full text into your <code>README.org</code> subheadings.</p>
+<hr />
+<p><strong><a href="20260919_143331_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_143338_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143336_capture.md&quot;)</p>

@@ -1,0 +1,17 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 159</h1>
+<p><strong><a href="20260919_143338_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_143343_capture.html">Next →</a></strong></p>
+<hr />
+<p>Aha! That empty table cell right there is the Smoking Gun.</p>
+<p>Your <code>ocr_fts</code> virtual table is configured as a <strong>contentless (or external content) FTS index</strong>.</p>
+<p>In SQLite FTS5, when you create a table with <code>content=&quot;&quot;</code> or point it to an external table that doesn't hold the raw string, SQLite builds a fast term index for <code>MATCH</code> queries (which is why <code>WHERE f.ocr_text MATCH 'hledger'</code> successfully found those 6 screenshots), but it <strong>discards the actual text column body</strong> to save database space. That is why querying <code>SELECT ocr_text</code> returns a blank string!</p>
+<p>So your intuition was spot on about screenshot text size, but SQLite's FTS schema was specifically instructed not to store the full string payload inside the <code>.db</code> file itself.</p>
+<p>This makes the disk fallback in our latest script completely necessary:</p>
+<ol>
+<li>SQLite does the heavy lifting of fast searching via <code>MATCH</code>.</li>
+<li>Once SQLite hands back <code>abs_path</code>, the script reads <code>2026-01-08-20:36-40_2560x1349.jpg.full.txt</code> directly off disk to populate the <code>*** OCR Text for Match XXX</code> subheadings in <code>README.org</code>.</li>
+</ol>
+<p>Give the updated script with <code>.full.txt</code> support a run—it will fill in those missing OCR text blocks straight from your sidecar files!</p>
+<hr />
+<p><strong><a href="20260919_143338_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_143343_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143341_capture.md&quot;)</p>

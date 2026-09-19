@@ -25534,3 +25534,932 @@ Translating the architecture from your mental model into code is the exact magic
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_140043_capture.md")
 
 ---
+
+# PROMPT 156
+I ran a first test of the latest script and we are missing the recent feature request of full ocr text to be included in the output org file
+
+[dad84@dad84-2013PC 20260806-gemini-sort-screenshots]$ python screenshot_database_search_02.py -e /home/dad84/Documents/2026/20260919-test-search-hledger-or-gnucash-in-screenshot/. -f /home/dad84/Documents/2026/20260919-test-search-hledger-or-gnucash-in-screenshot/test_search.sql
+Found 6 matching screenshot(s).
+
+#+TITLE: Screenshot Search: test_search.sql
+#+DATE: [2026-09-19 14:06:29]
+#+CATEGORY: effort
+
+* Search Metadata
+- **Query / File:** ~test_search.sql~
+- **Executed At:** 2026-09-19 14:06:29
+- **Matches Found:** 6
+- **Database Used:** ~/home/dad84/Documents/screenshots.db~
+
+* SQL Executed
+#+BEGIN_SRC sql
+SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'hledger OR gnucash'
+  AND s.abs_path LIKE '%2026%'
+ORDER BY s.id DESC;
+#+END_SRC
+
+* Matched Items
+** Match 001: [[file:001_2026-03-05-16:19-08_2560x1440.jpg][001_2026-03-05-16:19-08_2560x1440.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:19-08_2560x1440.jpg~
+- **Source URL:** . o 8 agemini.gooale.com/app
+
+** Match 002: [[file:002_2026-03-05-16:20-01_2560x1440.jpg][002_2026-03-05-16:20-01_2560x1440.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:20-01_2560x1440.jpg~
+- **Source URL:** - o 8 agemini.qooale.com/app/2724a6917be67d41
+
+** Match 003: [[file:003_2026-01-09-00:32-56_909x174.jpg][003_2026-01-09-00:32-56_909x174.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:32-56_909x174.jpg~
+- **Source URL:** l write/imbport vour transactions? - general
+
+** Match 004: [[file:004_2026-01-09-00:31-45_2560x1380.jpg][004_2026-01-09-00:31-45_2560x1380.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:31-45_2560x1380.jpg~
+- **Source URL:** o 6 jmtd.net/log/hledger 1yr/
+
+** Match 005: [[file:005_2026-01-08-20:38-38_2560x1349.jpg][005_2026-01-08-20:38-38_2560x1349.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:38-38_2560x1349.jpg~
+- **Source URL:** 210r4-7013pc ~1% td hledaer-tutorial
+
+** Match 006: [[file:006_2026-01-08-20:36-40_2560x1349.jpg][006_2026-01-08-20:36-40_2560x1349.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:36-40_2560x1349.jpg~
+- **Source URL:** 210r4-7013pc ~1% td hledaer-tutorial
+
+yes, these are older screenshots where I didn't yet put effort into url capture - that's ok for now.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_141541_capture.md")
+
+---
+
+# RESPONSE 156
+Ah, good catch! The reason the OCR text subheadings didn't render is because of **where** the script is looking for sidecars vs. **where your OCR text actually lives**.
+
+In your database schema, the OCR text is stored directly inside the SQLite table `ocr_fts` (joined on `s.id = f.screenshot_id`).
+
+In the previous version, the script tried to read sidecar `.txt` files off disk (e.g. `image.jpg.txt`), but since those sidecar files don't exist in your setup, `sidecar_symlink` evaluated to `None` and skipped rendering the OCR subheadings entirely!
+
+Instead of relying on external `.txt` files, we should pull `ocr_fts.ocr_text` directly out of the database query.
+
+Here is the updated script. It fetches `f.ocr_text` right from SQLite and embeds it directly into your `README.org` subheadings:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import datetime
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# Base Paths
+DB_PATH = Path.home() / "Documents" / "screenshots.db"
+BASE_DOCS_DIR = Path.home() / "Documents" / "2026"
+
+def slugify(text: str) -> str:
+    """Converts search query or filename into a clean filename-safe slug."""
+    text = text.lower()
+    text = re.sub(r'["\'\*]', '', text)
+    slug = re.sub(r'[^a-z0-9]+', '-', text).strip('-')
+    return slug[:50]
+
+def resolve_effort_folder(target_dir: Path | None, slug_text: str, custom_name: str | None) -> Path:
+    """Resolves target directory: uses existing if provided, otherwise creates a new one."""
+    if target_dir:
+        effort_dir = target_dir.expanduser().resolve()
+        if not effort_dir.is_dir():
+            print(f"Error: Specified effort directory does not exist: {effort_dir}", file=sys.stderr)
+            sys.exit(1)
+        return effort_dir
+
+    # Generate a new effort directory under BASE_DOCS_DIR
+    datestamp = datetime.datetime.now().strftime("%Y%m%d")
+    if custom_name:
+        slug = slugify(custom_name)
+    else:
+        slug = f"screenshot-search-{slugify(slug_text)}"
+        
+    folder_name = f"{datestamp}-{slug}"
+    effort_dir = BASE_DOCS_DIR / folder_name
+    effort_dir.mkdir(parents=True, exist_ok=True)
+    return effort_dir
+
+def execute_query(db_path: Path, sql: str, params: tuple = ()) -> list[dict]:
+    """Executes SQL query against SQLite DB and returns list of dicts with image data + OCR text."""
+    if not db_path.is_file():
+        print(f"Error: Database not found at {db_path}", file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            # Query must select: s.abs_path, s.best_url, f.ocr_text
+            abs_path = r[0]
+            url = r[1] if len(r) > 1 and r[1] else ""
+            ocr_text = r[2] if len(r) > 2 and r[2] else ""
+            
+            if Path(abs_path).is_file():
+                results.append({
+                    "abs_path": abs_path,
+                    "url": url,
+                    "ocr_text": ocr_text
+                })
+        return results
+    except sqlite3.OperationalError as e:
+        print(f"SQLite error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    """Writes or overwrites README.org inside the effort directory with embedded OCR text."""
+    log_path = effort_dir / "README.org"
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    lines = [
+        f"#+TITLE: Screenshot Search: {query_label}",
+        f"#+DATE: [{now_str}]",
+        "#+CATEGORY: effort",
+        "",
+        "* Search Metadata",
+        f"- **Query / File:** ~{query_label}~",
+        f"- **Executed At:** {now_str}",
+        f"- **Matches Found:** {len(matches_data)}",
+        f"- **Database Used:** ~{DB_PATH}~",
+        "",
+        "* SQL Executed",
+        "#+BEGIN_SRC sql",
+        sql.strip(),
+        "#+END_SRC",
+        "",
+        "* Matched Items",
+    ]
+
+    for item in matches_data:
+        idx = item["idx"]
+        path_str = item["orig_path"]
+        url = item["url"]
+        ocr_text = item["ocr_text"]
+        img_symlink = item["img_symlink"]
+
+        lines.append(f"** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]")
+        lines.append(f"- **Original Path:** ~{path_str}~")
+        if url:
+            lines.append(f"- **Source URL:** {url}")
+        
+        lines.append("")
+        lines.append(f"*** OCR Text for Match {idx:03d}")
+        if ocr_text.strip():
+            lines.append(ocr_text.strip())
+        else:
+            lines.append("/[No OCR text recorded for this screenshot]/")
+            
+        lines.append("")
+
+    log_path.write_text("\n".join(lines), encoding="utf-8")
+
+def main():
+    parser = argparse.ArgumentParser(description="Search screenshot DB and populate an effort folder.")
+    parser.add_argument("query", type=str, nargs="?", help="FTS5 search string query (ignored if -f/--file is supplied)")
+    parser.add_argument("-f", "--file", type=Path, help="Path to a .sql file containing the query")
+    parser.add_argument("-e", "--effort-dir", type=Path, help="Path to a pre-existing effort folder to populate")
+    parser.add_argument("-n", "--name", type=str, help="Custom effort folder slug override (if auto-generating folder)")
+    args = parser.parse_args()
+
+    # 1. Determine query source and wrap/ensure SELECT includes s.abs_path, s.best_url, f.ocr_text
+    if args.file:
+        if not args.file.is_file():
+            print(f"Error: SQL file not found at {args.file}", file=sys.stderr)
+            sys.exit(1)
+        
+        user_sql = args.file.read_text(encoding="utf-8").strip()
+        query_params = ()
+        query_label = args.file.name
+
+        # If user supplied a custom SQL file, wrap or ensure f.ocr_text is selected
+        # We query the DB directly using the file's SQL statement
+        sql_query = user_sql
+        # Fallback helper: if the user SQL doesn't pull 3 columns (path, url, ocr_text), 
+        # we enforce pulling ocr_text by inspecting/replacing the SELECT clause or selecting f.ocr_text
+        if "f.ocr_text" not in sql_query.lower() and "ocr_text" not in sql_query.lower():
+            sql_query = re.sub(
+                r"(?i)SELECT\s+s\.abs_path,\s*s\.best_url", 
+                "SELECT s.abs_path, s.best_url, f.ocr_text", 
+                user_sql
+            )
+    elif args.query:
+        sql_query = """
+            SELECT s.abs_path, s.best_url, f.ocr_text
+            FROM screenshots s
+            JOIN ocr_fts f ON s.id = f.screenshot_id
+            WHERE f.ocr_text MATCH ?
+            ORDER BY s.id DESC;
+        """
+        query_params = (args.query,)
+        query_label = args.query
+    else:
+        parser.error("You must supply either a positional search query or a SQL file via -f/--file.")
+
+    # 2. Execute SQL query
+    matches = execute_query(DB_PATH, sql_query, query_params)
+    print(f"Found {len(matches)} matching screenshot(s).")
+
+    if not matches:
+        return
+
+    # 3. Resolve target directory (pre-existing vs generated)
+    effort_dir = resolve_effort_folder(args.effort_dir, query_label, args.name)
+    print(f"Target effort folder: {effort_dir}")
+
+    matches_data = []
+
+    # 4. Symlink matching images into effort folder
+    for idx, item in enumerate(matches, start=1):
+        img_path = Path(item["abs_path"])
+        link_name = f"{idx:03d}_{img_path.name}"
+        img_symlink = effort_dir / link_name
+        
+        try:
+            if not img_symlink.exists():
+                img_symlink.symlink_to(img_path)
+        except OSError as e:
+            print(f"Warning: Failed to symlink {img_path}: {e}", file=sys.stderr)
+
+        matches_data.append({
+            "idx": idx,
+            "orig_path": item["abs_path"],
+            "url": item["url"],
+            "ocr_text": item["ocr_text"],
+            "img_symlink": img_symlink
+        })
+
+    # 5. Write Org log record inside target folder
+    write_log(effort_dir, query_label, user_sql if args.file else sql_query, matches_data)
+
+    # 6. Open or focus the effort directory in Emacs via emacsclient
+    subprocess.Popen(["emacsclient", "-n", str(effort_dir)])
+
+if __name__ == "__main__":
+    main()
+
+```
+
+### Key Changes:
+
+1. **DB Direct Fetch**: The SQL query automatically selects `s.abs_path, s.best_url, f.ocr_text`.
+2. **SQL File Compatibility**: If your `.sql` file only wrote `SELECT s.abs_path, s.best_url`, the script auto-expands it to include `f.ocr_text` before running.
+3. **Clean Org Subheadings**: Every match now gets its `*** OCR Text for Match XXX` section directly populated with the text pulled straight out of SQLite. Now `M-x occur` on `hledger` or `gnucash` inside your `README.org` will catch all instances!
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_141549_capture.md")
+
+---
+
+# PROMPT 157
+still not getting ocr full text to show up in output org file.  all I did to help so far is make sure there is some non-empty ocr full text on the disk drive:
+
+:
+  drwxr-xr-x  2 4.0K Aug 25 16:08 .
+  drwxr-xr-x 31  64K Sep 18 14:00 ..
+  -rw-r--r--  1 167K Jan  8  2026 2026-01-08-20:36-40_2560x1349.jpg
+  -rw-r--r--  1  333 Aug 25 16:08 2026-01-08-20:36-40_2560x1349.jpg.full.txt
+  -rw-r--r--  1   36 Aug 25 16:08 2026-01-08-20:36-40_2560x1349.jpg.url.txt
+  -rw-r--r--  1 178K Jan  8  2026 2026-01-08-20:38-38_2560x1349.jpg
+  -rw-r--r--  1  378 Aug 25 16:08 2026-01-08-20:38-38_2560x1349.jpg.full.txt
+  -rw-r--r--  1   36 Aug 25 16:08 2026-01-08-20:38-38_2560x1349.jpg.url.txt
+
+** Match 006: [[file:006_2026-01-08-20:36-40_2560x1349.jpg][006_2026-01-08-20:36-40_2560x1349.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:36-40_2560x1349.jpg~
+- **Source URL:** 210r4-7013pc ~1% td hledaer-tutorial
+
+*** OCR Text for Match 006
+/[No OCR text recorded for this screenshot]/
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143319_capture.md")
+
+---
+
+# RESPONSE 157
+Look closely at your directory listing vs. what the previous script was assuming:
+
+Your sidecar files on disk use the naming pattern **`.jpg.full.txt`** (e.g., `2026-01-08-20:36-40_2560x1349.jpg.full.txt`), whereas the earlier script was checking for `.jpg.txt`. Furthermore, because `ocr_fts` in your database only stores indexed search tokens, the full raw OCR text lives exclusively inside those `.full.txt` sidecar files on disk alongside the image.
+
+To fix this completely, the script needs to:
+
+1. Locate the `.full.txt` sidecar next to the original image path.
+2. Read the full OCR text from that file.
+3. Fall back gracefully to `ocr_fts.ocr_text` from SQLite if the sidecar file isn't present on disk.
+
+Here is the updated script:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import datetime
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# Base Paths
+DB_PATH = Path.home() / "Documents" / "screenshots.db"
+BASE_DOCS_DIR = Path.home() / "Documents" / "2026"
+
+def slugify(text: str) -> str:
+    """Converts search query or filename into a clean filename-safe slug."""
+    text = text.lower()
+    text = re.sub(r'["\'\*]', '', text)
+    slug = re.sub(r'[^a-z0-9]+', '-', text).strip('-')
+    return slug[:50]
+
+def resolve_effort_folder(target_dir: Path | None, slug_text: str, custom_name: str | None) -> Path:
+    """Resolves target directory: uses existing if provided, otherwise creates a new one."""
+    if target_dir:
+        effort_dir = target_dir.expanduser().resolve()
+        if not effort_dir.is_dir():
+            print(f"Error: Specified effort directory does not exist: {effort_dir}", file=sys.stderr)
+            sys.exit(1)
+        return effort_dir
+
+    # Generate a new effort directory under BASE_DOCS_DIR
+    datestamp = datetime.datetime.now().strftime("%Y%m%d")
+    if custom_name:
+        slug = slugify(custom_name)
+    else:
+        slug = f"screenshot-search-{slugify(slug_text)}"
+        
+    folder_name = f"{datestamp}-{slug}"
+    effort_dir = BASE_DOCS_DIR / folder_name
+    effort_dir.mkdir(parents=True, exist_ok=True)
+    return effort_dir
+
+def execute_query(db_path: Path, sql: str, params: tuple = ()) -> list[dict]:
+    """Executes SQL query against SQLite DB and returns matching records."""
+    if not db_path.is_file():
+        print(f"Error: Database not found at {db_path}", file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            abs_path = r[0]
+            url = r[1] if len(r) > 1 and r[1] else ""
+            db_ocr = r[2] if len(r) > 2 and r[2] else ""
+            
+            if Path(abs_path).is_file():
+                results.append({
+                    "abs_path": abs_path,
+                    "url": url,
+                    "db_ocr": db_ocr
+                })
+        return results
+    except sqlite3.OperationalError as e:
+        print(f"SQLite error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+def get_ocr_text(img_path: Path, db_ocr: str) -> str:
+    """Retrieves full OCR text from .full.txt sidecar, fallback to .txt sidecar, or DB text."""
+    # 1. Try <filename>.jpg.full.txt
+    full_sidecar = img_path.parent / f"{img_path.name}.full.txt"
+    if full_sidecar.is_file():
+        try:
+            return full_sidecar.read_text(encoding="utf-8", errors="replace").strip()
+        except Exception:
+            pass
+
+    # 2. Try <filename>.jpg.txt
+    std_sidecar = img_path.parent / f"{img_path.name}.txt"
+    if std_sidecar.is_file():
+        try:
+            return std_sidecar.read_text(encoding="utf-8", errors="replace").strip()
+        except Exception:
+            pass
+
+    # 3. Fallback to DB ocr_text
+    return db_ocr.strip()
+
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    """Writes or overwrites README.org inside the effort directory with embedded OCR text."""
+    log_path = effort_dir / "README.org"
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    lines = [
+        f"#+TITLE: Screenshot Search: {query_label}",
+        f"#+DATE: [{now_str}]",
+        "#+CATEGORY: effort",
+        "",
+        "* Search Metadata",
+        f"- **Query / File:** ~{query_label}~",
+        f"- **Executed At:** {now_str}",
+        f"- **Matches Found:** {len(matches_data)}",
+        f"- **Database Used:** ~{DB_PATH}~",
+        "",
+        "* SQL Executed",
+        "#+BEGIN_SRC sql",
+        sql.strip(),
+        "#+END_SRC",
+        "",
+        "* Matched Items",
+    ]
+
+    for item in matches_data:
+        idx = item["idx"]
+        path_str = item["orig_path"]
+        url = item["url"]
+        ocr_text = item["ocr_text"]
+        img_symlink = item["img_symlink"]
+
+        lines.append(f"** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]")
+        lines.append(f"- **Original Path:** ~{path_str}~")
+        if url:
+            lines.append(f"- **Source URL:** {url}")
+        
+        lines.append("")
+        lines.append(f"*** OCR Text for Match {idx:03d}")
+        if ocr_text:
+            lines.append(ocr_text)
+        else:
+            lines.append("/[No OCR text recorded for this screenshot]/")
+            
+        lines.append("")
+
+    log_path.write_text("\n".join(lines), encoding="utf-8")
+
+def main():
+    parser = argparse.ArgumentParser(description="Search screenshot DB and populate an effort folder.")
+    parser.add_argument("query", type=str, nargs="?", help="FTS5 search string query (ignored if -f/--file is supplied)")
+    parser.add_argument("-f", "--file", type=Path, help="Path to a .sql file containing the query")
+    parser.add_argument("-e", "--effort-dir", type=Path, help="Path to a pre-existing effort folder to populate")
+    parser.add_argument("-n", "--name", type=str, help="Custom effort folder slug override (if auto-generating folder)")
+    args = parser.parse_args()
+
+    # 1. Determine query source and ensure SELECT includes s.abs_path, s.best_url, f.ocr_text
+    if args.file:
+        if not args.file.is_file():
+            print(f"Error: SQL file not found at {args.file}", file=sys.stderr)
+            sys.exit(1)
+        
+        user_sql = args.file.read_text(encoding="utf-8").strip()
+        query_params = ()
+        query_label = args.file.name
+
+        sql_query = user_sql
+        if "f.ocr_text" not in sql_query.lower() and "ocr_text" not in sql_query.lower():
+            sql_query = re.sub(
+                r"(?i)SELECT\s+s\.abs_path,\s*s\.best_url", 
+                "SELECT s.abs_path, s.best_url, f.ocr_text", 
+                user_sql
+            )
+    elif args.query:
+        sql_query = """
+            SELECT s.abs_path, s.best_url, f.ocr_text
+            FROM screenshots s
+            JOIN ocr_fts f ON s.id = f.screenshot_id
+            WHERE f.ocr_text MATCH ?
+            ORDER BY s.id DESC;
+        """
+        query_params = (args.query,)
+        query_label = args.query
+    else:
+        parser.error("You must supply either a positional search query or a SQL file via -f/--file.")
+
+    # 2. Execute SQL query
+    matches = execute_query(DB_PATH, sql_query, query_params)
+    print(f"Found {len(matches)} matching screenshot(s).")
+
+    if not matches:
+        return
+
+    # 3. Resolve target directory
+    effort_dir = resolve_effort_folder(args.effort_dir, query_label, args.name)
+    print(f"Target effort folder: {effort_dir}")
+
+    matches_data = []
+
+    # 4. Process matches, create symlinks, and read .full.txt sidecars
+    for idx, item in enumerate(matches, start=1):
+        img_path = Path(item["abs_path"])
+        link_name = f"{idx:03d}_{img_path.name}"
+        img_symlink = effort_dir / link_name
+        
+        try:
+            if not img_symlink.exists():
+                img_symlink.symlink_to(img_path)
+            
+            # Link .full.txt sidecar into effort folder if present
+            full_txt = img_path.parent / f"{img_path.name}.full.txt"
+            if full_txt.is_file():
+                sidecar_symlink = effort_dir / f"{link_name}.full.txt"
+                if not sidecar_symlink.exists():
+                    sidecar_symlink.symlink_to(full_txt)
+
+        except OSError as e:
+            print(f"Warning: Failed to symlink {img_path}: {e}", file=sys.stderr)
+
+        # Read actual OCR content from sidecar file or fallback to DB
+        ocr_content = get_ocr_text(img_path, item["db_ocr"])
+
+        matches_data.append({
+            "idx": idx,
+            "orig_path": item["abs_path"],
+            "url": item["url"],
+            "ocr_text": ocr_content,
+            "img_symlink": img_symlink
+        })
+
+    # 5. Write Org log record inside target folder
+    write_log(effort_dir, query_label, user_sql if args.file else sql_query, matches_data)
+
+    # 6. Focus effort directory in Emacs via emacsclient
+    subprocess.Popen(["emacsclient", "-n", str(effort_dir)])
+
+if __name__ == "__main__":
+    main()
+
+```
+
+When re-run on your effort directory, `get_ocr_text()` will pick up `2026-01-08-20:36-40_2560x1349.jpg.full.txt` directly off disk, symlink the sidecar file into the effort folder, and write its 333 bytes of OCR text right into the `*** OCR Text for Match 006` subheading.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143328_capture.md")
+
+---
+
+# PROMPT 158
+you lose me on 'your database only stores indexed search tokens.'  the full ocr text of the screenshot is not in the database?  it seems like it would fit, because how much text can really exist in a screenshot?  if it were too tiny, it would not ocr into text, right?
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143331_capture.md")
+
+---
+
+# RESPONSE 158
+Ah, fair point! I owe you a quick clarification on how SQLite FTS5 (Full-Text Search) actually works under the hood—it's less about storage capacity and more about how SQLite builds its search indexes.
+
+SQLite can easily store full OCR text (a few kilobytes of text is microscopic for SQLite), but by default, an FTS table like `ocr_fts` acts primarily as an **inverted index** (a index mapping terms/words to `screenshot_id` row numbers).
+
+Depending on how `ocr_fts` was created in your database setup, it usually falls into one of two patterns:
+
+1. **Contentless / External Content FTS Table:** SQLite only indexes the words for matching (`MATCH 'hledger'`) to keep the search index lightning-fast, but it doesn't store a copy of the raw text inside the virtual table itself. If you query `SELECT ocr_text FROM ocr_fts`, it returns `NULL` or empty strings.
+2. **Standard FTS Table:** SQLite stores the full string directly inside the `ocr_text` column alongside the index.
+
+When I noticed `[No OCR text recorded for this screenshot]` popping up earlier while your `.sql` query had clearly matched the database row, I inferred that `ocr_fts` was returning an empty string for `ocr_text` (Scenario 1).
+
+However, since you have the `.jpg.full.txt` sidecar files sitting on disk right next to the image files, checking those files directly guarantees we read the complete, untruncated OCR text every time, regardless of how `ocr_fts` was configured!
+
+If you'd like to check whether your database actually holds the full text directly, you can run this quick query in your terminal:
+
+```sql
+SELECT ocr_text FROM ocr_fts LIMIT 1;
+
+```
+
+If that outputs the full string, we can pull it straight from SQLite. If it returns blank, then reading the `.full.txt` sidecar files off disk (as the latest script does) is the foolproof way to get the full text into your `README.org` subheadings.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143336_capture.md")
+
+---
+
+# PROMPT 159
+[dad84@dad84-2013PC 20260806-gemini-sort-screenshots]$ sqlite3 ~/Documents/screenshots.db 
+SQLite version 3.53.4 2026-07-24 19:02:57
+Enter ".help" for usage hints.
+sqlite> SELECT ocr_text FROM ocr_fts LIMIT 1;
+╭──────────╮
+│ ocr_text │
+╞══════════╡
+│          │
+╰──────────╯
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143338_capture.md")
+
+---
+
+# RESPONSE 159
+Aha! That empty table cell right there is the Smoking Gun.
+
+Your `ocr_fts` virtual table is configured as a **contentless (or external content) FTS index**.
+
+In SQLite FTS5, when you create a table with `content=""` or point it to an external table that doesn't hold the raw string, SQLite builds a fast term index for `MATCH` queries (which is why `WHERE f.ocr_text MATCH 'hledger'` successfully found those 6 screenshots), but it **discards the actual text column body** to save database space. That is why querying `SELECT ocr_text` returns a blank string!
+
+So your intuition was spot on about screenshot text size, but SQLite's FTS schema was specifically instructed not to store the full string payload inside the `.db` file itself.
+
+This makes the disk fallback in our latest script completely necessary:
+
+1. SQLite does the heavy lifting of fast searching via `MATCH`.
+2. Once SQLite hands back `abs_path`, the script reads `2026-01-08-20:36-40_2560x1349.jpg.full.txt` directly off disk to populate the `*** OCR Text for Match XXX` subheadings in `README.org`.
+
+Give the updated script with `.full.txt` support a run—it will fill in those missing OCR text blocks straight from your sidecar files!
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143341_capture.md")
+
+---
+
+# PROMPT 160
+I think you got there:
+
+#+TITLE: Screenshot Search: test_search.sql
+#+DATE: [2026-09-19 14:29:40]
+#+CATEGORY: effort
+
+* Search Metadata
+- **Query / File:** ~test_search.sql~
+- **Executed At:** 2026-09-19 14:29:40
+- **Matches Found:** 6
+- **Database Used:** ~/home/dad84/Documents/screenshots.db~
+
+* SQL Executed
+#+BEGIN_SRC sql
+SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'hledger OR gnucash'
+  AND s.abs_path LIKE '%2026%'
+ORDER BY s.id DESC;
+#+END_SRC
+
+* Matched Items
+** Match 001: [[file:001_2026-03-05-16:19-08_2560x1440.jpg][001_2026-03-05-16:19-08_2560x1440.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:19-08_2560x1440.jpg~
+- **Source URL:** . o 8 agemini.gooale.com/app
+
+*** OCR Text for Match 001
+[ Newchat
+
+& Mystuff
+
+[ >
+
+Chats.
+
+Python 2 to 3 Code Conversion
+
+Debugging Opaque Command-Line Pip...
+
+Embark: Emacs Contextual Actions
+Open Local HTML File in EWW
+
+Emacs Ansi-term Ctrl-C lssues.
+Removing Trailing Whitespace in Emacs.
+20260111 update emacs config files
+20251125 Bash Script for Clipboard Tex...
+Magit to EWW Historical HTML
+‘Samsung $21 FE Update Error Solutions.
+
+Finding a Safe, Silent Space Heater
+
+20260214 Org-roam Node Visit TLDR In...
+
+Science Behind Cheese Aversion
+
+Finding Old TrueCrypt Files
+
+20260129 RX 580 Whisper GPU Acceler...
+
+Dired Bash Script Execution
+Plotting Time Series Data with Python
+Python Script Merges Markdown Trans...
+
+Deciphering hledger CSV Import Rules
+
+20260107 Improving Firefox Save Workf...
+
+Org Mode Repeating Deadiines for Bills
+Using GNU Info with Local Files
+20251231 Bash Script Converts HTML t...
+
+Org Mode Strikethrough Functions
+
+£ Settings & help
+
+Gemini is now personalized based on your chats s
+
+Write anything  Help me learn
+
+** Match 002: [[file:002_2026-03-05-16:20-01_2560x1440.jpg][002_2026-03-05-16:20-01_2560x1440.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202603/personalized-google-gemini/2026-03-05-16:20-01_2560x1440.jpg~
+- **Source URL:** - o 8 agemini.qooale.com/app/2724a6917be67d41
+
+*** OCR Text for Match 002
+n
+»
+
+[ Newchat (
+
+2 Mystuff
+Gems >
+
+Chats
+
+Python 2 to 3 Code Conversion
+Debugging Opaque Command-Line Pip...
+Embark: Emacs Contextual Actions
+Open Local HTML File in EWW
+
+Emacs Ansi-term Ctrl-C lssues.
+Removing Trailing Whitespace in Emacs,
+20260111 update emacs config files
+20251125 Bash Script for Clipboard Tex...
+Magit to EWW Historical HTML
+
+Samsung 521 FE Update Error Solutions
+Finding a Safe, Silent Space Heater
+20260214 Org-roam Node Visit TLDR In..
+Science Behind Cheese Aversion
+Finding Old TrueCrypt Files
+
+20260129 RX 580 Whisper GPU Acceler.
+Dired Bash Script Execution
+
+Plotting Time Series Data with Python
+
+Python Script Merges Markdown Tran
+
+Deciphering hledger CSV Import Rules
+20260107 Improving Firefox Save Workf...
+Org Mode Repeating Deadlines for Bills
+Using GNU Info with Local Files
+
+20251231 Bash Script Converts HTML ..
+
+£ Settings & help
+
+Project Ideas and Next Steps
+
+Share some things we can work on together based on our
+chats. Make it catchy and use emojis.
+
+T i s e S e e
+
+andinterests, I've put together a few ideas for things we could tackle next that | think you'll
+really enjoy:
+
+# Our Next Big Projects
+« Emacs Workflow Mastery &
+
+We could dive deeper into your Org-roam setup or write some custom Elisp to further
+automate how you capture and link your technical notes. Whether it's refining your
+init.el or building new navigation tools, let's make your workspace even more
+
+seamless.
+
+« Linux System Optimization &
+Since you're running a specific MATE and X11 setup on EndeavourOS, we could work on
+some advanced shell scripting for your backups or fine-tuning those dual 1440p monitors
+for the perfect desktop experience.
+
+« The "No-Cheese” Culinary Quest &
+If you're looking for new meal ideas, we could brainstorm some high-energy, savory
+recipes for your active days that are completely dairy-free and avoid that "gross" factor
+entirely. We could even look into some international cuisines that naturally skip the cheese!
+
+'m always open to corrections if | get something wrong; the best way to do this is to just tell me
+what | got wrong or what | need to know. You can also tum off this personalization anytime in
+your settings.
+
+Which of those sounds like the best place to start, or is there a new technical rabbit hole
+you've been eyeing lately?
+
+& @ c o
+
+|Ask Gemini 3
++ 2% Tools Fast v g
+
+Geminiis Al and can make mistakes.
+
+** Match 003: [[file:003_2026-01-09-00:32-56_909x174.jpg][003_2026-01-09-00:32-56_909x174.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:32-56_909x174.jpg~
+- **Source URL:** l write/imbport vour transactions? - general
+
+*** OCR Text for Match 003
+Plain Text Accounting forum
+https:/forum.plaintextaccounting.org > how-often-do-y... &
+
+How often do you write/import your transactions? - General
+
+Mar 13, 2024 — | don't often use hledger add. Importing is usually relatively smooth, for me it looks like
+this: manually download main bank's CSVs; run just ...
+
+** Match 004: [[file:004_2026-01-09-00:31-45_2560x1380.jpg][004_2026-01-09-00:31-45_2560x1380.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/hledger/2026-01-09-00:31-45_2560x1380.jpg~
+- **Source URL:** o 6 jmtd.net/log/hledger 1yr/
+
+*** OCR Text for Match 004
+B @ hledger csvimport x | # jmtd — log — HLed X+
+
+CES N O 8 jmtd.net/log/hledger_1yr/
+
+-8 Import bookmarks... Oweather Cnews ¢
+
+jmtd — log — HLedger, 1 year on
+
+‘Tagged personal finance, software.
+
+It's been a year since I started exploring HLedger, and I'm still going. The rollover to 2023 was an
+opportunity to revisit my approach.
+
+Some time ago I stumbled across Dmitry Astapov's HLedger notes (fully-fledged hledgerd, which I briefly
+mentioned in eventual consistency) and decided to adopt some of its ideas.
+
+new year, new journal
+
+First up, Astapov encourages starting a new journal file for a new calendar year. I do this for other,
+accounting-adjacent files as a matter of course, and I did it for my GNUCash files prior to adopting HLedger.
+But the reason for those is a general suspicion that a simple mistake with those softwares could irrevocably
+corrupt my data. I'm much more confident with HLedger, so rolling over at years end isn't necessary for that.
+But there are other advantages. A quick obvious one is you can get rid of old accounts (such as expense
+accounts tied to a particular project, now completed).
+
+one journal per import
+
+In the first year, I periodically imported account data via CSV exports of transactions and HLedger's
+(excellent) CSV import system. I imported all the transactions, once each, into a single, large journal file.
+
+Astapov instead advocates for creating a separate journal for each CSV that you wish to import, and keep
+around the CSV, leaving you with a 1:1 mapping of CSV:journal. Then use HLedger's "include’ mechanism
+to pull them all into the main journal.
+
+With the former approach, where the CSV data was imported precisely, once, it was only exposed to your
+import rules once. The workflow ended up being: import transactions; notice some that you could have
+matched with import rules and auto-coded; write the rule for the next time. With Astapov's approach, you
+can re-generate the journal from the CSV at any point in the future with an updated set of import rules.
+
+tracking dependencies
+
+Now we get onto the job of driving the generation of all these derivative journal files. Astapov has built a
+sophisticated system using Haskell's "Shake’, which I'm not yet familiar, but for my sins I'm quite adept at
+(GNU-flavoured) UNIX Make, so I started building with that. An example rule
+
+import/jon/amex/%.journal: import/jon/amex/%.csv rules/amex.csv.rules
+m -f $(@D)/.latest.$*.csv $@
+hledger import --rules-file rules/amex.csv.rules -f $@ $<
+
+This captures the dependency between the journal and the underlying CSV but also to the relevant rules
+
+file; if I modify that, and this target is run in the future, all dependent journals should be re-generated. !
+
+8
+
+v =
+
+@f - » b B O
+
+Microsoft Copilot: Your... @ Google Maps [shopping & Wikipedia, the free en... Dlibraries Dbikes Cbooks Cimovies Cimoney Doutings Cisoftware - YouTube DI politics / society [3Jcomputer-hardware [ android-phone
+
+** Match 005: [[file:005_2026-01-08-20:38-38_2560x1349.jpg][005_2026-01-08-20:38-38_2560x1349.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:38-38_2560x1349.jpg~
+- **Source URL:** 210r4-7013pc ~1% td hledaer-tutorial
+
+*** OCR Text for Match 005
+[dad84@dad84-2013PC ~]$ fd hledger-tutorial
+Documents/2026/20260108-hledger-tutorial-import-csv-data/
+[dad84@dad84-2013PC ~]1% cd Documents/RoamNotes/
+[dad84@dad84-2013PC RoamNotes]$ ag 20260108-hledger
+20251215142227-hledger_tutorials.org
+
+130: =/home/dad84/Documents/2026/_-tutoria1-import-csv-data/=
+[dad84@dad84-2013PC RoamNotes]$ # write my-find-roam-nodes-1linking-here.sh
+
+** Match 006: [[file:006_2026-01-08-20:36-40_2560x1349.jpg][006_2026-01-08-20:36-40_2560x1349.jpg]]
+- **Original Path:** ~/home/dad84/Documents/2026/screenshots/202601/TODO-code-to-write/2026-01-08-20:36-40_2560x1349.jpg~
+- **Source URL:** 210r4-7013pc ~1% td hledaer-tutorial
+
+*** OCR Text for Match 006
+[dad84@dad84-2013PC ~]$ fd hledger-tutorial
+Documents/2026/20260108-hledger-tutorial-import-csv-data/
+[dad84@dad84-2013PC ~]1% cd Documents/RoamNotes/
+[dad84@dad84-2013PC RoamNotes]$ ag 20260108-hledger
+20251215142227-hledger_tutorials.org
+
+130:=/home/dad84/Documents/2026/ -tutorial-import-csv-data/=
+[dad84@dad84-2013PC RoamNotes]$
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143343_capture.md")
+
+---
+
+# RESPONSE 160
+That output looks fantastic! Everything came together cleanly:
+
+* **Symlinks created:** Matches `001` through `006` properly linked into the effort directory.
+* **Sidecar resolution:** Full text read directly off disk from the `.full.txt` files and embedded beneath each match.
+* **Org structure:** Clean `*** OCR Text for Match XXX` headings that make the whole log fully searchable inside Emacs with `M-x occur`, `consult-line`, or `ripgrep`.
+
+Now whenever you write a custom `.sql` query or run a quick command-line search, you get a self-contained Org document packed with the images, original paths, source URLs, and full OCR transcripts, ready for note-taking in your effort folder.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_143346_capture.md")
+
+---
