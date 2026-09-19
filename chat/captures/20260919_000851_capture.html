@@ -1,0 +1,35 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>PROMPT 152</h1>
+<p><strong><a href="20260919_000837_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_000859_capture.html">Next →</a></strong></p>
+<hr />
+<p>you are making me think of / remember my 'effort folders' e.g.:</p>
+<p>  /home/dad84/Documents/2026:
+  drwxr-xr-x 400  36K Sep 18 12:55 .
+  drwxr-xr-x  53 4.0K Sep 18 16:36 ..
+  drwxr-xr-x   2 4.0K Jan  6  2026 20260101-hledger-info-local-copy
+  drwxr-xr-x   2 4.0K Jan  1  2026 20260101-ms-copilot-ag-silver-searcher-markdown-search
+  drwxr-xr-x   2 4.0K Jan  5  2026 20260102-bash-script-to-run-hledger-info-in-terminal
+  drwxr-xr-x   4 4.0K Jan  8  2026 20260102-gemini-open-hledger-info-file-in-emacs-info-mode</p>
+<p>instead of the search results going into a temp folder which is ovewritten next time and not very visible in my file system, each search could be a new effort folder.  some lisp for making a new effort folder is:</p>
+<p>(defun my/dired-create-new-folder-datestamp-today ()
+  &quot;Create a new dated folder in <del>/Documents/2026 named YYYYMMDD-user-input.&quot;
+  (interactive)
+  (let* ((base-dir (expand-file-name &quot;</del>/Documents/2026&quot;))
+         (datestamp (format-time-string &quot;%Y%m%d&quot;))
+         (raw (read-string (format &quot;Folder name [%s-]: &quot; datestamp)))
+         (slug (replace-regexp-in-string &quot;[ _]+&quot; &quot;-&quot; (string-trim raw)))
+         (folder-name (concat datestamp &quot;-&quot; slug))
+         (full-path (expand-file-name folder-name base-dir)))
+    (if (file-exists-p full-path)
+        (message &quot;Folder already exists: %s&quot; folder-name)
+      (make-directory full-path t)
+      (message &quot;Created: %s&quot; folder-name)
+      (dired base-dir)
+      (dired-goto-file full-path)
+      (recenter))))</p>
+<p>we are not writing lisp at this time - I just thought that code might be helpful.</p>
+<p>the folder should contain a log file that clearly lays out the search that was done.</p>
+<p>all of this is easier said than done, I think - but seems quite possible - ?</p>
+<hr />
+<p><strong><a href="20260919_000837_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260919_000859_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_000851_capture.md&quot;)</p>
