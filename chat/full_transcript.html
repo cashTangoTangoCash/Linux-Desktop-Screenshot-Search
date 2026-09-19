@@ -20265,8 +20265,8 @@ The candidates scoring <code>13</code> (Indices 15, 41, 42, 65, 69, 70, 71) almo
 <p>we made an interesting url-capturing system, but it can be laborious.  I think I figured out that over the years, I might have accumulated 50,000 screenshots (that seems wrong and that maybe I screwed up my command line work at arriving at that).  I am probably not going to carefully get all those urls captured.  maybe just do the new ones going forward from here.</p>
 <p>now we have an ambitious goal of doing more powerful searching on the collection of screenshots - more powerful than what we did so far, which AFAIK was search for one string in the ocr full text.</p>
 <p>I could be wrong, but maybe the thing to do is attempt to construct a basic database of the screenshots, which would allow for SQL searches.  some searches of interest (in plain english here):</p>
-<p>craigslist in full text AND nua in full text
-craigslist in url AND specialized in full text</p>
+<p>craigslist in full text AND nua in full text</p>
+<p>craigslist in url AND specialized in full text</p>
 <p>but there is also a lot of information in the absolute path filename (APF), because we have sorted screenshots into folders with descriptive names e.g.:</p>
 <p>/home/dad84/Documents/2026/screenshots/202609/bike-geometry/2026-09-06-11:01-18_2528x1368.jpg</p>
 <p>so, a search could be done like:</p>
@@ -21519,4 +21519,707 @@ if __name__ == &quot;__main__&quot;:
 <li><strong>Organized Persistence:</strong> If a search turns into a bigger research project, the effort folder is already where it needs to be—you can start writing notes directly inside <code>README.org</code> or add custom Org-roam links to it.</li>
 </ol>
 <p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_000859_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 153</h1>
+<p>let's make a few changes to our screenshot database searching script.</p>
+<ol>
+<li>
+<p>the script should be able to use an optional input file that is a query.  I think this is a .sql file but I am getting the feeling my knowledge is out of date here.  we can use a command line input flag to supply this file.  if present, this will override the behavior where the script takes a query as a command line input argument.</p>
+</li>
+<li>
+<p>output org file changes</p>
+</li>
+</ol>
+<ul>
+<li>includes link to full text ocr sidecar file if present</li>
+</ul>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_134914_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 153</h1>
+<p>Those updates make a lot of sense—especially using a dedicated query file when you want to craft more elaborate SQL joins, filter by date ranges, or refine FTS matching beyond a simple search string.</p>
+<p>Regarding <code>.sql</code> files: your knowledge isn't out of date at all! Plain <code>.sql</code> files remain the standard, cleanest way to write and manage reusable or complex database queries.</p>
+<p>Here is the updated <code>search_to_effort.py</code> script incorporating both changes:</p>
+<ol>
+<li><strong>Query File Flag (<code>-f</code> / <code>--file</code>):</strong> Accepts a path to a <code>.sql</code> file containing an arbitrary SQL statement. When provided, it overrides the standard positional string query.</li>
+<li><strong>Org Log Sidecar Links:</strong> The generated <code>README.org</code> now explicitly links directly to the OCR <code>.txt</code> sidecar (formatted using standard Org-mode file link syntax <code>[[file:...]]</code>) whenever a sidecar exists.</li>
+</ol>
+<hr />
+<h3>Updated Script: <code>search_to_effort.py</code></h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+import argparse
+import datetime
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# Base Paths
+DB_PATH = Path.home() / &quot;.config&quot; / &quot;screenshot_indexer&quot; / &quot;screenshots.db&quot;
+BASE_DOCS_DIR = Path.home() / &quot;Documents&quot; / &quot;2026&quot;
+
+def slugify(text: str) -&gt; str:
+    &quot;&quot;&quot;Converts search query or filename into a clean filename-safe slug.&quot;&quot;&quot;
+    text = text.lower()
+    text = re.sub(r'[&quot;\'\*]', '', text)
+    slug = re.sub(r'[^a-z0-9]+', '-', text).strip('-')
+    return slug[:50]
+
+def create_effort_folder(slug_text: str, custom_name: str | None) -&gt; Path:
+    &quot;&quot;&quot;Creates YYYYMMDD-screenshot-search-slug directory under ~/Documents/2026.&quot;&quot;&quot;
+    datestamp = datetime.datetime.now().strftime(&quot;%Y%m%d&quot;)
+    
+    if custom_name:
+        slug = slugify(custom_name)
+    else:
+        slug = f&quot;screenshot-search-{slugify(slug_text)}&quot;
+        
+    folder_name = f&quot;{datestamp}-{slug}&quot;
+    effort_dir = BASE_DOCS_DIR / folder_name
+    effort_dir.mkdir(parents=True, exist_ok=True)
+    return effort_dir
+
+def execute_query(db_path: Path, sql: str, params: tuple = ()) -&gt; list[tuple[str, str]]:
+    &quot;&quot;&quot;Executes a SQL query against SQLite DB and returns matching (abs_path, best_url) rows.&quot;&quot;&quot;
+    if not db_path.is_file():
+        print(f&quot;Error: Database not found at {db_path}&quot;, file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        # Expecting SELECT queries to return abs_path as column 0, best_url optional as column 1
+        results = []
+        for r in rows:
+            abs_path = r[0]
+            url = r[1] if len(r) &gt; 1 and r[1] else &quot;&quot;
+            if Path(abs_path).is_file():
+                results.append((abs_path, url))
+        return results
+    except sqlite3.OperationalError as e:
+        print(f&quot;SQLite error: {e}&quot;, file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    &quot;&quot;&quot;Writes a detailed Org-mode log file inside the effort directory with links to sidecars.&quot;&quot;&quot;
+    log_path = effort_dir / &quot;README.org&quot;
+    now_str = datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    lines = [
+        f&quot;#+TITLE: Screenshot Search: {query_label}&quot;,
+        f&quot;#+DATE: [{now_str}]&quot;,
+        &quot;#+CATEGORY: effort&quot;,
+        &quot;&quot;,
+        &quot;* Search Metadata&quot;,
+        f&quot;- **Query / File:** ~{query_label}~&quot;,
+        f&quot;- **Executed At:** {now_str}&quot;,
+        f&quot;- **Matches Found:** {len(matches_data)}&quot;,
+        f&quot;- **Database Used:** ~{DB_PATH}~&quot;,
+        &quot;&quot;,
+        &quot;* SQL Executed&quot;,
+        &quot;#+BEGIN_SRC sql&quot;,
+        sql.strip(),
+        &quot;#+END_SRC&quot;,
+        &quot;&quot;,
+        &quot;* Matched Items&quot;,
+    ]
+
+    for item in matches_data:
+        idx = item[&quot;idx&quot;]
+        path_str = item[&quot;orig_path&quot;]
+        url = item[&quot;url&quot;]
+        sidecar_symlink = item[&quot;sidecar_symlink&quot;]
+
+        lines.append(f&quot;** Match {idx:03d}&quot;)
+        lines.append(f&quot;- **Original Path:** ~{path_str}~&quot;)
+        if url:
+            lines.append(f&quot;- **Source URL:** {url}&quot;)
+        
+        # Insert link to full text OCR sidecar if present
+        if sidecar_symlink:
+            lines.append(f&quot;- **Full Text OCR:** [[file:{sidecar_symlink.name}][View OCR Text]]&quot;)
+            
+        lines.append(&quot;&quot;)
+
+    log_path.write_text(&quot;\n&quot;.join(lines), encoding=&quot;utf-8&quot;)
+
+def main():
+    parser = argparse.ArgumentParser(description=&quot;Search screenshot DB and create an effort folder.&quot;)
+    parser.add_argument(&quot;query&quot;, type=str, nargs=&quot;?&quot;, help=&quot;FTS5 search string query (ignored if -f/--file is supplied)&quot;)
+    parser.add_argument(&quot;-f&quot;, &quot;--file&quot;, type=Path, help=&quot;Path to a .sql file containing the query&quot;)
+    parser.add_argument(&quot;--name&quot;, &quot;-n&quot;, type=str, help=&quot;Custom effort folder slug override&quot;)
+    args = parser.parse_args()
+
+    # Determine query source
+    if args.file:
+        if not args.file.is_file():
+            print(f&quot;Error: SQL file not found at {args.file}&quot;, file=sys.stderr)
+            sys.exit(1)
+        sql_query = args.file.read_text(encoding=&quot;utf-8&quot;)
+        query_params = ()
+        query_label = args.file.stem
+    elif args.query:
+        sql_query = &quot;&quot;&quot;
+            SELECT s.abs_path, s.best_url
+            FROM screenshots s
+            JOIN ocr_fts f ON s.id = f.screenshot_id
+            WHERE f.ocr_text MATCH ?
+            ORDER BY s.id DESC;
+        &quot;&quot;&quot;
+        query_params = (args.query,)
+        query_label = args.query
+    else:
+        parser.error(&quot;You must supply either a positional search query or a SQL file via -f/--file.&quot;)
+
+    matches = execute_query(DB_PATH, sql_query, query_params)
+    print(f&quot;Found {len(matches)} matching screenshot(s).&quot;)
+
+    if not matches:
+        return
+
+    effort_dir = create_effort_folder(query_label, args.name)
+    print(f&quot;Created effort folder: {effort_dir}&quot;)
+
+    matches_data = []
+
+    # Symlink matching images and sidecars into effort folder
+    for idx, (path_str, url) in enumerate(matches, start=1):
+        img_path = Path(path_str)
+        link_name = f&quot;{idx:03d}_{img_path.name}&quot;
+        img_symlink = effort_dir / link_name
+        
+        sidecar_symlink = None
+        try:
+            img_symlink.symlink_to(img_path)
+            
+            # Check for sidecar file (.jpg.txt or .png.txt)
+            txt_sidecar = img_path.with_suffix(img_path.suffix + &quot;.txt&quot;)
+            if txt_sidecar.is_file():
+                sidecar_symlink = effort_dir / f&quot;{link_name}.txt&quot;
+                sidecar_symlink.symlink_to(txt_sidecar)
+
+        except OSError as e:
+            print(f&quot;Warning: Failed to symlink {img_path}: {e}&quot;, file=sys.stderr)
+
+        matches_data.append({
+            &quot;idx&quot;: idx,
+            &quot;orig_path&quot;: path_str,
+            &quot;url&quot;: url,
+            &quot;img_symlink&quot;: img_symlink,
+            &quot;sidecar_symlink&quot;: sidecar_symlink
+        })
+
+    # Write Org log record
+    write_log(effort_dir, query_label, sql_query, matches_data)
+
+    # Open the new effort directory in Emacs via emacsclient
+    subprocess.Popen([&quot;emacsclient&quot;, &quot;-n&quot;, str(effort_dir)])
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<hr />
+<h3>How to Use It</h3>
+<p><strong>1. Standard String Search:</strong></p>
+<pre><code class="language-bash">./search_to_effort.py &quot;emacs dired&quot;
+
+</code></pre>
+<p><strong>2. Search using a custom <code>.sql</code> file:</strong>
+Create a file like <code>complex_search.sql</code>:</p>
+<pre><code class="language-sql">SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH 'hledger OR org-mode'
+  AND s.abs_path LIKE '%2026%'
+ORDER BY s.id DESC;
+
+</code></pre>
+<p>Then run:</p>
+<pre><code class="language-bash">./search_to_effort.py -f complex_search.sql
+
+</code></pre>
+<p>When opened in Dired, pressing <code>Tab</code> or <code>Enter</code> on the <code>README.org</code> will display your query log, where pressing <code>C-c C-o</code> on <code>[[file:001_screenshot.jpg.txt][View OCR Text]]</code> will jump straight into the OCR sidecar buffer.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_134924_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 154</h1>
+<p>sorry, I hit enter early somehow.  my typing fingers are cold in this fall weather.  one more change to output org file.  put the ocr full text in the output org file (in a subheading) so we can use m-x occur in the output org file and see matches.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_134929_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 154</h1>
+<p>No problem at all—fall cold fingers are a classic keyboard hazard!</p>
+<p>Adding the full OCR text directly into subheadings inside <code>README.org</code> is a fantastic tweak. It instantly turns the log into a searchable, self-contained dossier, allowing you to run <code>M-x occur</code> (or <code>consult-line</code> / <code>helm-swoop</code>) across all matched screenshots at once without needing to open individual sidecar files.</p>
+<p>Here is the updated <code>search_to_effort.py</code> script with the OCR text embedded in Org subheadings for each match:</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import argparse
+import datetime
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# Base Paths
+DB_PATH = Path.home() / &quot;.config&quot; / &quot;screenshot_indexer&quot; / &quot;screenshots.db&quot;
+BASE_DOCS_DIR = Path.home() / &quot;Documents&quot; / &quot;2026&quot;
+
+def slugify(text: str) -&gt; str:
+    &quot;&quot;&quot;Converts search query or filename into a clean filename-safe slug.&quot;&quot;&quot;
+    text = text.lower()
+    text = re.sub(r'[&quot;\'\*]', '', text)
+    slug = re.sub(r'[^a-z0-9]+', '-', text).strip('-')
+    return slug[:50]
+
+def create_effort_folder(slug_text: str, custom_name: str | None) -&gt; Path:
+    &quot;&quot;&quot;Creates YYYYMMDD-screenshot-search-slug directory under ~/Documents/2026.&quot;&quot;&quot;
+    datestamp = datetime.datetime.now().strftime(&quot;%Y%m%d&quot;)
+    
+    if custom_name:
+        slug = slugify(custom_name)
+    else:
+        slug = f&quot;screenshot-search-{slugify(slug_text)}&quot;
+        
+    folder_name = f&quot;{datestamp}-{slug}&quot;
+    effort_dir = BASE_DOCS_DIR / folder_name
+    effort_dir.mkdir(parents=True, exist_ok=True)
+    return effort_dir
+
+def execute_query(db_path: Path, sql: str, params: tuple = ()) -&gt; list[tuple[str, str]]:
+    &quot;&quot;&quot;Executes a SQL query against SQLite DB and returns matching (abs_path, best_url) rows.&quot;&quot;&quot;
+    if not db_path.is_file():
+        print(f&quot;Error: Database not found at {db_path}&quot;, file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            abs_path = r[0]
+            url = r[1] if len(r) &gt; 1 and r[1] else &quot;&quot;
+            if Path(abs_path).is_file():
+                results.append((abs_path, url))
+        return results
+    except sqlite3.OperationalError as e:
+        print(f&quot;SQLite error: {e}&quot;, file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    &quot;&quot;&quot;Writes a detailed Org-mode log file inside the effort directory with embedded OCR text.&quot;&quot;&quot;
+    log_path = effort_dir / &quot;README.org&quot;
+    now_str = datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    lines = [
+        f&quot;#+TITLE: Screenshot Search: {query_label}&quot;,
+        f&quot;#+DATE: [{now_str}]&quot;,
+        &quot;#+CATEGORY: effort&quot;,
+        &quot;&quot;,
+        &quot;* Search Metadata&quot;,
+        f&quot;- **Query / File:** ~{query_label}~&quot;,
+        f&quot;- **Executed At:** {now_str}&quot;,
+        f&quot;- **Matches Found:** {len(matches_data)}&quot;,
+        f&quot;- **Database Used:** ~{DB_PATH}~&quot;,
+        &quot;&quot;,
+        &quot;* SQL Executed&quot;,
+        &quot;#+BEGIN_SRC sql&quot;,
+        sql.strip(),
+        &quot;#+END_SRC&quot;,
+        &quot;&quot;,
+        &quot;* Matched Items&quot;,
+    ]
+
+    for item in matches_data:
+        idx = item[&quot;idx&quot;]
+        path_str = item[&quot;orig_path&quot;]
+        url = item[&quot;url&quot;]
+        img_symlink = item[&quot;img_symlink&quot;]
+        sidecar_symlink = item[&quot;sidecar_symlink&quot;]
+
+        lines.append(f&quot;** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]&quot;)
+        lines.append(f&quot;- **Original Path:** ~{path_str}~&quot;)
+        if url:
+            lines.append(f&quot;- **Source URL:** {url}&quot;)
+        
+        # Insert link to sidecar and embed full text in a sub-heading if present
+        if sidecar_symlink and sidecar_symlink.is_file():
+            lines.append(f&quot;- **Full Text OCR File:** [[file:{sidecar_symlink.name}][View Raw Sidecar]]&quot;)
+            lines.append(&quot;&quot;)
+            lines.append(f&quot;*** OCR Text for Match {idx:03d}&quot;)
+            try:
+                ocr_text = sidecar_symlink.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if ocr_text:
+                    lines.append(ocr_text)
+                else:
+                    lines.append(&quot;/[OCR sidecar file was empty]/&quot;)
+            except Exception as e:
+                lines.append(f&quot;/[Failed to read OCR sidecar: {e}]/&quot;)
+            
+        lines.append(&quot;&quot;)
+
+    log_path.write_text(&quot;\n&quot;.join(lines), encoding=&quot;utf-8&quot;)
+
+def main():
+    parser = argparse.ArgumentParser(description=&quot;Search screenshot DB and create an effort folder.&quot;)
+    parser.add_argument(&quot;query&quot;, type=str, nargs=&quot;?&quot;, help=&quot;FTS5 search string query (ignored if -f/--file is supplied)&quot;)
+    parser.add_argument(&quot;-f&quot;, &quot;--file&quot;, type=Path, help=&quot;Path to a .sql file containing the query&quot;)
+    parser.add_argument(&quot;--name&quot;, &quot;-n&quot;, type=str, help=&quot;Custom effort folder slug override&quot;)
+    args = parser.parse_args()
+
+    # Determine query source
+    if args.file:
+        if not args.file.is_file():
+            print(f&quot;Error: SQL file not found at {args.file}&quot;, file=sys.stderr)
+            sys.exit(1)
+        sql_query = args.file.read_text(encoding=&quot;utf-8&quot;)
+        query_params = ()
+        query_label = args.file.stem
+    elif args.query:
+        sql_query = &quot;&quot;&quot;
+            SELECT s.abs_path, s.best_url
+            FROM screenshots s
+            JOIN ocr_fts f ON s.id = f.screenshot_id
+            WHERE f.ocr_text MATCH ?
+            ORDER BY s.id DESC;
+        &quot;&quot;&quot;
+        query_params = (args.query,)
+        query_label = args.query
+    else:
+        parser.error(&quot;You must supply either a positional search query or a SQL file via -f/--file.&quot;)
+
+    matches = execute_query(DB_PATH, sql_query, query_params)
+    print(f&quot;Found {len(matches)} matching screenshot(s).&quot;)
+
+    if not matches:
+        return
+
+    effort_dir = create_effort_folder(query_label, args.name)
+    print(f&quot;Created effort folder: {effort_dir}&quot;)
+
+    matches_data = []
+
+    # Symlink matching images and sidecars into effort folder
+    for idx, (path_str, url) in enumerate(matches, start=1):
+        img_path = Path(path_str)
+        link_name = f&quot;{idx:03d}_{img_path.name}&quot;
+        img_symlink = effort_dir / link_name
+        
+        sidecar_symlink = None
+        try:
+            img_symlink.symlink_to(img_path)
+            
+            # Check for sidecar file (.jpg.txt or .png.txt)
+            txt_sidecar = img_path.with_suffix(img_path.suffix + &quot;.txt&quot;)
+            if txt_sidecar.is_file():
+                sidecar_symlink = effort_dir / f&quot;{link_name}.txt&quot;
+                sidecar_symlink.symlink_to(txt_sidecar)
+
+        except OSError as e:
+            print(f&quot;Warning: Failed to symlink {img_path}: {e}&quot;, file=sys.stderr)
+
+        matches_data.append({
+            &quot;idx&quot;: idx,
+            &quot;orig_path&quot;: path_str,
+            &quot;url&quot;: url,
+            &quot;img_symlink&quot;: img_symlink,
+            &quot;sidecar_symlink&quot;: sidecar_symlink
+        })
+
+    # Write Org log record
+    write_log(effort_dir, query_label, sql_query, matches_data)
+
+    # Open the new effort directory in Emacs via emacsclient
+    subprocess.Popen([&quot;emacsclient&quot;, &quot;-n&quot;, str(effort_dir)])
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<h3>What the <code>README.org</code> looks like now:</h3>
+<pre><code class="language-org">#+TITLE: Screenshot Search: bottom bracket
+#+DATE: [2026-09-19 13:45:00]
+#+CATEGORY: effort
+
+* Search Metadata
+- **Query / File:** ~bottom bracket~
+- **Executed At:** 2026-09-19 13:45:00
+- **Matches Found:** 1
+- **Database Used:** `~/.config/screenshot_indexer/screenshots.db`
+
+* SQL Executed
+#+BEGIN_SRC sql
+SELECT s.abs_path, s.best_url
+FROM screenshots s
+JOIN ocr_fts f ON s.id = f.screenshot_id
+WHERE f.ocr_text MATCH ?
+ORDER BY s.id DESC;
+#+END_SRC
+
+* Matched Items
+** Match 001: [[file:001_20260512-140022.jpg][001_20260512-140022.jpg]]
+- **Original Path:** `~/Pictures/Screenshots/20260512-140022.jpg`
+- **Full Text OCR File:** [[file:001_20260512-140022.jpg.txt][View Raw Sidecar]]
+
+*** OCR Text for Match 001
+Shimano XT BB-MT800 Threaded Bottom Bracket BSA 68/73mm.
+Torque specification: 35-50 N.m.
+
+</code></pre>
+<p>Now in Emacs, opening <code>README.org</code> and running <code>M-x occur</code> on any term will jump directly to the relevant match heading and show all the OCR occurrences in a dedicated buffer.</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_134959_capture.md&quot;)</p>
+<hr />
+<h1>PROMPT 155</h1>
+<p>let's see if I can try the patience of the gemini system.  if we are writing our own .sql file, it would be natural to first manually create the effort file and write the .sql file in it.  so, we can have yet another optional command line input that supplies a pre-existing effort folder rather than having the script generate one.  the pre-existing effort folder and the input query file are not overly 'joined' in the script - you can have either one without the other.  the input query file is not necessarily located in the effort folder.  whew.  this stuff certainly tries my patience!  but it's much easier to put into words / natural language than to code it (for me anyway).</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_140036_capture.md&quot;)</p>
+<hr />
+<h1>RESPONSE 155</h1>
+<p>You are nowhere near trying my patience! That logic makes complete sense: if you're already in Emacs organizing an effort folder, you've likely created <code>20260919-my-custom-effort/</code>, written a <code>custom_query.sql</code> somewhere, and just want the script to <strong>populate that existing folder</strong> instead of generating a redundant <code>YYYYMMDD-screenshot-search-...</code> directory.</p>
+<p>Decoupling the two keeps the CLI modular:</p>
+<ul>
+<li><code>--effort-dir</code> / <code>-e</code>: Explicitly sets the target directory. If provided, the script skips directory creation entirely and uses that existing folder.</li>
+<li><code>--file</code> / <code>-f</code>: Reads the SQL query from a file.</li>
+<li>Positional <code>query</code>: Accepts a raw FTS string if <code>-f</code> isn't used.</li>
+</ul>
+<p>Here is the updated <code>search_to_effort.py</code> handling all four combinations seamlessly (existing folder + SQL file, existing folder + search string, generated folder + SQL file, generated folder + search string):</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+import argparse
+import datetime
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+
+# Base Paths
+DB_PATH = Path.home() / &quot;.config&quot; / &quot;screenshot_indexer&quot; / &quot;screenshots.db&quot;
+BASE_DOCS_DIR = Path.home() / &quot;Documents&quot; / &quot;2026&quot;
+
+def slugify(text: str) -&gt; str:
+    &quot;&quot;&quot;Converts search query or filename into a clean filename-safe slug.&quot;&quot;&quot;
+    text = text.lower()
+    text = re.sub(r'[&quot;\'\*]', '', text)
+    slug = re.sub(r'[^a-z0-9]+', '-', text).strip('-')
+    return slug[:50]
+
+def resolve_effort_folder(target_dir: Path | None, slug_text: str, custom_name: str | None) -&gt; Path:
+    &quot;&quot;&quot;Resolves target directory: uses existing if provided, otherwise creates a new one.&quot;&quot;&quot;
+    if target_dir:
+        effort_dir = target_dir.expanduser().resolve()
+        if not effort_dir.is_dir():
+            print(f&quot;Error: Specified effort directory does not exist: {effort_dir}&quot;, file=sys.stderr)
+            sys.exit(1)
+        return effort_dir
+
+    # Generate a new effort directory under BASE_DOCS_DIR
+    datestamp = datetime.datetime.now().strftime(&quot;%Y%m%d&quot;)
+    if custom_name:
+        slug = slugify(custom_name)
+    else:
+        slug = f&quot;screenshot-search-{slugify(slug_text)}&quot;
+        
+    folder_name = f&quot;{datestamp}-{slug}&quot;
+    effort_dir = BASE_DOCS_DIR / folder_name
+    effort_dir.mkdir(parents=True, exist_ok=True)
+    return effort_dir
+
+def execute_query(db_path: Path, sql: str, params: tuple = ()) -&gt; list[tuple[str, str]]:
+    &quot;&quot;&quot;Executes a SQL query against SQLite DB and returns matching (abs_path, best_url) rows.&quot;&quot;&quot;
+    if not db_path.is_file():
+        print(f&quot;Error: Database not found at {db_path}&quot;, file=sys.stderr)
+        sys.exit(1)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            abs_path = r[0]
+            url = r[1] if len(r) &gt; 1 and r[1] else &quot;&quot;
+            if Path(abs_path).is_file():
+                results.append((abs_path, url))
+        return results
+    except sqlite3.OperationalError as e:
+        print(f&quot;SQLite error: {e}&quot;, file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[dict]):
+    &quot;&quot;&quot;Writes or appends to README.org inside the effort directory with embedded OCR text.&quot;&quot;&quot;
+    log_path = effort_dir / &quot;README.org&quot;
+    now_str = datetime.datetime.now().strftime(&quot;%Y-%m-%d %H:%M:%S&quot;)
+
+    lines = [
+        f&quot;#+TITLE: Screenshot Search: {query_label}&quot;,
+        f&quot;#+DATE: [{now_str}]&quot;,
+        &quot;#+CATEGORY: effort&quot;,
+        &quot;&quot;,
+        &quot;* Search Metadata&quot;,
+        f&quot;- **Query / File:** ~{query_label}~&quot;,
+        f&quot;- **Executed At:** {now_str}&quot;,
+        f&quot;- **Matches Found:** {len(matches_data)}&quot;,
+        f&quot;- **Database Used:** ~{DB_PATH}~&quot;,
+        &quot;&quot;,
+        &quot;* SQL Executed&quot;,
+        &quot;#+BEGIN_SRC sql&quot;,
+        sql.strip(),
+        &quot;#+END_SRC&quot;,
+        &quot;&quot;,
+        &quot;* Matched Items&quot;,
+    ]
+
+    for item in matches_data:
+        idx = item[&quot;idx&quot;]
+        path_str = item[&quot;orig_path&quot;]
+        url = item[&quot;url&quot;]
+        img_symlink = item[&quot;img_symlink&quot;]
+        sidecar_symlink = item[&quot;sidecar_symlink&quot;]
+
+        lines.append(f&quot;** Match {idx:03d}: [[file:{img_symlink.name}][{img_symlink.name}]]&quot;)
+        lines.append(f&quot;- **Original Path:** ~{path_str}~&quot;)
+        if url:
+            lines.append(f&quot;- **Source URL:** {url}&quot;)
+        
+        if sidecar_symlink and sidecar_symlink.is_file():
+            lines.append(f&quot;- **Full Text OCR File:** [[file:{sidecar_symlink.name}][View Raw Sidecar]]&quot;)
+            lines.append(&quot;&quot;)
+            lines.append(f&quot;*** OCR Text for Match {idx:03d}&quot;)
+            try:
+                ocr_text = sidecar_symlink.read_text(encoding=&quot;utf-8&quot;, errors=&quot;replace&quot;).strip()
+                if ocr_text:
+                    lines.append(ocr_text)
+                else:
+                    lines.append(&quot;/[OCR sidecar file was empty]/&quot;)
+            except Exception as e:
+                lines.append(f&quot;/[Failed to read OCR sidecar: {e}]/&quot;)
+            
+        lines.append(&quot;&quot;)
+
+    log_path.write_text(&quot;\n&quot;.join(lines), encoding=&quot;utf-8&quot;)
+
+def main():
+    parser = argparse.ArgumentParser(description=&quot;Search screenshot DB and populate an effort folder.&quot;)
+    parser.add_argument(&quot;query&quot;, type=str, nargs=&quot;?&quot;, help=&quot;FTS5 search string query (ignored if -f/--file is supplied)&quot;)
+    parser.add_argument(&quot;-f&quot;, &quot;--file&quot;, type=Path, help=&quot;Path to a .sql file containing the query&quot;)
+    parser.add_argument(&quot;-e&quot;, &quot;--effort-dir&quot;, type=Path, help=&quot;Path to a pre-existing effort folder to populate&quot;)
+    parser.add_argument(&quot;-n&quot;, &quot;--name&quot;, type=str, help=&quot;Custom effort folder slug override (if auto-generating folder)&quot;)
+    args = parser.parse_args()
+
+    # 1. Determine query source
+    if args.file:
+        if not args.file.is_file():
+            print(f&quot;Error: SQL file not found at {args.file}&quot;, file=sys.stderr)
+            sys.exit(1)
+        sql_query = args.file.read_text(encoding=&quot;utf-8&quot;)
+        query_params = ()
+        query_label = args.file.name
+    elif args.query:
+        sql_query = &quot;&quot;&quot;
+            SELECT s.abs_path, s.best_url
+            FROM screenshots s
+            JOIN ocr_fts f ON s.id = f.screenshot_id
+            WHERE f.ocr_text MATCH ?
+            ORDER BY s.id DESC;
+        &quot;&quot;&quot;
+        query_params = (args.query,)
+        query_label = args.query
+    else:
+        parser.error(&quot;You must supply either a positional search query or a SQL file via -f/--file.&quot;)
+
+    # 2. Execute SQL query
+    matches = execute_query(DB_PATH, sql_query, query_params)
+    print(f&quot;Found {len(matches)} matching screenshot(s).&quot;)
+
+    if not matches:
+        return
+
+    # 3. Resolve target directory (pre-existing vs generated)
+    effort_dir = resolve_effort_folder(args.effort_dir, query_label, args.name)
+    print(f&quot;Target effort folder: {effort_dir}&quot;)
+
+    matches_data = []
+
+    # 4. Symlink matching images and sidecars into effort folder
+    for idx, (path_str, url) in enumerate(matches, start=1):
+        img_path = Path(path_str)
+        link_name = f&quot;{idx:03d}_{img_path.name}&quot;
+        img_symlink = effort_dir / link_name
+        
+        sidecar_symlink = None
+        try:
+            # Create symlink if it doesn't already exist
+            if not img_symlink.exists():
+                img_symlink.symlink_to(img_path)
+            
+            # Check for sidecar file (.jpg.txt or .png.txt)
+            txt_sidecar = img_path.with_suffix(img_path.suffix + &quot;.txt&quot;)
+            if txt_sidecar.is_file():
+                sidecar_symlink = effort_dir / f&quot;{link_name}.txt&quot;
+                if not sidecar_symlink.exists():
+                    sidecar_symlink.symlink_to(txt_sidecar)
+
+        except OSError as e:
+            print(f&quot;Warning: Failed to symlink {img_path}: {e}&quot;, file=sys.stderr)
+
+        matches_data.append({
+            &quot;idx&quot;: idx,
+            &quot;orig_path&quot;: path_str,
+            &quot;url&quot;: url,
+            &quot;img_symlink&quot;: img_symlink,
+            &quot;sidecar_symlink&quot;: sidecar_symlink
+        })
+
+    # 5. Write Org log record inside target folder
+    write_log(effort_dir, query_label, sql_query, matches_data)
+
+    # 6. Open or focus the effort directory in Emacs via emacsclient
+    subprocess.Popen([&quot;emacsclient&quot;, &quot;-n&quot;, str(effort_dir)])
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<hr />
+<h3>Workflow Examples Now Supported</h3>
+<ol>
+<li><strong>Pre-existing effort folder + <code>.sql</code> query inside it:</strong></li>
+</ol>
+<pre><code class="language-bash">./search_to_effort.py -e ~/Documents/2026/20260919-drivetrain-notes -f ~/Documents/2026/20260919-drivetrain-notes/query.sql
+
+</code></pre>
+<ol start="2">
+<li><strong>Pre-existing effort folder + simple inline query string:</strong></li>
+</ol>
+<pre><code class="language-bash">./search_to_effort.py -e ./current_effort &quot;chain stretch&quot;
+
+</code></pre>
+<ol start="3">
+<li><strong>Generated effort folder + external <code>.sql</code> query file:</strong></li>
+</ol>
+<pre><code class="language-bash">./search_to_effort.py -f ~/.config/queries/recent_emacs.sql
+
+</code></pre>
+<ol start="4">
+<li><strong>Generated effort folder + simple inline query string (the original behavior):</strong></li>
+</ol>
+<pre><code class="language-bash">./search_to_effort.py &quot;ripgrep fzf&quot;
+
+</code></pre>
+<p>Translating the architecture from your mental model into code is the exact magic of using an AI coding assistant. You describe the intent, and the model handles the boilerplate and edge cases!</p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_140043_capture.md&quot;)</p>
 <hr />
