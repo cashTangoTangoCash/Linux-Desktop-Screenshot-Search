@@ -39,6 +39,35 @@ Knowing almost nothing about how Windows built Recall beyond a brief description
 
 ---
 
+## 📁 Directory & Sidecar Layout Conventions
+
+The indexing and search scripts assume a structured layout based on year and month subdirectories, with companion "sidecar" text files created alongside each image:
+
+```text
+~/Documents/2026/screenshots/
+└── 202601/
+    ├── TODO-code-to-write/
+    │   ├── 2026-01-08-20:36-40_2560x1349.jpg
+    │   ├── 2026-01-08-20:36-40_2560x1349.jpg.full.txt   <-- Raw OCR transcript
+    │   └── 2026-01-08-20:36-40_2560x1349.jpg.url.txt    <-- Extracted web page URL
+    └── hledger/
+        ├── 2026-01-09-00:31-45_2560x1380.jpg
+        ├── 2026-01-09-00:31-45_2560x1380.jpg.full.txt
+        └── 2026-01-09-00:31-45_2560x1380.jpg.url.txt
+```
+
+### Key Conventions:
+
+* **Datestamped Filenames:** Images follow a timestamped naming structure (e.g., `YYYY-MM-DD-HH:MM-SS_WIDTHxHEIGHT.jpg`).
+* **Year/Month Buckets:** Files are organized into `YYYY/screenshots/YYYYMM/` topic or task folders.
+* **Sidecar Extensions:**
+* `.jpg.full.txt`: Stores the complete, unformatted Tesseract OCR text extracted from the screenshot.
+* `.jpg.url.txt`: Stores browser address bar URLs harvested during OCR analysis or metadata parsing.
+
+
+
+---
+
 *Detailed usage instructions, installation requirements, and script breakdowns could be added later.*
 
 ## Development Status
