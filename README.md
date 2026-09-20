@@ -1,4 +1,4 @@
-# Local Desktop Snapshot Search
+# Linux-Desktop-Screenshot-Search
 
 > *"Why be jealous of the Windows Recall photographic memory-like experience, when you can vibe-code your own local, plain-text-friendly (emacs-centric, no-AI) version on Linux?"*
 
