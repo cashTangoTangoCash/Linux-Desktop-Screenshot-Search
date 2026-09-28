@@ -27511,3 +27511,277 @@ python3 unsort_screenshots.py --all
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_232752_capture.md")
 
 ---
+
+# PROMPT 165
+time to start testing.  we have one change for the --after mode:  the start of filenames of current screenshots is e.g. 2026-09-27, not 20260927 as the unsort script AFAIK assumes.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_235927_capture.md")
+
+---
+
+# RESPONSE 165
+Here is the updated `unsort_screenshots.py` script. The date extractor function has been updated to parse both ISO hyphenated dates (`YYYY-MM-DD`) and non-hyphenated dates (`YYYYMMDD`), normalizing them so that passing `--after 2026-09-27` or `--after 20260927` on the command line works seamlessly regardless of format.
+
+```python
+#!/usr/bin/env python3
+"""
+unsort_screenshots.py
+
+Reverses automatic screenshot sorting by checking subfolder images against 
+current rule files (rules_combo.txt, rules_full.txt, rules_url.txt).
+
+Only files that match an active rule (or all sorted files if --all is set)
+and satisfy optional date filters will be moved back to the root WORK_DIR.
+"""
+
+import argparse
+import json
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+
+
+def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
+    """Loads rules from a pipe-separated text file (pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            pattern_str, folder = line.rsplit("|", 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(
+                    f"Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}"
+                )
+    return rules
+
+
+def load_combo_rules(
+    file_path: Path,
+) -> list[tuple[re.Pattern, re.Pattern, str]]:
+    """Loads rules from a 2-pipe separated text file (url_pattern | full_pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) == 3:
+            url_str, full_str, folder = parts
+            try:
+                url_compiled = re.compile(url_str, re.IGNORECASE)
+                full_compiled = re.compile(full_str, re.IGNORECASE)
+                rules.append((url_compiled, full_compiled, folder))
+            except re.error as e:
+                print(f"Warning: Invalid regex in {file_path.name}: {e}")
+    return rules
+
+
+def read_sidecars(image_path: Path) -> tuple[str, str]:
+    """Reads and returns (url_text, full_text) for an image inside its current subfolder."""
+    subfolder = image_path.parent
+
+    full_txt_path = subfolder / f"{image_path.name}.full.txt"
+    full_text = (
+        full_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if full_txt_path.is_file()
+        else ""
+    )
+
+    url_txt_path = subfolder / f"{image_path.name}.url.txt"
+    url_json_path = subfolder / f"{image_path.name}.url.json"
+    url_text = (
+        url_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if url_txt_path.is_file()
+        else ""
+    )
+
+    if not url_text and url_json_path.is_file():
+        try:
+            data = json.loads(
+                url_json_path.read_text(encoding="utf-8", errors="ignore")
+            )
+            url_text = data.get("best_url", "")
+        except Exception:
+            pass
+
+    return url_text, full_text
+
+
+def matches_any_rule(
+    image_path: Path,
+    rules_combo: list,
+    rules_full: list,
+    rules_url: list,
+) -> tuple[bool, str]:
+    """Checks if an image matches any of the loaded rule sets."""
+    url_text, full_text = read_sidecars(image_path)
+
+    # 1. Check Combo
+    for url_pattern, full_pattern, folder in rules_combo:
+        if url_pattern.search(url_text) and full_pattern.search(full_text):
+            return True, f"Combo -> {folder}"
+
+    # 2. Check Full Text
+    for pattern, folder in rules_full:
+        if pattern.search(full_text):
+            return True, f"Full Text -> {folder}"
+
+    # 3. Check URL
+    for pattern, folder in rules_url:
+        if pattern.search(url_text):
+            return True, f"URL -> {folder}"
+
+    return False, ""
+
+
+def normalize_date_string(date_str: str) -> str:
+    """Strips hyphens/delimiters to convert YYYY-MM-DD or YYYYMMDD into YYYYMMDD."""
+    return re.sub(r"\D", "", date_str)
+
+
+def extract_date_prefix(filename: str) -> str:
+    """
+    Extracts leading date digits from filename.
+    Handles 'YYYY-MM-DD' (e.g. 2026-09-27) or 'YYYYMMDD' (e.g. 20260927).
+    Returns normalized 8-digit string 'YYYYMMDD'.
+    """
+    match = re.match(r"^(\d{4}-\d{2}-\d{2}|\d{8})", filename)
+    if match:
+        return normalize_date_string(match.group(1))
+    return ""
+
+
+def unmove_bundle(image_path: Path, dry_run: bool = False):
+    """Moves image and sidecars back to WORK_DIR root."""
+    subfolder = image_path.parent
+
+    sidecars = [
+        subfolder / f"{image_path.name}.url.txt",
+        subfolder / f"{image_path.name}.url.json",
+        subfolder / f"{image_path.name}.full.txt",
+    ]
+
+    if dry_run:
+        return
+
+    shutil.move(str(image_path), str(WORK_DIR / image_path.name))
+    for sidecar in sidecars:
+        if sidecar.is_file():
+            shutil.move(str(sidecar), str(sidecar.name))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Unsort automatically sorted screenshots back to root directory."
+    )
+    parser.add_argument(
+        "--after",
+        type=str,
+        help="Only unsort images with date prefix >= YYYY-MM-DD or YYYYMMDD (e.g., 2026-09-27)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview operations without moving files",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Unsort ALL images in subfolders regardless of rule matching",
+    )
+
+    args = parser.parse_args()
+
+    after_cutoff = normalize_date_string(args.after) if args.after else ""
+
+    rules_combo = load_combo_rules(WORK_DIR / "rules_combo.txt")
+    rules_full = load_rules(WORK_DIR / "rules_full.txt")
+    rules_url = load_rules(WORK_DIR / "rules_url.txt")
+
+    # Find all screenshot JPGs in immediate subdirectories of WORK_DIR
+    subfolder_images = []
+    for item in WORK_DIR.iterdir():
+        if item.is_dir():
+            for f in item.iterdir():
+                if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name):
+                    subfolder_images.append(f)
+
+    subfolder_images.sort()
+
+    if not subfolder_images:
+        print(f"No subfolder screenshots found in {WORK_DIR}")
+        return
+
+    print(f"Found {len(subfolder_images)} screenshot(s) across subfolders.")
+    if args.dry_run:
+        print("--- RUNNING IN DRY-RUN MODE (No files will be moved) ---\n")
+
+    restored_count = 0
+    skipped_date = 0
+    skipped_manual = 0
+
+    for img in subfolder_images:
+        img_date = extract_date_prefix(img.name)
+
+        # Date filter check
+        if after_cutoff and img_date:
+            if img_date < after_cutoff:
+                skipped_date += 1
+                continue
+
+        # Rule match check (unless --all is specified)
+        if args.all:
+            matched = True
+            reason = "Forced (--all)"
+        else:
+            matched, reason = matches_any_rule(
+                img, rules_combo, rules_full, rules_url
+            )
+
+        if matched:
+            print(
+                f"[UNSORT] Moving back '{img.relative_to(WORK_DIR)}' ({reason})"
+            )
+            unmove_bundle(img, dry_run=args.dry_run)
+            restored_count += 1
+        else:
+            skipped_manual += 1
+
+    print("\n" + "=" * 50)
+    print("Unsort Complete:")
+    print(f"  Total Inspected  : {len(subfolder_images)}")
+    print(f"  Restored to Root : {restored_count}")
+    print(f"  Skipped (Date)   : {skipped_date}")
+    print(f"  Skipped (Manual) : {skipped_manual}")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+### Key Changes Made
+
+* **`extract_date_prefix()`**: Updated regex to capture both `YYYY-MM-DD` and `YYYYMMDD`.
+* **`normalize_date_string()`**: Strips non-digit characters (`2026-09-27` $\rightarrow$ `20260927`) from both the command-line argument and filename dates before comparison.
+* **Flexible Input**: You can now pass `--after 2026-09-27` or `--after 20260927`.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_235935_capture.md")
+
+---

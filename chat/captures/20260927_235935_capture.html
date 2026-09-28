@@ -1,9 +1,8 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 164</h1>
-<p><strong><a href="20260927_232746_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260927_235927_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 165</h1>
+<p><strong><a href="20260927_235927_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
 <hr />
-<p>Here is <code>unsort_screenshots.py</code>. It inspects images inside subdirectories of <code>WORK_DIR</code>, checks their sidecar text files against your current rule sets (<code>rules_combo.txt</code>, <code>rules_full.txt</code>, and <code>rules_url.txt</code>), and moves them (plus sidecars) back to <code>WORK_DIR</code> <strong>only if</strong> they trigger a match.</p>
-<p>It supports filtering by filename timestamp (e.g., <code>--after 20260922</code>), <code>--dry-run</code> mode to preview changes safely, and a <code>--all</code> option if you ever want to unsort regardless of rules.</p>
+<p>Here is the updated <code>unsort_screenshots.py</code> script. The date extractor function has been updated to parse both ISO hyphenated dates (<code>YYYY-MM-DD</code>) and non-hyphenated dates (<code>YYYYMMDD</code>), normalizing them so that passing <code>--after 2026-09-27</code> or <code>--after 20260927</code> on the command line works seamlessly regardless of format.</p>
 <pre><code class="language-python">#!/usr/bin/env python3
 &quot;&quot;&quot;
 unsort_screenshots.py
@@ -75,7 +74,7 @@ def load_combo_rules(
 def read_sidecars(image_path: Path) -&gt; tuple[str, str]:
     &quot;&quot;&quot;Reads and returns (url_text, full_text) for an image inside its current subfolder.&quot;&quot;&quot;
     subfolder = image_path.parent
-    
+
     full_txt_path = subfolder / f&quot;{image_path.name}.full.txt&quot;
     full_text = (
         full_txt_path.read_text(encoding=&quot;utf-8&quot;, errors=&quot;ignore&quot;)
@@ -130,16 +129,27 @@ def matches_any_rule(
     return False, &quot;&quot;
 
 
+def normalize_date_string(date_str: str) -&gt; str:
+    &quot;&quot;&quot;Strips hyphens/delimiters to convert YYYY-MM-DD or YYYYMMDD into YYYYMMDD.&quot;&quot;&quot;
+    return re.sub(r&quot;\D&quot;, &quot;&quot;, date_str)
+
+
 def extract_date_prefix(filename: str) -&gt; str:
-    &quot;&quot;&quot;Extracts leading digits (YYYYMMDD) from filename if present.&quot;&quot;&quot;
-    match = re.match(r&quot;^(\d{8})&quot;, filename)
-    return match.group(1) if match else &quot;&quot;
+    &quot;&quot;&quot;
+    Extracts leading date digits from filename.
+    Handles 'YYYY-MM-DD' (e.g. 2026-09-27) or 'YYYYMMDD' (e.g. 20260927).
+    Returns normalized 8-digit string 'YYYYMMDD'.
+    &quot;&quot;&quot;
+    match = re.match(r&quot;^(\d{4}-\d{2}-\d{2}|\d{8})&quot;, filename)
+    if match:
+        return normalize_date_string(match.group(1))
+    return &quot;&quot;
 
 
 def unmove_bundle(image_path: Path, dry_run: bool = False):
     &quot;&quot;&quot;Moves image and sidecars back to WORK_DIR root.&quot;&quot;&quot;
     subfolder = image_path.parent
-    
+
     sidecars = [
         subfolder / f&quot;{image_path.name}.url.txt&quot;,
         subfolder / f&quot;{image_path.name}.url.json&quot;,
@@ -152,7 +162,7 @@ def unmove_bundle(image_path: Path, dry_run: bool = False):
     shutil.move(str(image_path), str(WORK_DIR / image_path.name))
     for sidecar in sidecars:
         if sidecar.is_file():
-            shutil.move(str(sidecar), str(WORK_DIR / sidecar.name))
+            shutil.move(str(sidecar), str(sidecar.name))
 
 
 def main():
@@ -162,7 +172,7 @@ def main():
     parser.add_argument(
         &quot;--after&quot;,
         type=str,
-        help=&quot;Only unsort images with date prefix &gt;= YYYYMMDD (e.g., 20260922)&quot;,
+        help=&quot;Only unsort images with date prefix &gt;= YYYY-MM-DD or YYYYMMDD (e.g., 2026-09-27)&quot;,
     )
     parser.add_argument(
         &quot;--dry-run&quot;,
@@ -176,6 +186,8 @@ def main():
     )
 
     args = parser.parse_args()
+
+    after_cutoff = normalize_date_string(args.after) if args.after else &quot;&quot;
 
     rules_combo = load_combo_rules(WORK_DIR / &quot;rules_combo.txt&quot;)
     rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)
@@ -207,8 +219,8 @@ def main():
         img_date = extract_date_prefix(img.name)
 
         # Date filter check
-        if args.after and img_date:
-            if img_date &lt; args.after:
+        if after_cutoff and img_date:
+            if img_date &lt; after_cutoff:
                 skipped_date += 1
                 continue
 
@@ -243,31 +255,12 @@ if __name__ == &quot;__main__&quot;:
     main()
 
 </code></pre>
-<h3>Usage Examples</h3>
-<ol>
-<li><strong>Preview unsorting today's/recent files (dry run):</strong></li>
-</ol>
-<pre><code class="language-bash">python3 unsort_screenshots.py --after 20260922 --dry-run
-
-</code></pre>
-<ol start="2">
-<li><strong>Undo automatic sorting for files from September 22 onward:</strong></li>
-</ol>
-<pre><code class="language-bash">python3 unsort_screenshots.py --after 20260922
-
-</code></pre>
-<ol start="3">
-<li><strong>Undo automatic sorting for everything across all dates:</strong></li>
-</ol>
-<pre><code class="language-bash">python3 unsort_screenshots.py
-
-</code></pre>
-<ol start="4">
-<li><strong>Pull <em>everything</em> out of subfolders back into root regardless of rules:</strong></li>
-</ol>
-<pre><code class="language-bash">python3 unsort_screenshots.py --all
-
-</code></pre>
+<h3>Key Changes Made</h3>
+<ul>
+<li><strong><code>extract_date_prefix()</code></strong>: Updated regex to capture both <code>YYYY-MM-DD</code> and <code>YYYYMMDD</code>.</li>
+<li><strong><code>normalize_date_string()</code></strong>: Strips non-digit characters (<code>2026-09-27</code> $\rightarrow$ <code>20260927</code>) from both the command-line argument and filename dates before comparison.</li>
+<li><strong>Flexible Input</strong>: You can now pass <code>--after 2026-09-27</code> or <code>--after 20260927</code>.</li>
+</ul>
 <hr />
-<p><strong><a href="20260927_232746_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260927_235927_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_232752_capture.md&quot;)</p>
+<p><strong><a href="20260927_235927_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_235935_capture.md&quot;)</p>
