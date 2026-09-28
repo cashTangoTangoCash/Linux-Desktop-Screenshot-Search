@@ -27785,3 +27785,363 @@ if __name__ == "__main__":
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_235935_capture.md")
 
 ---
+
+# PROMPT 166
+hmm, I think I thought of a logic problem here that is probably inescapable.  I just used the unsort script to rescue my one particular effort from today that was automatically sorted in a 'wrong' folder and that worked well.  I then manually sorted those particular screenshots into a new folder.  but, if I run the unsort script again, it will not recognize those screenshots as manually sorted, because they do match rules in the rules files.  on approach would be to make the rules files more complicated by adding 'time ranges' to rules, but I dislike that.  things are already too complicated.  it's very interesting how pretty simple stuff like sorting screenshots seems to get complicated kind of quickly.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000122_capture.md")
+
+---
+
+# RESPONSE 166
+You've hit on a classic problem in classification and automation pipelines: **idempotency and state tracking**.
+
+When a script relies purely on external rule files to deduce whether an item *belongs* in a folder, it lacks **memory**. It can't distinguish between *"the auto-sorter placed this here"* and *"Drew explicitly moved this here."* Adding date ranges to rule files, as you noted, adds unnecessary overhead to a system that should remain lean and maintainable.
+
+There are a few simple ways to handle this without adding clutter to your rule text files:
+
+---
+
+### Option 1: The `.manual` Sidecar File (Recommended)
+
+When you manually sort a file, create a tiny flag file next to it or touch a hidden marker. For example, `2026-09-27_01.jpg.manual`.
+
+* **How it works:** `unsort_screenshots.py` simply skips any image if `image_path.name + ".manual"` exists in the subfolder.
+* **Why it fits:** It leaves your rule files clean, lives right alongside the sidecars (`.full.txt`, `.url.txt`), and makes the state explicit. You can even write a 2-line shell function or Emacs command to move images and touch the `.manual` file in one shot.
+
+---
+
+### Option 2: An `.unsort_ignore` or Exclude List
+
+If creating sidecar files feels too noisy in the file manager, keep a plain text file named `.unsort_ignore` in `WORK_DIR` (or inside each subfolder).
+
+* **How it works:** Put filenames or date prefixes you've manually curated into that file (e.g., `2026-09-27_142201.jpg`).
+* **Why it fits:** The unsort script checks this list before inspecting rules and skips matching files.
+
+---
+
+### Option 3: Two-Phase Sorting / Staging
+
+Instead of running auto-sorting directly on the main directory, auto-sort into a `.staged/` or `auto_sorted/` tree first.
+
+* **How it works:**
+1. Auto-sorter moves matches into `WORK_DIR/<folder>/`.
+2. Unsort script only pulls from subfolders back to root if needed.
+3. Manually moving a file marks it as "reviewed."
+
+
+* **Why it fits:** Physical location itself acts as the state.
+
+---
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000125_capture.md")
+
+---
+
+# PROMPT 167
+typically, all the screenshots in a subfolder are either manually sorted or automatically sorted.  so we can go by folder rather than by filename.  let's have the unsort script look for a file called unsort-ignore.txt.  it contains names of folders that are known to contain only manually sorted screenshots and sidecars:
+
+[dad84@dad84-2013PC 202609]$ cat unsort-ignore.txt
+# folders which were manually sorted
+
+winter-tires-for-nua-audac-on-craigslist-40-622-size
+[dad84@dad84-2013PC 202609]$ pwd
+/home/dad84/Documents/2026/screenshots/202609
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000128_capture.md")
+
+---
+
+# RESPONSE 167
+Here is the updated `unsort_screenshots.py` script. It now loads `unsort-ignore.txt` from `WORK_DIR`, ignores comments/blank lines, and skips any subfolder listed in that file.
+
+```python
+#!/usr/bin/env python3
+"""
+unsort_screenshots.py
+
+Reverses automatic screenshot sorting by checking subfolder images against 
+current rule files (rules_combo.txt, rules_full.txt, rules_url.txt).
+
+Only files that match an active rule (or all sorted files if --all is set)
+and satisfy optional date filters will be moved back to the root WORK_DIR.
+
+Skips subfolders listed in unsort-ignore.txt.
+"""
+
+import argparse
+import json
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+
+
+def load_ignore_folders(file_path: Path) -> set[str]:
+    """Loads folder names to ignore from unsort-ignore.txt."""
+    ignored = set()
+    if not file_path.is_file():
+        return ignored
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        ignored.add(line)
+    return ignored
+
+
+def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
+    """Loads rules from a pipe-separated text file (pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            pattern_str, folder = line.rsplit("|", 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(
+                    f"Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}"
+                )
+    return rules
+
+
+def load_combo_rules(
+    file_path: Path,
+) -> list[tuple[re.Pattern, re.Pattern, str]]:
+    """Loads rules from a 2-pipe separated text file (url_pattern | full_pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) == 3:
+            url_str, full_str, folder = parts
+            try:
+                url_compiled = re.compile(url_str, re.IGNORECASE)
+                full_compiled = re.compile(full_str, re.IGNORECASE)
+                rules.append((url_compiled, full_compiled, folder))
+            except re.error as e:
+                print(f"Warning: Invalid regex in {file_path.name}: {e}")
+    return rules
+
+
+def read_sidecars(image_path: Path) -> tuple[str, str]:
+    """Reads and returns (url_text, full_text) for an image inside its current subfolder."""
+    subfolder = image_path.parent
+
+    full_txt_path = subfolder / f"{image_path.name}.full.txt"
+    full_text = (
+        full_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if full_txt_path.is_file()
+        else ""
+    )
+
+    url_txt_path = subfolder / f"{image_path.name}.url.txt"
+    url_json_path = subfolder / f"{image_path.name}.url.json"
+    url_text = (
+        url_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if url_txt_path.is_file()
+        else ""
+    )
+
+    if not url_text and url_json_path.is_file():
+        try:
+            data = json.loads(
+                url_json_path.read_text(encoding="utf-8", errors="ignore")
+            )
+            url_text = data.get("best_url", "")
+        except Exception:
+            pass
+
+    return url_text, full_text
+
+
+def matches_any_rule(
+    image_path: Path,
+    rules_combo: list,
+    rules_full: list,
+    rules_url: list,
+) -> tuple[bool, str]:
+    """Checks if an image matches any of the loaded rule sets."""
+    url_text, full_text = read_sidecars(image_path)
+
+    # 1. Check Combo
+    for url_pattern, full_pattern, folder in rules_combo:
+        if url_pattern.search(url_text) and full_pattern.search(full_text):
+            return True, f"Combo -> {folder}"
+
+    # 2. Check Full Text
+    for pattern, folder in rules_full:
+        if pattern.search(full_text):
+            return True, f"Full Text -> {folder}"
+
+    # 3. Check URL
+    for pattern, folder in rules_url:
+        if pattern.search(url_text):
+            return True, f"URL -> {folder}"
+
+    return False, ""
+
+
+def normalize_date_string(date_str: str) -> str:
+    """Strips hyphens/delimiters to convert YYYY-MM-DD or YYYYMMDD into YYYYMMDD."""
+    return re.sub(r"\D", "", date_str)
+
+
+def extract_date_prefix(filename: str) -> str:
+    """
+    Extracts leading date digits from filename.
+    Handles 'YYYY-MM-DD' (e.g. 2026-09-27) or 'YYYYMMDD' (e.g. 20260927).
+    Returns normalized 8-digit string 'YYYYMMDD'.
+    """
+    match = re.match(r"^(\d{4}-\d{2}-\d{2}|\d{8})", filename)
+    if match:
+        return normalize_date_string(match.group(1))
+    return ""
+
+
+def unmove_bundle(image_path: Path, dry_run: bool = False):
+    """Moves image and sidecars back to WORK_DIR root."""
+    subfolder = image_path.parent
+
+    sidecars = [
+        subfolder / f"{image_path.name}.url.txt",
+        subfolder / f"{image_path.name}.url.json",
+        subfolder / f"{image_path.name}.full.txt",
+    ]
+
+    if dry_run:
+        return
+
+    shutil.move(str(image_path), str(WORK_DIR / image_path.name))
+    for sidecar in sidecars:
+        if sidecar.is_file():
+            shutil.move(str(sidecar), str(sidecar.name))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Unsort automatically sorted screenshots back to root directory."
+    )
+    parser.add_argument(
+        "--after",
+        type=str,
+        help="Only unsort images with date prefix >= YYYY-MM-DD or YYYYMMDD (e.g., 2026-09-27)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview operations without moving files",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Unsort ALL images in non-ignored subfolders regardless of rule matching",
+    )
+
+    args = parser.parse_args()
+
+    after_cutoff = normalize_date_string(args.after) if args.after else ""
+
+    ignored_folders = load_ignore_folders(WORK_DIR / "unsort-ignore.txt")
+    if ignored_folders:
+        print(f"Loaded {len(ignored_folders)} ignored folder(s) from unsort-ignore.txt")
+
+    rules_combo = load_combo_rules(WORK_DIR / "rules_combo.txt")
+    rules_full = load_rules(WORK_DIR / "rules_full.txt")
+    rules_url = load_rules(WORK_DIR / "rules_url.txt")
+
+    # Find all screenshot JPGs in immediate subdirectories of WORK_DIR, excluding ignored folders
+    subfolder_images = []
+    skipped_folders_count = 0
+
+    for item in WORK_DIR.iterdir():
+        if item.is_dir():
+            if item.name in ignored_folders:
+                skipped_folders_count += 1
+                continue
+            for f in item.iterdir():
+                if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name):
+                    subfolder_images.append(f)
+
+    subfolder_images.sort()
+
+    if skipped_folders_count > 0:
+        print(f"Skipped inspecting {skipped_folders_count} folder(s) listed in unsort-ignore.txt.")
+
+    if not subfolder_images:
+        print(f"No inspectable subfolder screenshots found in {WORK_DIR}")
+        return
+
+    print(f"Found {len(subfolder_images)} screenshot(s) across inspectable subfolders.")
+    if args.dry_run:
+        print("--- RUNNING IN DRY-RUN MODE (No files will be moved) ---\n")
+
+    restored_count = 0
+    skipped_date = 0
+    skipped_manual = 0
+
+    for img in subfolder_images:
+        img_date = extract_date_prefix(img.name)
+
+        # Date filter check
+        if after_cutoff and img_date:
+            if img_date < after_cutoff:
+                skipped_date += 1
+                continue
+
+        # Rule match check (unless --all is specified)
+        if args.all:
+            matched = True
+            reason = "Forced (--all)"
+        else:
+            matched, reason = matches_any_rule(
+                img, rules_combo, rules_full, rules_url
+            )
+
+        if matched:
+            print(
+                f"[UNSORT] Moving back '{img.relative_to(WORK_DIR)}' ({reason})"
+            )
+            unmove_bundle(img, dry_run=args.dry_run)
+            restored_count += 1
+        else:
+            skipped_manual += 1
+
+    print("\n" + "=" * 50)
+    print("Unsort Complete:")
+    print(f"  Total Inspected  : {len(subfolder_images)}")
+    print(f"  Restored to Root : {restored_count}")
+    print(f"  Skipped (Date)   : {skipped_date}")
+    print(f"  Skipped (Manual) : {skipped_manual}")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+### Changes Made
+
+* **`load_ignore_folders()`**: Reads `unsort-ignore.txt`, strips whitespace, ignores empty lines or `#` comments, and returns a set of folder names.
+* **Folder Filter**: During directory scanning, any folder matching a entry in `unsort-ignore.txt` is completely bypassed.
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000137_capture.md")
+
+---

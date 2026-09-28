@@ -1,8 +1,8 @@
 <style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
-<h1>RESPONSE 165</h1>
-<p><strong><a href="20260927_235927_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260928_000122_capture.html">Next →</a></strong></p>
+<h1>RESPONSE 167</h1>
+<p><strong><a href="20260928_000128_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
 <hr />
-<p>Here is the updated <code>unsort_screenshots.py</code> script. The date extractor function has been updated to parse both ISO hyphenated dates (<code>YYYY-MM-DD</code>) and non-hyphenated dates (<code>YYYYMMDD</code>), normalizing them so that passing <code>--after 2026-09-27</code> or <code>--after 20260927</code> on the command line works seamlessly regardless of format.</p>
+<p>Here is the updated <code>unsort_screenshots.py</code> script. It now loads <code>unsort-ignore.txt</code> from <code>WORK_DIR</code>, ignores comments/blank lines, and skips any subfolder listed in that file.</p>
 <pre><code class="language-python">#!/usr/bin/env python3
 &quot;&quot;&quot;
 unsort_screenshots.py
@@ -12,6 +12,8 @@ current rule files (rules_combo.txt, rules_full.txt, rules_url.txt).
 
 Only files that match an active rule (or all sorted files if --all is set)
 and satisfy optional date filters will be moved back to the root WORK_DIR.
+
+Skips subfolders listed in unsort-ignore.txt.
 &quot;&quot;&quot;
 
 import argparse
@@ -22,6 +24,20 @@ from pathlib import Path
 
 WORK_DIR = Path.cwd()
 PC_SCREENSHOT_PATTERN = re.compile(r&quot;.*\.jpg$&quot;, re.IGNORECASE)
+
+
+def load_ignore_folders(file_path: Path) -&gt; set[str]:
+    &quot;&quot;&quot;Loads folder names to ignore from unsort-ignore.txt.&quot;&quot;&quot;
+    ignored = set()
+    if not file_path.is_file():
+        return ignored
+
+    for line in file_path.read_text(encoding=&quot;utf-8&quot;).splitlines():
+        line = line.strip()
+        if not line or line.startswith(&quot;#&quot;):
+            continue
+        ignored.add(line)
+    return ignored
 
 
 def load_rules(file_path: Path) -&gt; list[tuple[re.Pattern, str]]:
@@ -182,32 +198,44 @@ def main():
     parser.add_argument(
         &quot;--all&quot;,
         action=&quot;store_true&quot;,
-        help=&quot;Unsort ALL images in subfolders regardless of rule matching&quot;,
+        help=&quot;Unsort ALL images in non-ignored subfolders regardless of rule matching&quot;,
     )
 
     args = parser.parse_args()
 
     after_cutoff = normalize_date_string(args.after) if args.after else &quot;&quot;
 
+    ignored_folders = load_ignore_folders(WORK_DIR / &quot;unsort-ignore.txt&quot;)
+    if ignored_folders:
+        print(f&quot;Loaded {len(ignored_folders)} ignored folder(s) from unsort-ignore.txt&quot;)
+
     rules_combo = load_combo_rules(WORK_DIR / &quot;rules_combo.txt&quot;)
     rules_full = load_rules(WORK_DIR / &quot;rules_full.txt&quot;)
     rules_url = load_rules(WORK_DIR / &quot;rules_url.txt&quot;)
 
-    # Find all screenshot JPGs in immediate subdirectories of WORK_DIR
+    # Find all screenshot JPGs in immediate subdirectories of WORK_DIR, excluding ignored folders
     subfolder_images = []
+    skipped_folders_count = 0
+
     for item in WORK_DIR.iterdir():
         if item.is_dir():
+            if item.name in ignored_folders:
+                skipped_folders_count += 1
+                continue
             for f in item.iterdir():
                 if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name):
                     subfolder_images.append(f)
 
     subfolder_images.sort()
 
+    if skipped_folders_count &gt; 0:
+        print(f&quot;Skipped inspecting {skipped_folders_count} folder(s) listed in unsort-ignore.txt.&quot;)
+
     if not subfolder_images:
-        print(f&quot;No subfolder screenshots found in {WORK_DIR}&quot;)
+        print(f&quot;No inspectable subfolder screenshots found in {WORK_DIR}&quot;)
         return
 
-    print(f&quot;Found {len(subfolder_images)} screenshot(s) across subfolders.&quot;)
+    print(f&quot;Found {len(subfolder_images)} screenshot(s) across inspectable subfolders.&quot;)
     if args.dry_run:
         print(&quot;--- RUNNING IN DRY-RUN MODE (No files will be moved) ---\n&quot;)
 
@@ -255,12 +283,11 @@ if __name__ == &quot;__main__&quot;:
     main()
 
 </code></pre>
-<h3>Key Changes Made</h3>
+<h3>Changes Made</h3>
 <ul>
-<li><strong><code>extract_date_prefix()</code></strong>: Updated regex to capture both <code>YYYY-MM-DD</code> and <code>YYYYMMDD</code>.</li>
-<li><strong><code>normalize_date_string()</code></strong>: Strips non-digit characters (<code>2026-09-27</code> $\rightarrow$ <code>20260927</code>) from both the command-line argument and filename dates before comparison.</li>
-<li><strong>Flexible Input</strong>: You can now pass <code>--after 2026-09-27</code> or <code>--after 20260927</code>.</li>
+<li><strong><code>load_ignore_folders()</code></strong>: Reads <code>unsort-ignore.txt</code>, strips whitespace, ignores empty lines or <code>#</code> comments, and returns a set of folder names.</li>
+<li><strong>Folder Filter</strong>: During directory scanning, any folder matching a entry in <code>unsort-ignore.txt</code> is completely bypassed.</li>
 </ul>
 <hr />
-<p><strong><a href="20260927_235927_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260928_000122_capture.html">Next →</a></strong></p>
-<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_235935_capture.md&quot;)</p>
+<p><strong><a href="20260928_000128_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | End →</strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000137_capture.md&quot;)</p>

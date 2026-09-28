@@ -1,0 +1,39 @@
+<style>table{border-collapse:collapse;width:100%;margin:1em 0;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background-color:#f8f8f8;}</style>
+<h1>RESPONSE 166</h1>
+<p><strong><a href="20260928_000122_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260928_000128_capture.html">Next →</a></strong></p>
+<hr />
+<p>You've hit on a classic problem in classification and automation pipelines: <strong>idempotency and state tracking</strong>.</p>
+<p>When a script relies purely on external rule files to deduce whether an item <em>belongs</em> in a folder, it lacks <strong>memory</strong>. It can't distinguish between <em>&quot;the auto-sorter placed this here&quot;</em> and <em>&quot;Drew explicitly moved this here.&quot;</em> Adding date ranges to rule files, as you noted, adds unnecessary overhead to a system that should remain lean and maintainable.</p>
+<p>There are a few simple ways to handle this without adding clutter to your rule text files:</p>
+<hr />
+<h3>Option 1: The <code>.manual</code> Sidecar File (Recommended)</h3>
+<p>When you manually sort a file, create a tiny flag file next to it or touch a hidden marker. For example, <code>2026-09-27_01.jpg.manual</code>.</p>
+<ul>
+<li><strong>How it works:</strong> <code>unsort_screenshots.py</code> simply skips any image if <code>image_path.name + &quot;.manual&quot;</code> exists in the subfolder.</li>
+<li><strong>Why it fits:</strong> It leaves your rule files clean, lives right alongside the sidecars (<code>.full.txt</code>, <code>.url.txt</code>), and makes the state explicit. You can even write a 2-line shell function or Emacs command to move images and touch the <code>.manual</code> file in one shot.</li>
+</ul>
+<hr />
+<h3>Option 2: An <code>.unsort_ignore</code> or Exclude List</h3>
+<p>If creating sidecar files feels too noisy in the file manager, keep a plain text file named <code>.unsort_ignore</code> in <code>WORK_DIR</code> (or inside each subfolder).</p>
+<ul>
+<li><strong>How it works:</strong> Put filenames or date prefixes you've manually curated into that file (e.g., <code>2026-09-27_142201.jpg</code>).</li>
+<li><strong>Why it fits:</strong> The unsort script checks this list before inspecting rules and skips matching files.</li>
+</ul>
+<hr />
+<h3>Option 3: Two-Phase Sorting / Staging</h3>
+<p>Instead of running auto-sorting directly on the main directory, auto-sort into a <code>.staged/</code> or <code>auto_sorted/</code> tree first.</p>
+<ul>
+<li><strong>How it works:</strong></li>
+</ul>
+<ol>
+<li>Auto-sorter moves matches into <code>WORK_DIR/&lt;folder&gt;/</code>.</li>
+<li>Unsort script only pulls from subfolders back to root if needed.</li>
+<li>Manually moving a file marks it as &quot;reviewed.&quot;</li>
+</ol>
+<ul>
+<li><strong>Why it fits:</strong> Physical location itself acts as the state.</li>
+</ul>
+<hr />
+<hr />
+<p><strong><a href="20260928_000122_capture.html">← Previous</a> | <a href="../full_transcript.html">Full Index</a> | <a href="20260928_000128_capture.html">Next →</a></strong></p>
+<p>Edit: (find-file &quot;/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260928_000125_capture.md&quot;)</p>
