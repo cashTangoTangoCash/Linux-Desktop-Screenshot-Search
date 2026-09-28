@@ -26990,3 +26990,524 @@ def write_log(effort_dir: Path, query_label: str, sql: str, matches_data: list[d
 Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260919_170556_capture.md")
 
 ---
+
+# PROMPT 164
+We have sort_screenshots_in_folder_into_subfolders_by_ocr.py.  I would like a new python script that reverses only the automatic sorting performed by this script, but does not pop manually-sorted screenshots out of folders (we assume the manually sorted ones are those that are not matched by rules files).  this is a little sketchy as the rules files might possibly have changed in the meantime.  the need for this script arises today as I did some sorting, and then said, where did my work from today vanish to?  there must be old rules in the rules files for this month which I have forgotten about, or I at least have to rewrite the rules files.  but first I have to undo the sorting.  even nicer would be the ability to undo the (automatic) sorting of screenshots newer than e.g. 20260922 - maybe I need to manually sort just those particular screenshots from today that I particularly care about.  This project seems to spin into overcomplication!
+
+sort..py is:
+
+#!/usr/bin/env python3
+import json
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+
+
+def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
+    """Loads rules from a pipe-separated text file (pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            pattern_str, folder = line.rsplit("|", 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(
+                    f"Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}"
+                )
+    return rules
+
+
+def load_combo_rules(
+    file_path: Path,
+) -> list[tuple[re.Pattern, re.Pattern, str]]:
+    """Loads rules from a 2-pipe separated text file (url_pattern | full_pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) == 3:
+            url_str, full_str, folder = parts
+            try:
+                url_compiled = re.compile(url_str, re.IGNORECASE)
+                full_compiled = re.compile(full_str, re.IGNORECASE)
+                rules.append((url_compiled, full_compiled, folder))
+            except re.error as e:
+                print(f"Warning: Invalid regex in {file_path.name}: {e}")
+    return rules
+
+
+def move_bundle(image_path: Path, target_folder_name: str):
+    """Moves image along with its sidecar .url.txt, .url.json, and .full.txt files."""
+    target_dir = WORK_DIR / target_folder_name
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    url_txt = WORK_DIR / f"{image_path.name}.url.txt"
+    url_json = WORK_DIR / f"{image_path.name}.url.json"
+    full_txt = WORK_DIR / f"{image_path.name}.full.txt"
+
+    shutil.move(str(image_path), str(target_dir / image_path.name))
+    if url_txt.is_file():
+        shutil.move(str(url_txt), str(target_dir / url_txt.name))
+    if url_json.is_file():
+        shutil.move(str(url_json), str(target_dir / url_json.name))
+    if full_txt.is_file():
+        shutil.move(str(full_txt), str(target_dir / full_txt.name))
+
+
+def read_sidecars(image_path: Path) -> tuple[str, str]:
+    """Helper to read and return both (url_text, full_text) for an image."""
+    full_txt_path = WORK_DIR / f"{image_path.name}.full.txt"
+    full_text = (
+        full_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if full_txt_path.is_file()
+        else ""
+    )
+
+    url_txt_path = WORK_DIR / f"{image_path.name}.url.txt"
+    url_json_path = WORK_DIR / f"{image_path.name}.url.json"
+    url_text = (
+        url_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if url_txt_path.is_file()
+        else ""
+    )
+
+    # Fall back to inspecting .url.json if .url.txt is missing/empty
+    if not url_text and url_json_path.is_file():
+        try:
+            data = json.loads(
+                url_json_path.read_text(encoding="utf-8", errors="ignore")
+            )
+            url_text = data.get("best_url", "")
+        except Exception:
+            pass
+
+    return url_text, full_text
+
+
+def sort_by_combo(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, re.Pattern, str]],
+    pass_label: str = "Pass - Combo",
+) -> tuple[list[Path], int]:
+    """Sorts images requiring matches on BOTH URL and full-text rules."""
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_text, full_text = read_sidecars(image_path)
+
+        matched_folder = None
+        for url_pattern, full_pattern, folder in rules:
+            if url_pattern.search(url_text) and full_pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f"[{pass_label}] Moved '{image_path.name}' -> {matched_folder}/")
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def sort_by_full_text(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, str]],
+    pass_label: str = "Pass - Full Text",
+) -> tuple[list[Path], int]:
+    """Sorts images based on full-text sidecars (.full.txt)."""
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        _, full_text = read_sidecars(image_path)
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(full_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f"[{pass_label}] Moved '{image_path.name}' -> {matched_folder}/")
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def sort_by_url(
+    images: list[Path],
+    rules: list[tuple[re.Pattern, str]],
+    pass_label: str = "Pass - URL",
+) -> tuple[list[Path], int]:
+    """Sorts images based on URL sidecars (.url.txt or .url.json)."""
+    remaining = []
+    moved_count = 0
+    for image_path in images:
+        url_text, _ = read_sidecars(image_path)
+
+        matched_folder = None
+        for pattern, folder in rules:
+            if pattern.search(url_text):
+                matched_folder = folder
+                break
+
+        if matched_folder:
+            move_bundle(image_path, matched_folder)
+            print(f"[{pass_label}] Moved '{image_path.name}' -> {matched_folder}/")
+            moved_count += 1
+        else:
+            remaining.append(image_path)
+
+    return remaining, moved_count
+
+
+def process_sort():
+    pc_images = sorted(
+        [
+            f
+            for f in WORK_DIR.iterdir()
+            if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name)
+        ]
+    )
+
+    if not pc_images:
+        print(f"No PC screenshots found to sort in {WORK_DIR}")
+        return
+
+    rules_combo = load_combo_rules(WORK_DIR / "rules_combo.txt")
+    rules_full = load_rules(WORK_DIR / "rules_full.txt")
+    rules_url = load_rules(WORK_DIR / "rules_url.txt")
+
+    print(
+        f"Loaded {len(rules_combo)} Combo rules, {len(rules_full)} Full-Text rules, and {len(rules_url)} URL rules."
+    )
+    print(f"Sorting {len(pc_images)} screenshot(s)...\n")
+
+    # --- EXECUTE SORT PASSES ---
+    # Order: Most specific (Combo) -> Moderately specific (Full Text) -> General (URL)
+    remaining_images, sorted_pass_1 = sort_by_combo(
+        pc_images, rules_combo, "Pass 1 - Combo"
+    )
+    remaining_images, sorted_pass_2 = sort_by_full_text(
+        remaining_images, rules_full, "Pass 2 - Full Text"
+    )
+    remaining_images, sorted_pass_3 = sort_by_url(
+        remaining_images, rules_url, "Pass 3 - URL"
+    )
+
+    print("\n" + "=" * 50)
+    print("Sorting Complete:")
+    print(f"  Total Screenshots : {len(pc_images)}")
+    print(f"  Pass 1 (Combo)    : {sorted_pass_1} moved")
+    print(f"  Pass 2 (Full Text): {sorted_pass_2} moved")
+    print(f"  Pass 3 (URL)      : {sorted_pass_3} moved")
+    print(f"  Unsorted Remaining: {len(remaining_images)}")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    process_sort()
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_232746_capture.md")
+
+---
+
+# RESPONSE 164
+Here is `unsort_screenshots.py`. It inspects images inside subdirectories of `WORK_DIR`, checks their sidecar text files against your current rule sets (`rules_combo.txt`, `rules_full.txt`, and `rules_url.txt`), and moves them (plus sidecars) back to `WORK_DIR` **only if** they trigger a match.
+
+It supports filtering by filename timestamp (e.g., `--after 20260922`), `--dry-run` mode to preview changes safely, and a `--all` option if you ever want to unsort regardless of rules.
+
+```python
+#!/usr/bin/env python3
+"""
+unsort_screenshots.py
+
+Reverses automatic screenshot sorting by checking subfolder images against 
+current rule files (rules_combo.txt, rules_full.txt, rules_url.txt).
+
+Only files that match an active rule (or all sorted files if --all is set)
+and satisfy optional date filters will be moved back to the root WORK_DIR.
+"""
+
+import argparse
+import json
+import re
+import shutil
+from pathlib import Path
+
+WORK_DIR = Path.cwd()
+PC_SCREENSHOT_PATTERN = re.compile(r".*\.jpg$", re.IGNORECASE)
+
+
+def load_rules(file_path: Path) -> list[tuple[re.Pattern, str]]:
+    """Loads rules from a pipe-separated text file (pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "|" in line:
+            pattern_str, folder = line.rsplit("|", 1)
+            try:
+                compiled = re.compile(pattern_str.strip(), re.IGNORECASE)
+                rules.append((compiled, folder.strip()))
+            except re.error as e:
+                print(
+                    f"Warning: Invalid regex '{pattern_str.strip()}' in {file_path.name}: {e}"
+                )
+    return rules
+
+
+def load_combo_rules(
+    file_path: Path,
+) -> list[tuple[re.Pattern, re.Pattern, str]]:
+    """Loads rules from a 2-pipe separated text file (url_pattern | full_pattern | folder_name)."""
+    rules = []
+    if not file_path.is_file():
+        return rules
+
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) == 3:
+            url_str, full_str, folder = parts
+            try:
+                url_compiled = re.compile(url_str, re.IGNORECASE)
+                full_compiled = re.compile(full_str, re.IGNORECASE)
+                rules.append((url_compiled, full_compiled, folder))
+            except re.error as e:
+                print(f"Warning: Invalid regex in {file_path.name}: {e}")
+    return rules
+
+
+def read_sidecars(image_path: Path) -> tuple[str, str]:
+    """Reads and returns (url_text, full_text) for an image inside its current subfolder."""
+    subfolder = image_path.parent
+    
+    full_txt_path = subfolder / f"{image_path.name}.full.txt"
+    full_text = (
+        full_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if full_txt_path.is_file()
+        else ""
+    )
+
+    url_txt_path = subfolder / f"{image_path.name}.url.txt"
+    url_json_path = subfolder / f"{image_path.name}.url.json"
+    url_text = (
+        url_txt_path.read_text(encoding="utf-8", errors="ignore")
+        if url_txt_path.is_file()
+        else ""
+    )
+
+    if not url_text and url_json_path.is_file():
+        try:
+            data = json.loads(
+                url_json_path.read_text(encoding="utf-8", errors="ignore")
+            )
+            url_text = data.get("best_url", "")
+        except Exception:
+            pass
+
+    return url_text, full_text
+
+
+def matches_any_rule(
+    image_path: Path,
+    rules_combo: list,
+    rules_full: list,
+    rules_url: list,
+) -> tuple[bool, str]:
+    """Checks if an image matches any of the loaded rule sets."""
+    url_text, full_text = read_sidecars(image_path)
+
+    # 1. Check Combo
+    for url_pattern, full_pattern, folder in rules_combo:
+        if url_pattern.search(url_text) and full_pattern.search(full_text):
+            return True, f"Combo -> {folder}"
+
+    # 2. Check Full Text
+    for pattern, folder in rules_full:
+        if pattern.search(full_text):
+            return True, f"Full Text -> {folder}"
+
+    # 3. Check URL
+    for pattern, folder in rules_url:
+        if pattern.search(url_text):
+            return True, f"URL -> {folder}"
+
+    return False, ""
+
+
+def extract_date_prefix(filename: str) -> str:
+    """Extracts leading digits (YYYYMMDD) from filename if present."""
+    match = re.match(r"^(\d{8})", filename)
+    return match.group(1) if match else ""
+
+
+def unmove_bundle(image_path: Path, dry_run: bool = False):
+    """Moves image and sidecars back to WORK_DIR root."""
+    subfolder = image_path.parent
+    
+    sidecars = [
+        subfolder / f"{image_path.name}.url.txt",
+        subfolder / f"{image_path.name}.url.json",
+        subfolder / f"{image_path.name}.full.txt",
+    ]
+
+    if dry_run:
+        return
+
+    shutil.move(str(image_path), str(WORK_DIR / image_path.name))
+    for sidecar in sidecars:
+        if sidecar.is_file():
+            shutil.move(str(sidecar), str(WORK_DIR / sidecar.name))
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Unsort automatically sorted screenshots back to root directory."
+    )
+    parser.add_argument(
+        "--after",
+        type=str,
+        help="Only unsort images with date prefix >= YYYYMMDD (e.g., 20260922)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview operations without moving files",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Unsort ALL images in subfolders regardless of rule matching",
+    )
+
+    args = parser.parse_args()
+
+    rules_combo = load_combo_rules(WORK_DIR / "rules_combo.txt")
+    rules_full = load_rules(WORK_DIR / "rules_full.txt")
+    rules_url = load_rules(WORK_DIR / "rules_url.txt")
+
+    # Find all screenshot JPGs in immediate subdirectories of WORK_DIR
+    subfolder_images = []
+    for item in WORK_DIR.iterdir():
+        if item.is_dir():
+            for f in item.iterdir():
+                if f.is_file() and PC_SCREENSHOT_PATTERN.match(f.name):
+                    subfolder_images.append(f)
+
+    subfolder_images.sort()
+
+    if not subfolder_images:
+        print(f"No subfolder screenshots found in {WORK_DIR}")
+        return
+
+    print(f"Found {len(subfolder_images)} screenshot(s) across subfolders.")
+    if args.dry_run:
+        print("--- RUNNING IN DRY-RUN MODE (No files will be moved) ---\n")
+
+    restored_count = 0
+    skipped_date = 0
+    skipped_manual = 0
+
+    for img in subfolder_images:
+        img_date = extract_date_prefix(img.name)
+
+        # Date filter check
+        if args.after and img_date:
+            if img_date < args.after:
+                skipped_date += 1
+                continue
+
+        # Rule match check (unless --all is specified)
+        if args.all:
+            matched = True
+            reason = "Forced (--all)"
+        else:
+            matched, reason = matches_any_rule(
+                img, rules_combo, rules_full, rules_url
+            )
+
+        if matched:
+            print(
+                f"[UNSORT] Moving back '{img.relative_to(WORK_DIR)}' ({reason})"
+            )
+            unmove_bundle(img, dry_run=args.dry_run)
+            restored_count += 1
+        else:
+            skipped_manual += 1
+
+    print("\n" + "=" * 50)
+    print("Unsort Complete:")
+    print(f"  Total Inspected  : {len(subfolder_images)}")
+    print(f"  Restored to Root : {restored_count}")
+    print(f"  Skipped (Date)   : {skipped_date}")
+    print(f"  Skipped (Manual) : {skipped_manual}")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+### Usage Examples
+
+1. **Preview unsorting today's/recent files (dry run):**
+```bash
+python3 unsort_screenshots.py --after 20260922 --dry-run
+
+```
+
+
+2. **Undo automatic sorting for files from September 22 onward:**
+```bash
+python3 unsort_screenshots.py --after 20260922
+
+```
+
+
+3. **Undo automatic sorting for everything across all dates:**
+```bash
+python3 unsort_screenshots.py
+
+```
+
+
+4. **Pull *everything* out of subfolders back into root regardless of rules:**
+```bash
+python3 unsort_screenshots.py --all
+
+```
+
+Edit: (find-file "/home/dad84/Documents/2026/20260806-gemini-sort-screenshots/chat/captures/20260927_232752_capture.md")
+
+---
